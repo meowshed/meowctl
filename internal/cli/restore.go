@@ -9,7 +9,7 @@ func newRestoreCmd() *cobra.Command {
 		Use:   "restore",
 		Short: "Roll back the last install run (not yet implemented)",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return errNotImplemented("restore")
 		},
 	}

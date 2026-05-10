@@ -1,3 +1,4 @@
+// Package version provides build-time version information for meowctl.
 package version
 
 import (

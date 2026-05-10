@@ -9,7 +9,7 @@ func newShellCmd() *cobra.Command {
 		Use:   "shell",
 		Short: "Emit shell integration code (not yet implemented)",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return errNotImplemented("shell")
 		},
 	}
