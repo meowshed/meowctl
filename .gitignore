@@ -1,0 +1,17 @@
+# Build output
+bin/
+/meowctl
+
+# Go toolchain
+*.test
+*.out
+coverage.out
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
