@@ -15,8 +15,7 @@ import (
 // concurrent readers or a process that crashes mid-write.
 func Write(path string, lf *LockFile) error {
 	dir := filepath.Dir(path)
-	//nolint:gosec // 0o755 is intentional: config dirs must be user-readable/executable.
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- 0o755 is intentional: config dirs must be traversable.
 		return fmt.Errorf("lock: creating parent dir for %s: %w", path, err)
 	}
 

@@ -12,8 +12,7 @@ import (
 // If path does not exist, Read returns an empty LockFile and a nil error — callers
 // treat a missing lock file as a clean slate rather than an error condition.
 func Read(path string) (*LockFile, error) {
-	//nolint:gosec // path is a caller-supplied config file path, not user-provided taint.
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is caller-supplied config path, not user-provided taint.
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return &LockFile{}, nil
