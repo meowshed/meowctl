@@ -39,17 +39,36 @@ jobs:
         with:
           files: coverage.out
           fail_ci_if_error: false
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
 
   build:
-    name: Build
+    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Build binary
-        run: CGO_ENABLED=0 go build -o meowctl ./cmd/meowctl
+        run: CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o meowctl-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/meowctl
 
   security:
     name: Security (gosec + govulncheck)

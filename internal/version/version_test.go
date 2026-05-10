@@ -29,6 +29,10 @@ func TestString_DefaultValues(t *testing.T) {
 }
 
 func TestString_CustomValues(t *testing.T) {
+	// NOTE: Version, Commit, BuildDate are exported package-level vars required
+	// for ldflags injection. Direct mutation is safe here because tests run
+	// sequentially (CGO_ENABLED=0 prevents -race). If parallelism is added in
+	// future, replace with a version.New(v, commit, date) constructor instead.
 	orig := version.Version
 	origCommit := version.Commit
 	origDate := version.BuildDate

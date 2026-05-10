@@ -1,5 +1,7 @@
 # meowctl
 
+[![CI](https://github.com/meowshed/meowctl/actions/workflows/ci.yml/badge.svg)](https://github.com/meowshed/meowctl/actions/workflows/ci.yml)
+
 Dotfiles and dev environment manager powered by Starlark.
 
 ## Status

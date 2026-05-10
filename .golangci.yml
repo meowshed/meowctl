@@ -12,6 +12,9 @@ linters:
     - misspell
     - unconvert
     - unparam
+    - revive
+    - bodyclose
+    - noctx
   settings:
     gocyclo:
       min-complexity: 15

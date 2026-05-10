@@ -13,7 +13,8 @@ func newRootCmd() *cobra.Command {
 		Short: "Dotfiles and dev environment manager powered by Starlark",
 		Long: `meowctl manages dotfiles and developer environments using
 Starlark configuration files.`,
-		SilenceUsage: true,
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 
 	cmd.AddCommand(
