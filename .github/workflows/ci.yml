@@ -79,9 +79,9 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Run gosec
-        uses: securego/gosec@6decf96c3d272d5a8bbdcf9fddb5789d0be16a8d # v2.22.4
-        with:
-          args: ./...
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.22.4
+          gosec ./...
       - name: Run govulncheck
         uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee # v1
         with:
