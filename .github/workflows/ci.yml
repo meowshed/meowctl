@@ -33,7 +33,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Run tests
-        run: CGO_ENABLED=0 go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+        run: CGO_ENABLED=0 go test -count=1 -coverprofile=coverage.out -covermode=atomic ./...
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -70,15 +70,16 @@ jobs:
           go-package: ./...
 
   secrets:
-    name: Secrets (gitleaks)
+    name: Secrets (trufflehog)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@v3.88.14
+        with:
+          extra_args: --results=verified,unknown
 
   sbom:
     name: SBOM

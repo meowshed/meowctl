@@ -13,10 +13,9 @@ linters:
     - misspell
     - unconvert
     - unparam
-
-linters-settings:
-  gocyclo:
-    min-complexity: 15
+  settings:
+    gocyclo:
+      min-complexity: 15
 
 formatters:
   enable:

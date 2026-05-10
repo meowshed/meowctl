@@ -1,6 +1,6 @@
 # Build output
 bin/
-meowctl
+/meowctl
 
 # Go toolchain
 *.test
