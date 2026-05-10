@@ -1,3 +1,4 @@
+// Package cli implements the meowctl command-line interface.
 package cli
 
 import (
