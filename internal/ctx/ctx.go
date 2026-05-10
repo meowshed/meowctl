@@ -1,0 +1,146 @@
+// Package ctx implements the ctx object passed to lifecycle hook functions in
+// user-authored Starlark component files. CtxValue satisfies starlark.HasAttrs
+// and exposes 21 methods and 6 data properties.
+package ctx
+
+import (
+	"fmt"
+	"sort"
+
+	gostarlark "go.starlark.net/starlark"
+)
+
+// Capabilities holds Go-side data the ctx methods operate on. The caller
+// constructs a Capabilities value appropriate for the current phase and
+// component before calling New or NewRestricted.
+type Capabilities struct {
+	// Home is the value of $HOME.
+	Home string
+	// DryRun indicates the --dry-run flag is set.
+	DryRun bool
+	// ComponentDir is the absolute path to the component's source directory.
+	ComponentDir string
+	// StateDir is the per-component persistent state directory.
+	StateDir string
+	// Shell is the target shell name ("zsh", "fish", "bash", "posix").
+	// Empty in all phases except shell.star execution.
+	Shell string
+	// Platform is a pre-built starlark struct matching the platform() builtin output.
+	Platform gostarlark.Value
+	// Env is a copy of the process environment, used by ctx.env().
+	Env map[string]string
+}
+
+// CtxValue is the ctx object passed to lifecycle hook functions. It implements
+// starlark.Value and starlark.HasAttrs. Methods are stored in a map keyed by
+// their Starlark name; data properties are stored in a separate props map so
+// both appear in AttrNames.
+//
+//nolint:revive // CtxValue is intentional: ctx.Value would be ambiguous with starlark.Value.
+type CtxValue struct {
+	caps    *Capabilities
+	methods map[string]*gostarlark.Builtin
+	props   map[string]gostarlark.Value
+}
+
+// Compile-time interface checks.
+var (
+	_ gostarlark.Value    = (*CtxValue)(nil)
+	_ gostarlark.HasAttrs = (*CtxValue)(nil)
+)
+
+// New constructs a CtxValue with all 21 methods registered and all 6 data
+// properties populated from caps. The returned value is ready to pass to
+// Evaluator.CallHook as the ctx argument.
+func New(caps *Capabilities) *CtxValue {
+	c := &CtxValue{
+		caps:    caps,
+		methods: make(map[string]*gostarlark.Builtin, 21),
+		props:   make(map[string]gostarlark.Value, 6),
+	}
+
+	// Register data properties.
+	c.props["home"] = gostarlark.String(caps.Home)
+	c.props["dry_run"] = gostarlark.Bool(caps.DryRun)
+	c.props["component_dir"] = gostarlark.String(caps.ComponentDir)
+	c.props["state_dir"] = gostarlark.String(caps.StateDir)
+	if caps.Shell != "" {
+		c.props["shell"] = gostarlark.String(caps.Shell)
+	} else {
+		c.props["shell"] = gostarlark.None
+	}
+	if caps.Platform != nil {
+		c.props["platform"] = caps.Platform
+	} else {
+		c.props["platform"] = gostarlark.None
+	}
+
+	// Register methods.
+	c.methods["log"] = gostarlark.NewBuiltin("log", c.starLog)
+	c.methods["env"] = gostarlark.NewBuiltin("env", c.starEnv)
+	c.methods["write_file"] = gostarlark.NewBuiltin("write_file", c.starWriteFile)
+	c.methods["append_file"] = gostarlark.NewBuiltin("append_file", c.starAppendFile)
+	c.methods["delete_file"] = gostarlark.NewBuiltin("delete_file", c.starDeleteFile)
+	c.methods["copy_file"] = gostarlark.NewBuiltin("copy_file", c.starCopyFile)
+	c.methods["symlink"] = gostarlark.NewBuiltin("symlink", c.starSymlink)
+	c.methods["remove_symlink"] = gostarlark.NewBuiltin("remove_symlink", c.starRemoveSymlink)
+	c.methods["mkdir"] = gostarlark.NewBuiltin("mkdir", c.starMkdir)
+	c.methods["read_file"] = gostarlark.NewBuiltin("read_file", c.starReadFile)
+	c.methods["file_exists"] = gostarlark.NewBuiltin("file_exists", c.starFileExists)
+	c.methods["list_dir"] = gostarlark.NewBuiltin("list_dir", c.starListDir)
+	c.methods["run"] = gostarlark.NewBuiltin("run", c.starRun)
+	c.methods["git_clone"] = gostarlark.NewBuiltin("git_clone", c.starGitClone)
+	c.methods["download"] = gostarlark.NewBuiltin("download", c.starDownload)
+	c.methods["defaults_write"] = gostarlark.NewBuiltin("defaults_write", c.starDefaultsWrite)
+	c.methods["plist_set"] = gostarlark.NewBuiltin("plist_set", c.starPlistSet)
+	c.methods["prompt"] = gostarlark.NewBuiltin("prompt", c.starPrompt)
+	c.methods["emit"] = gostarlark.NewBuiltin("emit", c.starEmit)
+	c.methods["render"] = gostarlark.NewBuiltin("render", c.starRender)
+	c.methods["render_file"] = gostarlark.NewBuiltin("render_file", c.starRenderFile)
+
+	return c
+}
+
+// String implements starlark.Value.
+func (c *CtxValue) String() string { return "<ctx>" }
+
+// Type implements starlark.Value.
+func (c *CtxValue) Type() string { return "ctx" }
+
+// Freeze implements starlark.Value. CtxValue is intentionally not frozen — it
+// carries mutable Go-side state during hook execution.
+func (c *CtxValue) Freeze() {}
+
+// Truth implements starlark.Value.
+func (c *CtxValue) Truth() gostarlark.Bool { return gostarlark.True }
+
+// Hash implements starlark.Value. ctx objects are not hashable.
+func (c *CtxValue) Hash() (uint32, error) {
+	return 0, fmt.Errorf("unhashable type: ctx")
+}
+
+// Attr implements starlark.HasAttrs. Returns nil, nil for unknown names so
+// Starlark reports attribute-not-found rather than a Go error.
+func (c *CtxValue) Attr(name string) (gostarlark.Value, error) {
+	if v, ok := c.props[name]; ok {
+		return v, nil
+	}
+	if v, ok := c.methods[name]; ok {
+		return v, nil
+	}
+	return nil, nil
+}
+
+// AttrNames implements starlark.HasAttrs. Returns a sorted list of all
+// property and method names — 27 in total for a fully constructed CtxValue.
+func (c *CtxValue) AttrNames() []string {
+	names := make([]string, 0, len(c.props)+len(c.methods))
+	for k := range c.props {
+		names = append(names, k)
+	}
+	for k := range c.methods {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
