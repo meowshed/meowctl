@@ -40,7 +40,7 @@ func (l *FileSystemLoader) Load(thread *gostarlark.Thread, moduleURL string, pre
 		return nil, fmt.Errorf("FileSystemLoader: module path %q escapes root %q", moduleURL, l.Root)
 	}
 
-	src, err := os.ReadFile(abs) //nolint:gosec // abs is verified to be within l.Root above
+	src, err := os.ReadFile(abs) // #nosec G304 -- path verified to be within l.Root by HasPrefix check above
 	if err != nil {
 		return nil, fmt.Errorf("FileSystemLoader: cannot read %q: %w", abs, err)
 	}
