@@ -10,7 +10,7 @@ var RootCmd = newRootCmd()
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "meowctl",
-		Short: "Declarative dotfiles and dev environment manager",
+		Short: "Dotfiles and dev environment manager powered by Starlark",
 		Long: `meowctl manages dotfiles and developer environments using
 Starlark configuration files.`,
 		SilenceUsage: true,

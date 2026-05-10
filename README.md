@@ -1,6 +1,6 @@
 # meowctl
 
-Declarative dotfiles and dev environment manager powered by Starlark.
+Dotfiles and dev environment manager powered by Starlark.
 
 ## Status
 
