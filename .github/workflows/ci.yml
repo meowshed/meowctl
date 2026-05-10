@@ -79,7 +79,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Run gosec
-        uses: securego/gosec@6decf96c3d272d5a8bbdcf9fddb5789d0be16a8d # v2.22.4
+        uses: securego/gosec@9c4bb74a6258fe3818db8354b376ecca985704aa # v2.26.1
         with:
           args: ./...
       - name: Run govulncheck
