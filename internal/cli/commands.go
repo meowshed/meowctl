@@ -26,17 +26,6 @@ func newInitCmd() *cobra.Command {
 	}
 }
 
-func newInstallCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "install",
-		Short: "Run the install phase of all components (not yet implemented)",
-		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return errNotImplemented("install")
-		},
-	}
-}
-
 func newSetupCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "setup",
@@ -44,28 +33,6 @@ func newSetupCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return errNotImplemented("setup")
-		},
-	}
-}
-
-func newUninstallCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "uninstall",
-		Short: "Run the uninstall phase of all components (not yet implemented)",
-		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return errNotImplemented("uninstall")
-		},
-	}
-}
-
-func newVerifyCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "verify",
-		Short: "Verify the current environment against the dotfiles config (not yet implemented)",
-		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return errNotImplemented("verify")
 		},
 	}
 }
