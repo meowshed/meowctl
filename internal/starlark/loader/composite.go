@@ -3,6 +3,7 @@ package loader
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -23,12 +24,13 @@ import (
 //   - @name//   → RegistryLoader
 //   - github:// → GitHubLoader
 type CompositeLoader struct {
-	root     string
-	userRoot string
-	cacheDir string
-	lockPath string
-	fileOpts *syntax.FileOptions
-	client   *http.Client
+	root        string
+	userRoot    string
+	cacheDir    string
+	lockPath    string
+	registryURL string
+	fileOpts    *syntax.FileOptions
+	client      *http.Client
 
 	// githubAPIBase and githubRawBase override the default GitHub endpoints.
 	// Empty string means production defaults are used; overridden in tests via NewCompositeLoaderForTest.
@@ -48,6 +50,9 @@ type CompositeLoaderOptions struct {
 	UserRoot string
 	// CacheDir is the directory for downloaded module caches (typically ~/.cache/meowctl).
 	CacheDir string
+	// RegistryURL overrides the default meowshed registry URL for @name// scheme.
+	// If empty, the default is used.
+	RegistryURL string
 	// LockPath is the path to the meowctl lock file.
 	LockPath string
 	// Client overrides the default HTTP client. Useful for tests.
@@ -64,13 +69,14 @@ func NewCompositeLoader(root string, fileOpts *syntax.FileOptions, opts Composit
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
 	return &CompositeLoader{
-		root:     root,
-		userRoot: opts.UserRoot,
-		cacheDir: opts.CacheDir,
-		lockPath: opts.LockPath,
-		fileOpts: fileOpts,
-		client:   client,
-		cache:    make(map[string]gostarlark.StringDict),
+		root:        root,
+		userRoot:    opts.UserRoot,
+		cacheDir:    opts.CacheDir,
+		lockPath:    opts.LockPath,
+		registryURL: opts.RegistryURL,
+		fileOpts:    fileOpts,
+		client:      client,
+		cache:       make(map[string]gostarlark.StringDict),
 	}
 }
 
@@ -108,7 +114,13 @@ func (c *CompositeLoader) Load(thread *gostarlark.Thread, moduleURL string, pred
 			}
 			sub = gh
 		case len(moduleURL) > 1 && moduleURL[0] == '@' && strings.Contains(moduleURL, "//"):
-			sub = &RegistryLoader{}
+			sub = &RegistryLoader{
+				RegistryURL: c.registryURL,
+				CacheDir:    filepath.Join(c.cacheDir, "modules"),
+				LockPath:    c.lockPath,
+				Client:      c.client,
+				FileOpts:    c.fileOpts,
+			}
 		default:
 			return nil, fmt.Errorf("CompositeLoader: unknown scheme in module URL %q", moduleURL)
 		}
