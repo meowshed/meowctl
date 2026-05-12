@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	gostarlark "go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -79,8 +81,11 @@ func (c *CtxValue) starWriteFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, ar
 		return gostarlark.None, nil
 	}
 	// Read prior content for rollback.
-	prior, err := os.ReadFile(path) // #nosec G304
-	hadPrior := err == nil
+	prior, readErr := os.ReadFile(path) // #nosec G304
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return nil, fmt.Errorf("write_file: read prior content: %w", readErr)
+	}
+	hadPrior := readErr == nil
 	var priorStr string
 	if hadPrior {
 		priorStr = string(prior)
@@ -91,6 +96,8 @@ func (c *CtxValue) starWriteFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, ar
 			return nil, fmt.Errorf("write_file: record rollback: %w", err)
 		}
 	}
+	// Note: parent directories created by MkdirAll below are NOT individually
+	// rollback-recorded. Rollback removes the file but leaves any new parent dirs.
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return nil, fmt.Errorf("write_file: mkdir: %w", err)
 	}
@@ -102,7 +109,7 @@ func (c *CtxValue) starWriteFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, ar
 
 // starAppendFile implements ctx.append_file(dst, content, marker=None).
 // Wraps the appended content in BEGIN/END meowctl markers for rollback.
-func (c *CtxValue) starAppendFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+func (c *CtxValue) starAppendFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (_ gostarlark.Value, retErr error) {
 	var dst, content gostarlark.String
 	var markerVal gostarlark.Value = gostarlark.None
 	if err := gostarlark.UnpackArgs("append_file", args, kwargs,
@@ -137,8 +144,8 @@ func (c *CtxValue) starAppendFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, a
 		return nil, fmt.Errorf("append_file: %w", err)
 	}
 	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("append_file: close: %w", cerr)
+		if cerr := f.Close(); cerr != nil && retErr == nil {
+			retErr = fmt.Errorf("append_file: close: %w", cerr)
 		}
 	}()
 	if _, err = f.WriteString(block); err != nil {
@@ -170,7 +177,7 @@ func (c *CtxValue) starDeleteFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, a
 }
 
 // starCopyFile implements ctx.copy_file(src, dst).
-func (c *CtxValue) starCopyFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+func (c *CtxValue) starCopyFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (_ gostarlark.Value, retErr error) {
 	var src, dst gostarlark.String
 	if err := gostarlark.UnpackArgs("copy_file", args, kwargs, "src", &src, "dst", &dst); err != nil {
 		return nil, err
@@ -183,6 +190,7 @@ func (c *CtxValue) starCopyFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 		return nil, err
 	}
 	if c.caps.DryRun {
+		c.dryLog("copy_file", "src="+srcPath, "dst="+dstPath)
 		return gostarlark.None, nil
 	}
 	if c.caps.RollbackStack != nil {
@@ -190,6 +198,8 @@ func (c *CtxValue) starCopyFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 			return nil, fmt.Errorf("copy_file: record rollback: %w", err)
 		}
 	}
+	// Note: parent directories created by MkdirAll below are NOT individually
+	// rollback-recorded. Rollback removes the file but leaves any new parent dirs.
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0o750); err != nil {
 		return nil, fmt.Errorf("copy_file: mkdir: %w", err)
 	}
@@ -203,8 +213,8 @@ func (c *CtxValue) starCopyFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 		return nil, fmt.Errorf("copy_file: create dst: %w", err)
 	}
 	defer func() {
-		if cerr := out.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("copy_file: close dst: %w", cerr)
+		if cerr := out.Close(); cerr != nil && retErr == nil {
+			retErr = fmt.Errorf("copy_file: close dst: %w", cerr)
 		}
 	}()
 	if _, err = io.Copy(out, in); err != nil {
@@ -230,16 +240,38 @@ func (c *CtxValue) starSymlink(_ *gostarlark.Thread, _ *gostarlark.Builtin, args
 		c.dryLog("symlink", "src="+srcPath, "dst="+dstPath)
 		return gostarlark.None, nil
 	}
-	if c.caps.RollbackStack != nil {
-		if err := c.caps.RollbackStack.AppendSymlink(c.caps.Phase, c.caps.Component, dstPath); err != nil {
-			return nil, fmt.Errorf("symlink: record rollback: %w", err)
-		}
-	}
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0o750); err != nil {
 		return nil, fmt.Errorf("symlink: mkdir: %w", err)
 	}
-	// Remove existing symlink at dst if present so we can re-link idempotently.
-	_ = os.Remove(dstPath)
+	// Lstat-check before any destructive action. Refuse to clobber regular files.
+	var priorTarget string
+	var hadPrior bool
+	if fi, err := os.Lstat(dstPath); err == nil {
+		if fi.Mode()&os.ModeSymlink == 0 {
+			return nil, fmt.Errorf("symlink: %s exists and is not a symlink; refusing to overwrite", dstPath)
+		}
+		// dst is an existing symlink — read its target for rollback.
+		target, readErr := os.Readlink(dstPath)
+		if readErr != nil {
+			return nil, fmt.Errorf("symlink: readlink %s: %w", dstPath, readErr)
+		}
+		priorTarget = target
+		hadPrior = true
+		// Fall through to Remove below.
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("symlink: lstat %s: %w", dstPath, err)
+	}
+	// Record intent before any destructive operation so that a failed journal
+	// write never leaves us with the old symlink already removed.
+	if c.caps.RollbackStack != nil {
+		if err := c.caps.RollbackStack.AppendSymlink(c.caps.Phase, c.caps.Component, dstPath, priorTarget, hadPrior); err != nil {
+			return nil, fmt.Errorf("symlink: record rollback: %w", err)
+		}
+	}
+	// Remove existing symlink now that the rollback record is safely written.
+	if err := os.Remove(dstPath); err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("symlink: remove existing symlink %s: %w", dstPath, err)
+	}
 	if err := os.Symlink(srcPath, dstPath); err != nil {
 		return nil, fmt.Errorf("symlink: %w", err)
 	}
@@ -279,17 +311,44 @@ func (c *CtxValue) starMkdir(_ *gostarlark.Thread, _ *gostarlark.Builtin, args g
 		return nil, err
 	}
 	if c.caps.DryRun {
+		c.dryLog("mkdir", "path="+p)
 		return gostarlark.None, nil
 	}
-	_, statErr := os.Stat(p)
-	created := os.IsNotExist(statErr)
+	// Use os.Mkdir to atomically determine whether we create the directory.
+	// os.MkdirAll is used for the actual creation to handle missing parents,
+	// but we first attempt os.Mkdir to get exclusive-create semantics: if it
+	// succeeds we know we created the leaf; if it returns EEXIST the directory
+	// already existed and we must not delete it on rollback.
+	// Known limitation: when intermediate directories are missing, os.Mkdir
+	// returns ENOENT, so we fall back to MkdirAll with created=false. This
+	// means the leaf directory is NOT removed on rollback (conservative choice
+	// to avoid deleting directories we may not own). Operators should check for
+	// orphaned directories manually if a multi-level mkdir is rolled back.
+	mkdirErr := os.Mkdir(p, 0o750)
+	created := mkdirErr == nil
+	if mkdirErr != nil && !os.IsExist(mkdirErr) {
+		// Real error (e.g. missing parent). Fall back to MkdirAll which creates
+		// intermediate directories. If MkdirAll succeeds we cannot tell whether
+		// we created the leaf, so conservatively set created=false to avoid
+		// destroying a directory we may not own during rollback.
+		if err := os.MkdirAll(p, 0o750); err != nil {
+			return nil, fmt.Errorf("mkdir: %w", err)
+		}
+		created = false
+	}
+	// Record rollback only after MkdirAll succeeds to avoid a phantom record
+	// for a directory that was never actually created.
 	if c.caps.RollbackStack != nil {
 		if err := c.caps.RollbackStack.AppendMkdir(c.caps.Phase, c.caps.Component, p, created); err != nil {
+			// Rollback record could not be written; undo the directory only if
+			// *this call* created it (created=true). If it pre-existed, leave it.
+			if created {
+				if removeErr := os.Remove(p); removeErr != nil && !os.IsNotExist(removeErr) {
+					return nil, fmt.Errorf("mkdir: record rollback: %w; also failed to undo directory: %v", err, removeErr)
+				}
+			}
 			return nil, fmt.Errorf("mkdir: record rollback: %w", err)
 		}
-	}
-	if err := os.MkdirAll(p, 0o750); err != nil {
-		return nil, fmt.Errorf("mkdir: %w", err)
 	}
 	return gostarlark.None, nil
 }
@@ -313,7 +372,7 @@ func (c *CtxValue) starFileExists(_ *gostarlark.Thread, _ *gostarlark.Builtin, a
 	if err := gostarlark.UnpackArgs("file_exists", args, kwargs, "path", &path); err != nil {
 		return nil, err
 	}
-	_, err := os.Stat(string(path))
+	_, err := os.Lstat(string(path))
 	if os.IsNotExist(err) {
 		return gostarlark.False, nil
 	}
@@ -439,7 +498,7 @@ func (c *CtxValue) starGitClone(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 }
 
 // starDownload implements ctx.download(url, dst, checksum=None).
-func (c *CtxValue) starDownload(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+func (c *CtxValue) starDownload(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (_ gostarlark.Value, retErr error) {
 	var rawURL, dst gostarlark.String
 	var checksum gostarlark.Value = gostarlark.None
 	if err := gostarlark.UnpackArgs("download", args, kwargs,
@@ -454,11 +513,6 @@ func (c *CtxValue) starDownload(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 		c.dryLog("download", "url="+string(rawURL), "dst="+dstPath)
 		return gostarlark.None, nil
 	}
-	if c.caps.RollbackStack != nil {
-		if err := c.caps.RollbackStack.AppendDownload(c.caps.Phase, c.caps.Component, dstPath); err != nil {
-			return nil, fmt.Errorf("download: record rollback: %w", err)
-		}
-	}
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0o750); err != nil {
 		return nil, fmt.Errorf("download: mkdir: %w", err)
 	}
@@ -471,19 +525,93 @@ func (c *CtxValue) starDownload(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download: server returned %d", resp.StatusCode)
 	}
-	f, err := os.Create(dstPath) // #nosec G304
-	if err != nil {
-		return nil, fmt.Errorf("download: create: %w", err)
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = fmt.Errorf("download: close: %w", cerr)
-		}
-	}()
-	if _, err = io.Copy(f, resp.Body); err != nil {
-		return nil, fmt.Errorf("download: write: %w", err)
+	if err := c.downloadToFile(dstPath, resp.Body); err != nil {
+		return nil, err
 	}
 	return gostarlark.None, nil
+}
+
+// downloadToFile writes body to dstPath, recording rollback and preserving any
+// prior content. Extracted to keep starDownload below the cyclomatic complexity limit.
+func (c *CtxValue) downloadToFile(dstPath string, body io.Reader) (retErr error) {
+	// Check if dstPath already exists so we can record its prior content for
+	// rollback. Without this, os.Create below would truncate a pre-existing file
+	// before any rollback record is written, permanently destroying its content.
+	var (
+		priorContent string
+		hadPrior     bool
+	)
+	if existing, readErr := os.ReadFile(dstPath); readErr == nil { // #nosec G304
+		priorContent = string(existing)
+		hadPrior = true
+	} else if !os.IsNotExist(readErr) {
+		return fmt.Errorf("download: read existing file: %w", readErr)
+	}
+	// Write the rollback record BEFORE os.Create so that prior content is
+	// covered even if the journal write fails (we never reach the truncation).
+	if c.caps.RollbackStack != nil {
+		if err := c.caps.RollbackStack.AppendDownload(c.caps.Phase, c.caps.Component, dstPath, priorContent, hadPrior); err != nil {
+			return fmt.Errorf("download: record rollback: %w", err)
+		}
+	}
+	f, err := os.Create(dstPath) // #nosec G304
+	if err != nil {
+		return fmt.Errorf("download: create: %w", err)
+	}
+	var fClosed bool
+	defer func() {
+		if fClosed {
+			return
+		}
+		if cerr := f.Close(); cerr != nil && retErr == nil {
+			retErr = fmt.Errorf("download: close: %w", cerr)
+			// On close failure the written data may not be flushed.
+			// If there was no prior file, remove the corrupt artifact.
+			// If there was a prior file, the rollback record will restore it;
+			// do not remove so that rollback has something to overwrite.
+			if !hadPrior {
+				_ = os.Remove(dstPath)
+			}
+		}
+	}()
+	if _, err := io.Copy(f, body); err != nil {
+		fClosed = true
+		closeErr := f.Close()
+		cleanErr := cleanupPartialDownload(dstPath, hadPrior)
+		return combineDownloadErrors(err, closeErr, cleanErr)
+	}
+	return nil
+}
+
+// cleanupPartialDownload removes a partially-written download file.
+// It only removes the file when hadPrior is false to avoid permanent data loss:
+// when a prior file existed and rollback is disabled, the caller's rollback
+// record (if present) will restore it; removing here would destroy the only copy.
+func cleanupPartialDownload(dstPath string, hadPrior bool) error {
+	if hadPrior {
+		return nil
+	}
+	if err := os.Remove(dstPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+// combineDownloadErrors assembles a single error from the three failure modes
+// that can occur in the io.Copy error path of downloadToFile.
+// writeErr is wrapped with %w to preserve chain inspection; closeErr and cleanErr
+// are secondary and formatted with %w as well for completeness.
+func combineDownloadErrors(writeErr, closeErr, cleanErr error) error {
+	if cleanErr != nil && closeErr != nil {
+		return fmt.Errorf("download: write: %w; close: %w; also failed to remove partial file: %w", writeErr, closeErr, cleanErr)
+	}
+	if cleanErr != nil {
+		return fmt.Errorf("download: write: %w; also failed to remove partial file: %w", writeErr, cleanErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("download: write: %w; close: %w", writeErr, closeErr)
+	}
+	return fmt.Errorf("download: write: %w", writeErr)
 }
 
 // starDefaultsWrite implements ctx.defaults_write(domain, key, type, value).
@@ -655,11 +783,12 @@ func starlarkValueToShellArg(v gostarlark.Value) string {
 	return fmt.Sprintf("%v", v)
 }
 
-// shellQuote wraps s in double-quotes if it contains any whitespace, ensuring
-// it is parsed as a single token by PlistBuddy's internal command parser.
+// shellQuote wraps s in double-quotes if it contains any whitespace, double-quote,
+// or backslash characters, ensuring it is parsed as a single unambiguous token
+// by PlistBuddy's internal command parser.
 // Backslashes are escaped before double-quotes to avoid partial escape sequences.
 func shellQuote(s string) string {
-	if strings.ContainsAny(s, " \t\n\r") {
+	if strings.ContainsAny(s, " \t\n\r\"\\") {
 		s = strings.ReplaceAll(s, `\`, `\\`)
 		s = strings.ReplaceAll(s, `"`, `\"`)
 		return `"` + s + `"`
@@ -667,14 +796,18 @@ func shellQuote(s string) string {
 	return s
 }
 
+// uuidFallbackCounter provides unique values when crypto/rand is unavailable.
+var uuidFallbackCounter atomic.Uint64
+
 // newUUID generates a UUID v4-like string using crypto/rand.
 // crypto/rand is pure Go and CGO-free; it works correctly on all supported platforms.
 func newUUID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		// crypto/rand failure is exceptional; fall back to a deterministic placeholder
-		// rather than silently producing a zero UUID that could cause marker collisions.
-		return fmt.Sprintf("fallback-%x", b)
+		// crypto/rand failure is exceptional; use a time+counter pair to ensure
+		// the fallback is unique across concurrent calls in the same process.
+		n := uuidFallbackCounter.Add(1)
+		return fmt.Sprintf("fallback-%016x%016x", time.Now().UnixNano(), n)
 	}
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80

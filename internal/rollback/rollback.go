@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // Kind constants identify the forward operation recorded in an OpRecord.
@@ -55,9 +56,13 @@ type inverseCopyFile struct {
 	Dst string `json:"dst"`
 }
 
-// inverseSymlink removes the symlink at Dst.
+// inverseSymlink removes or restores the symlink at Dst.
+// When HadPrior is true the symlink previously pointed to PriorTarget and
+// rollback re-creates it; when false rollback simply removes the symlink.
 type inverseSymlink struct {
-	Dst string `json:"dst"`
+	Dst         string `json:"dst"`
+	PriorTarget string `json:"prior_target,omitempty"`
+	HadPrior    bool   `json:"had_prior"`
 }
 
 // inverseMkdir removes the directory if meowctl created it.
@@ -66,14 +71,19 @@ type inverseMkdir struct {
 	CreatedByMeowctl bool   `json:"created_by_meowctl"`
 }
 
-// inverseDownload deletes the downloaded file.
+// inverseDownload deletes the downloaded file, or restores prior content if
+// the destination was overwritten.
 type inverseDownload struct {
-	Dst string `json:"dst"`
+	Dst          string `json:"dst"`
+	PriorContent string `json:"prior_content,omitempty"`
+	HadPrior     bool   `json:"had_prior"`
 }
 
 // Stack is a write-ahead log backed by a file on disk. Append an op before
-// executing it; call Truncate after a successful run.
+// executing it; call Truncate after a successful run. Stack is safe for
+// concurrent use from a single process.
 type Stack struct {
+	mu   sync.Mutex
 	path string
 	seq  int
 	f    *os.File
@@ -99,15 +109,30 @@ func Open(path string) (*Stack, error) {
 }
 
 // Close closes the underlying file handle.
+// Safe to call after a failed Truncate (s.f may be nil in that case).
 func (s *Stack) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.f == nil {
+		return nil
+	}
 	return s.f.Close()
 }
 
 // Pending reports whether the journal contains any un-replayed records.
-func (s *Stack) Pending() bool { return s.seq > 0 }
+func (s *Stack) Pending() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.seq > 0
+}
 
 // Append records op to the write-ahead log before the forward operation runs.
 func (s *Stack) Append(phase, component, kind string, inverse any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.f == nil {
+		return fmt.Errorf("rollback: stack is broken (truncate failed); cannot append")
+	}
 	raw, err := json.Marshal(inverse)
 	if err != nil {
 		return fmt.Errorf("rollback: marshal inverse: %w", err)
@@ -135,9 +160,14 @@ func (s *Stack) Append(phase, component, kind string, inverse any) error {
 // It reopens the file without O_APPEND so that subsequent writes start at
 // offset 0 on all platforms (Linux ignores seeks on O_APPEND file descriptors).
 func (s *Stack) Truncate() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := s.f.Truncate(0); err != nil {
 		return fmt.Errorf("rollback: truncate journal: %w", err)
 	}
+	// Reset seq immediately so that any future Append on a recovered stack uses
+	// the correct starting counter, even if the reopen below fails.
+	s.seq = 0
 	// Close before reopen; if reopen fails, record the error and leave s.f nil
 	// rather than holding a stale closed handle.
 	if err := s.f.Close(); err != nil {
@@ -146,12 +176,11 @@ func (s *Stack) Truncate() error {
 	}
 	s.f = nil
 	// Reopen without O_APPEND so the write cursor is at the correct offset.
-	f, err := os.OpenFile(s.path, os.O_RDWR|os.O_CREATE, 0o600) // #nosec G304
+	f, err := os.OpenFile(s.path, os.O_RDWR|os.O_CREATE, 0o600) // #nosec G304 — path is the journal path set at Open time
 	if err != nil {
 		return fmt.Errorf("rollback: reopen journal after truncate: %w", err)
 	}
 	s.f = f
-	s.seq = 0
 	return nil
 }
 
@@ -161,7 +190,9 @@ func (s *Stack) Truncate() error {
 // sequence numbers if the Stack is reused after a rollback.
 // Returns a Result describing what succeeded and what failed.
 func (s *Stack) Execute() Result {
-	records, skipped, err := readAll(s.f)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	records, skipped, skippedAt, err := readAll(s.f)
 	if err != nil {
 		return Result{Err: fmt.Errorf("rollback: read journal: %w", err)}
 	}
@@ -171,6 +202,7 @@ func (s *Stack) Execute() Result {
 	}
 	var result Result
 	result.SkippedLines = skipped
+	result.SkippedAt = skippedAt
 	for _, rec := range records {
 		if err := applyInverse(rec); err != nil {
 			result.Failures = append(result.Failures, Failure{Record: rec, Err: err})
@@ -188,6 +220,10 @@ type Result struct {
 	// A non-zero value means some ops may not have been reversed; the caller
 	// should warn the operator.
 	SkippedLines int
+	// SkippedAt holds the 1-based line numbers of the malformed lines that were
+	// skipped. Useful for directing the operator to specific positions in the
+	// journal file.
+	SkippedAt []int
 	// Err is set when the journal could not even be read.
 	Err error
 }
@@ -255,6 +291,17 @@ func applyInverseSymlink(raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &inv); err != nil {
 		return err
 	}
+	if inv.HadPrior {
+		// Re-create the prior symlink. Remove whatever now sits at dst first
+		// (either the new symlink or nothing).
+		if err := deleteIfExists(inv.Dst); err != nil {
+			return fmt.Errorf("rollback: remove new symlink %s: %w", inv.Dst, err)
+		}
+		if err := os.Symlink(inv.PriorTarget, inv.Dst); err != nil {
+			return fmt.Errorf("rollback: restore symlink %s -> %s: %w", inv.Dst, inv.PriorTarget, err)
+		}
+		return nil
+	}
 	return deleteIfExists(inv.Dst)
 }
 
@@ -279,6 +326,9 @@ func applyInverseDownload(raw json.RawMessage) error {
 	var inv inverseDownload
 	if err := json.Unmarshal(raw, &inv); err != nil {
 		return err
+	}
+	if inv.HadPrior {
+		return os.WriteFile(inv.Dst, []byte(inv.PriorContent), 0o600) // #nosec G306
 	}
 	return deleteIfExists(inv.Dst)
 }
@@ -335,6 +385,10 @@ func removeMarkedBlock(path, marker string) error {
 // countLines counts valid JSON lines in f by scanning from the start.
 // Only lines that successfully unmarshal as OpRecord are counted, so corrupt
 // or partial trailing lines do not inflate the seq counter.
+// Note: if the journal contains corrupt mid-file lines, seq will equal the
+// number of valid records, not the maximum Seq value. Subsequent Append calls
+// may assign a Seq number already used by a record that was skipped. Seq is
+// therefore a logical record counter, not a guaranteed-unique identifier.
 func countLines(f *os.File) (int, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return 0, err
@@ -364,27 +418,31 @@ func countLines(f *os.File) (int, error) {
 // readAll reads all valid OpRecords from the file from the beginning.
 // Malformed or partial lines are skipped — consistent with countLines — so a
 // partially-written trailing record does not abort the entire rollback replay.
-// Returns the records and the count of skipped lines so callers can warn the operator.
-func readAll(f *os.File) ([]OpRecord, int, error) {
+// Returns the records, the count of skipped lines, and a slice of the 1-based
+// line numbers that were skipped so callers can warn the operator with position info.
+func readAll(f *os.File) ([]OpRecord, int, []int, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	var records []OpRecord
-	skipped := 0
+	var skippedAt []int
+	lineNum := 0 // counts every line including blanks; reported positions match text-editor line numbers
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line := sc.Text()
+		lineNum++
 		if line == "" {
+			// blank lines advance lineNum so malformed-line positions remain accurate
 			continue
 		}
 		var rec OpRecord
 		if json.Unmarshal([]byte(line), &rec) == nil {
 			records = append(records, rec)
 		} else {
-			skipped++
+			skippedAt = append(skippedAt, lineNum)
 		}
 	}
-	return records, skipped, sc.Err()
+	return records, len(skippedAt), skippedAt, sc.Err()
 }
 
 // AppendWriteFile records a write_file inverse op before execution.
@@ -411,8 +469,15 @@ func (s *Stack) AppendCopyFile(phase, component, dst string) error {
 }
 
 // AppendSymlink records a symlink inverse op before execution.
-func (s *Stack) AppendSymlink(phase, component, dst string) error {
-	return s.Append(phase, component, KindSymlink, inverseSymlink{Dst: dst})
+// priorTarget is the target the existing symlink pointed to (empty string when
+// no prior symlink existed). hadPrior must be true when an existing symlink is
+// being replaced so that rollback can restore the original link.
+func (s *Stack) AppendSymlink(phase, component, dst, priorTarget string, hadPrior bool) error {
+	return s.Append(phase, component, KindSymlink, inverseSymlink{
+		Dst:         dst,
+		PriorTarget: priorTarget,
+		HadPrior:    hadPrior,
+	})
 }
 
 // AppendMkdir records a mkdir inverse op before execution.
@@ -424,6 +489,12 @@ func (s *Stack) AppendMkdir(phase, component, path string, createdByMeowctl bool
 }
 
 // AppendDownload records a download inverse op before execution.
-func (s *Stack) AppendDownload(phase, component, dst string) error {
-	return s.Append(phase, component, KindDownload, inverseDownload{Dst: dst})
+// priorContent and hadPrior capture any pre-existing file at dst so that
+// rollback can restore it rather than simply deleting the downloaded file.
+func (s *Stack) AppendDownload(phase, component, dst, priorContent string, hadPrior bool) error {
+	return s.Append(phase, component, KindDownload, inverseDownload{
+		Dst:          dst,
+		PriorContent: priorContent,
+		HadPrior:     hadPrior,
+	})
 }

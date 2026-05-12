@@ -110,7 +110,7 @@ func TestRollback_Symlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := s.AppendSymlink("install", "test", dst); err != nil {
+	if err := s.AppendSymlink("install", "test", dst, "", false); err != nil {
 		t.Fatalf("AppendSymlink: %v", err)
 	}
 	if err := os.Symlink(src, dst); err != nil {

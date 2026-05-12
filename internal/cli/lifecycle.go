@@ -9,6 +9,7 @@ import (
 	"github.com/meowshed/meowctl/internal/lifecycle"
 	"github.com/meowshed/meowctl/internal/rollback"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
+	"github.com/meowshed/meowctl/internal/state"
 	"github.com/spf13/cobra"
 )
 
@@ -20,20 +21,18 @@ type runConfig struct {
 }
 
 // defaultRunConfig returns a runConfig populated from the environment.
-// It panics if no home directory can be determined and MEOWCTL_DOTFILES is
-// unset, because there is no safe default path to use.
-func defaultRunConfig() runConfig {
+// Returns an error if no home directory can be determined and MEOWCTL_DOTFILES
+// is unset, because there is no safe default path to use.
+func defaultRunConfig() (runConfig, error) {
 	dir := os.Getenv("MEOWCTL_DOTFILES")
 	if dir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			// Without a home directory there is no reasonable default; abort early
-			// rather than silently using an empty path.
-			panic(fmt.Sprintf("meowctl: cannot determine home directory: %v", err))
+			return runConfig{}, fmt.Errorf("meowctl: cannot determine home directory: %w", err)
 		}
 		dir = filepath.Join(home, "dotfiles")
 	}
-	return runConfig{DotfilesDir: dir}
+	return runConfig{DotfilesDir: dir}, nil
 }
 
 // addLifecycleFlags attaches --dry-run and --no-rollback flags to cmd.
@@ -43,7 +42,7 @@ func addLifecycleFlags(cmd *cobra.Command, cfg *runConfig) {
 }
 
 // buildRunner constructs a Runner for the given config and component order.
-func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.Stack) *lifecycle.Runner {
+func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.Stack, sentinel *state.Manager) *lifecycle.Runner {
 	eval := &starlarkpkg.Evaluator{}
 	caller := &starlarkHookCaller{
 		dotfilesDir: cfg.DotfilesDir,
@@ -55,6 +54,7 @@ func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.S
 		Order:      order,
 		Caller:     caller,
 		Stack:      stack,
+		Sentinel:   sentinel,
 		NoRollback: cfg.NoRollback,
 	}
 }
@@ -71,7 +71,7 @@ type starlarkHookCaller struct {
 func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
 	// Resolve component file: <dotfiles>/<componentID>.star
 	componentFile := filepath.Join(h.dotfilesDir, componentID+".star")
-	if _, err := os.Stat(componentFile); os.IsNotExist(err) {
+	if _, err := os.Lstat(componentFile); os.IsNotExist(err) {
 		// No component file — skip silently (component may have no hooks).
 		return nil
 	}
@@ -115,13 +115,20 @@ func envMap() map[string]string {
 }
 
 func newInstallCmd() *cobra.Command {
-	cfg := defaultRunConfig()
+	var cfg runConfig
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Run the full install phase set for all components",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return runLifecyclePhaseSet("install", lifecycle.PhaseSetInstall, cfg)
+			base, err := defaultRunConfig()
+			if err != nil {
+				return err
+			}
+			// Preserve flag values that Cobra wrote into cfg before RunE.
+			base.DryRun = cfg.DryRun
+			base.NoRollback = cfg.NoRollback
+			return runLifecyclePhaseSet("install", lifecycle.PhaseSetInstall, base)
 		},
 	}
 	addLifecycleFlags(cmd, &cfg)
@@ -129,13 +136,19 @@ func newInstallCmd() *cobra.Command {
 }
 
 func newUninstallCmd() *cobra.Command {
-	cfg := defaultRunConfig()
+	var cfg runConfig
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Run the uninstall phase for all components",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return runLifecyclePhaseSet("uninstall", lifecycle.PhaseSetUninstall, cfg)
+			base, err := defaultRunConfig()
+			if err != nil {
+				return err
+			}
+			base.DryRun = cfg.DryRun
+			base.NoRollback = cfg.NoRollback
+			return runLifecyclePhaseSet("uninstall", lifecycle.PhaseSetUninstall, base)
 		},
 	}
 	addLifecycleFlags(cmd, &cfg)
@@ -143,13 +156,19 @@ func newUninstallCmd() *cobra.Command {
 }
 
 func newVerifyCmd() *cobra.Command {
-	cfg := defaultRunConfig()
+	var cfg runConfig
 	cmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Verify the current environment against the dotfiles config",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return runLifecyclePhaseSet("verify", lifecycle.PhaseSetVerify, cfg)
+			base, err := defaultRunConfig()
+			if err != nil {
+				return err
+			}
+			base.DryRun = cfg.DryRun
+			base.NoRollback = cfg.NoRollback
+			return runLifecyclePhaseSet("verify", lifecycle.PhaseSetVerify, base)
 		},
 	}
 	addLifecycleFlags(cmd, &cfg)
@@ -175,11 +194,14 @@ func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig) 
 		defer func() { _ = stack.Close() }()
 	}
 
-	// Component order will be populated from the lock file once component discovery is wired.
+	// TODO(M6): populate order from lock file once component discovery is wired.
+	// Until then, the warning below fires on every invocation and RunPhaseSet is a no-op.
 	order := []lifecycle.ComponentID{}
 	if len(order) == 0 {
 		fmt.Fprintf(os.Stderr, "meowctl: warning: no components in order; nothing to do (component discovery not yet wired)\n")
 	}
-	runner := buildRunner(cfg, order, stack)
+	statePath := filepath.Join(home, ".config", "meowctl", "state.toml")
+	sentinel := state.NewManager(statePath)
+	runner := buildRunner(cfg, order, stack, sentinel)
 	return runner.RunPhaseSet(name, phases)
 }

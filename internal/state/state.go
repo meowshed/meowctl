@@ -97,7 +97,7 @@ func (m *Manager) Save(s Sentinel) error {
 		_ = os.Remove(tmp) // #nosec G703
 		return fmt.Errorf("state: close temp file: %w", err)
 	}
-	if err := os.Rename(tmp, m.path); err != nil { // #nosec G703
+	if err := os.Rename(tmp, m.path); err != nil {
 		_ = os.Remove(tmp) // #nosec G703
 		return fmt.Errorf("state: rename sentinel: %w", err)
 	}

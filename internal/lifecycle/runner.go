@@ -25,19 +25,22 @@ const (
 )
 
 // Phase sets define the ordered phases for each top-level command.
+// PhaseSetUpdate is reserved for the future meowctl update command and is not
+// currently wired to any CLI command.
 var (
 	PhaseSetInstall   = []Phase{PhaseBootstrap, PhaseInit, PhaseInstall, PhaseSetup, PhaseShell}
-	PhaseSetUpdate    = []Phase{PhaseInstall, PhaseSetup, PhaseShell} // Reserved for the future meowctl update command; not currently wired to any CLI command.
+	PhaseSetUpdate    = []Phase{PhaseInstall, PhaseSetup, PhaseShell}
 	PhaseSetUninstall = []Phase{PhaseUninstall}
 	PhaseSetVerify    = []Phase{PhaseVerify}
 )
 
-// HookCaller executes a named lifecycle hook for one component file.
-// componentFile is the path to the component's Starlark file.
+// HookCaller executes a named lifecycle hook for one component.
+// componentID is the component identifier; the implementation resolves the
+// corresponding Starlark file path internally.
 // hookName is the hook function name (e.g. "install", "uninstall").
 // Returns nil if the hook is absent (optional hooks).
 type HookCaller interface {
-	CallHook(componentFile, hookName string) error
+	CallHook(componentID, hookName string) error
 }
 
 // ComponentFailure records a hook execution error for one component.
@@ -177,16 +180,16 @@ func (r *Runner) executeRollback() state.RolledBack {
 		return state.RolledBackFailed
 	}
 	if result.SkippedLines > 0 {
-		r.log("meowctl: warning: rollback skipped %d malformed journal line(s); some ops may not have been reversed\n", result.SkippedLines)
+		r.log("meowctl: warning: rollback skipped %d malformed journal line(s) at lines %v; some ops may not have been reversed\n", result.SkippedLines, result.SkippedAt)
 	}
-	if len(result.Failures) == 0 && result.SkippedLines == 0 {
+	if len(result.Failures) == 0 {
+		// Warning already logged above if SkippedLines > 0; treat as OK since
+		// all parseable ops were reversed successfully.
 		return state.RolledBackOK
 	}
-	if len(result.Failures) > 0 {
-		r.log("meowctl: warning: rollback completed with %d failure(s):\n", len(result.Failures))
-		for _, f := range result.Failures {
-			r.log("  [%s] %s/%s: %v\n", f.Record.Kind, f.Record.Phase, f.Record.Component, f.Err)
-		}
+	r.log("meowctl: warning: rollback completed with %d failure(s):\n", len(result.Failures))
+	for _, f := range result.Failures {
+		r.log("  [%s] %s/%s: %v\n", f.Record.Kind, f.Record.Phase, f.Record.Component, f.Err)
 	}
 	return state.RolledBackPartial
 }

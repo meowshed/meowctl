@@ -17,6 +17,22 @@ type ComponentID = string
 //
 // Returns an error if the graph contains a cycle.
 func TopoSort(deps map[ComponentID][]ComponentID) ([]ComponentID, error) {
+	// Deduplicate dep lists to avoid inflated in-degree counts and
+	// double-enqueue during Kahn's traversal.
+	dedupedDeps := make(map[ComponentID][]ComponentID, len(deps))
+	for id, depList := range deps {
+		seen := make(map[ComponentID]struct{}, len(depList))
+		deduped := depList[:0]
+		for _, d := range depList {
+			if _, ok := seen[d]; !ok {
+				seen[d] = struct{}{}
+				deduped = append(deduped, d)
+			}
+		}
+		dedupedDeps[id] = deduped
+	}
+	deps = dedupedDeps
+
 	// Collect all nodes, including those referenced only as deps.
 	allNodes := make(map[ComponentID]struct{})
 	for id, depList := range deps {
