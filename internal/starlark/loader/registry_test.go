@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"crypto/sha512"
 	"encoding/base64"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -387,5 +388,107 @@ func TestRegistryLoader_MVSDiamond(t *testing.T) {
 	}
 	if dv.String() != `"v2.0.0"` {
 		t.Errorf("expected dep_version = v2.0.0, got %v", dv)
+	}
+}
+
+// TestRegistryLoader_CompatWarn verifies that a registry index with compat > 1
+// causes a warning to be printed to stderr, but does NOT fail the load.
+func TestRegistryLoader_CompatWarn(t *testing.T) {
+	modContent := []byte(`compat_val = "ok"`)
+	tarball := buildTarGz(t, map[string][]byte{"compat.star": modContent})
+
+	tarballServer := testServer(t, map[string][]byte{
+		"/compat-v1.0.0.tar.gz": tarball,
+	})
+	defer tarballServer.Close()
+
+	// Build a raw TOML index with compat = 2.
+	indexBody := []byte("compat = 2\n\n[modules.compat]\nversions = [\"v1.0.0\"]\nsource = \"" +
+		tarballServer.URL + "/compat-{version}.tar.gz\"\n")
+
+	indexServer := testServer(t, map[string][]byte{"/": indexBody})
+	defer indexServer.Close()
+
+	// Redirect os.Stderr to a pipe so we can capture the warning.
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stderr = w
+
+	cacheDir := t.TempDir()
+	lockPath := filepath.Join(t.TempDir(), "meowctl.lock")
+	cl := newTestRegistryLoader(t, indexServer, cacheDir, lockPath)
+	thread := &gostarlark.Thread{Name: "test"}
+
+	_, loadErr := cl.Load(thread, "@compat//compat.star", gostarlark.StringDict{})
+
+	// Restore stderr before any assertions.
+	if err := w.Close(); err != nil {
+		t.Fatalf("close write pipe: %v", err)
+	}
+	os.Stderr = origStderr
+	var stderrBuf bytes.Buffer
+	_, _ = io.Copy(&stderrBuf, r)
+	if err := r.Close(); err != nil {
+		t.Fatalf("close read pipe: %v", err)
+	}
+
+	if loadErr != nil {
+		t.Fatalf("Load should succeed even with compat=2, got: %v", loadErr)
+	}
+	if !strings.Contains(stderrBuf.String(), "compat=2") {
+		t.Errorf("expected stderr warning containing 'compat=2', got: %q", stderrBuf.String())
+	}
+}
+
+// TestRegistryLoader_CompatNoWarn verifies that a registry index without a
+// compat field (or compat = 1) does NOT emit any warning to stderr.
+func TestRegistryLoader_CompatNoWarn(t *testing.T) {
+	modContent := []byte(`quiet_val = "quiet"`)
+	tarball := buildTarGz(t, map[string][]byte{"quiet.star": modContent})
+
+	tarballServer := testServer(t, map[string][]byte{
+		"/quiet-v1.0.0.tar.gz": tarball,
+	})
+	defer tarballServer.Close()
+
+	// Build a raw TOML index with compat = 1 (no warning expected).
+	indexBody := []byte("compat = 1\n\n[modules.quiet]\nversions = [\"v1.0.0\"]\nsource = \"" +
+		tarballServer.URL + "/quiet-{version}.tar.gz\"\n")
+
+	indexServer := testServer(t, map[string][]byte{"/": indexBody})
+	defer indexServer.Close()
+
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stderr = w
+
+	cacheDir := t.TempDir()
+	lockPath := filepath.Join(t.TempDir(), "meowctl.lock")
+	cl := newTestRegistryLoader(t, indexServer, cacheDir, lockPath)
+	thread := &gostarlark.Thread{Name: "test"}
+
+	_, loadErr := cl.Load(thread, "@quiet//quiet.star", gostarlark.StringDict{})
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("close write pipe: %v", err)
+	}
+	os.Stderr = origStderr
+	var stderrBuf bytes.Buffer
+	_, _ = io.Copy(&stderrBuf, r)
+	if err := r.Close(); err != nil {
+		t.Fatalf("close read pipe: %v", err)
+	}
+
+	if loadErr != nil {
+		t.Fatalf("Load should succeed with compat=1, got: %v", loadErr)
+	}
+	if strings.Contains(stderrBuf.String(), "compat") {
+		t.Errorf("expected no compat warning for compat=1, got: %q", stderrBuf.String())
 	}
 }
