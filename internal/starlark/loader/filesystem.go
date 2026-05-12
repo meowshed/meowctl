@@ -10,28 +10,42 @@ import (
 	"go.starlark.net/syntax"
 )
 
-const selfScheme = "self//"
+const (
+	selfScheme = "self//"
+	userScheme = "user://"
+)
 
-// FileSystemLoader loads Starlark modules referenced with the self// scheme.
-// The scheme resolves paths relative to a root directory (typically the dotfiles root).
+// FileSystemLoader loads Starlark modules referenced with the self// or user:// scheme.
+// The scheme resolves paths relative to a root directory.
 //
-// Example: self//lib/helpers.star → <root>/lib/helpers.star
+// Example (self//): self//lib/helpers.star → <root>/lib/helpers.star
+// Example (user://): user://modules/helpers.star → <root>/modules/helpers.star
 type FileSystemLoader struct {
 	Root     string
+	scheme   string // "self//" or "user://"
 	fileOpts *syntax.FileOptions
+}
+
+// NewUserLoader creates a FileSystemLoader rooted at configDir that handles
+// the user:// scheme. user:// paths resolve relative to the user's meowctl
+// config directory (typically ~/.config/meowctl).
+//
+// Example: user://modules/helpers.star → <configDir>/modules/helpers.star
+func NewUserLoader(configDir string, opts *syntax.FileOptions) *FileSystemLoader {
+	return &FileSystemLoader{Root: configDir, fileOpts: opts, scheme: userScheme}
 }
 
 // NewFileSystemLoader creates a FileSystemLoader rooted at root.
 func NewFileSystemLoader(root string, opts *syntax.FileOptions) *FileSystemLoader {
-	return &FileSystemLoader{Root: root, fileOpts: opts}
+	return &FileSystemLoader{Root: root, fileOpts: opts, scheme: selfScheme}
 }
 
-// Load implements Loader. moduleURL must start with "self//".
+// Load implements Loader. moduleURL must start with the loader's scheme ("self//" or "user://").
 func (l *FileSystemLoader) Load(thread *gostarlark.Thread, moduleURL string, predeclared gostarlark.StringDict) (gostarlark.StringDict, error) {
-	if !strings.HasPrefix(moduleURL, selfScheme) {
+	if !strings.HasPrefix(moduleURL, l.scheme) {
 		return nil, fmt.Errorf("FileSystemLoader: unsupported scheme in %q", moduleURL)
 	}
-	rel := strings.TrimPrefix(moduleURL, selfScheme)
+	rel := strings.TrimPrefix(moduleURL, l.scheme)
 	abs := filepath.Join(l.Root, filepath.FromSlash(rel))
 
 	// Reject paths that escape the root (e.g. self//../../../etc/passwd).
