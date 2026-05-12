@@ -2,8 +2,10 @@ package loader
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/singleflight"
 
@@ -17,11 +19,21 @@ import (
 //
 // Supported schemes:
 //   - self//    → FileSystemLoader (local dotfiles)
+//   - user://   → FileSystemLoader rooted at the user config directory
 //   - @name//   → RegistryLoader
 //   - github:// → GitHubLoader
 type CompositeLoader struct {
 	root     string
+	userRoot string
+	cacheDir string
+	lockPath string
 	fileOpts *syntax.FileOptions
+	client   *http.Client
+
+	// githubAPIBase and githubRawBase override the default GitHub endpoints.
+	// Empty string means production defaults are used; overridden in tests via NewCompositeLoaderForTest.
+	githubAPIBase string
+	githubRawBase string
 
 	// sf deduplicates concurrent load calls for the same module URL so evaluation
 	// happens at most once even when multiple goroutines race to load the same module.
@@ -30,12 +42,34 @@ type CompositeLoader struct {
 	cache map[string]gostarlark.StringDict
 }
 
+// CompositeLoaderOptions holds optional configuration for NewCompositeLoader.
+type CompositeLoaderOptions struct {
+	// UserRoot is the directory for user:// scheme resolution (typically ~/.config/meowctl).
+	UserRoot string
+	// CacheDir is the directory for downloaded module caches (typically ~/.cache/meowctl).
+	CacheDir string
+	// LockPath is the path to the meowctl lock file.
+	LockPath string
+	// Client overrides the default HTTP client. Useful for tests.
+	Client *http.Client
+}
+
 // NewCompositeLoader creates a CompositeLoader. root is the dotfiles root directory,
-// used by FileSystemLoader to resolve self// paths.
-func NewCompositeLoader(root string, opts *syntax.FileOptions) *CompositeLoader {
+// used by FileSystemLoader to resolve self// paths. opts provides optional config
+// for the remote loaders; zero-value opts disables remote loading (github:// and @name//
+// will return errors until their dependencies are configured).
+func NewCompositeLoader(root string, fileOpts *syntax.FileOptions, opts CompositeLoaderOptions) *CompositeLoader {
+	client := opts.Client
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
 	return &CompositeLoader{
 		root:     root,
-		fileOpts: opts,
+		userRoot: opts.UserRoot,
+		cacheDir: opts.CacheDir,
+		lockPath: opts.LockPath,
+		fileOpts: fileOpts,
+		client:   client,
 		cache:    make(map[string]gostarlark.StringDict),
 	}
 }
@@ -59,8 +93,20 @@ func (c *CompositeLoader) Load(thread *gostarlark.Thread, moduleURL string, pred
 		switch {
 		case strings.HasPrefix(moduleURL, selfScheme):
 			sub = NewFileSystemLoader(c.root, c.fileOpts)
-		case strings.HasPrefix(moduleURL, "github://"):
-			sub = &GitHubLoader{}
+		case strings.HasPrefix(moduleURL, userScheme):
+			if c.userRoot == "" {
+				return nil, fmt.Errorf("CompositeLoader: user:// requested but UserRoot not configured")
+			}
+			sub = NewUserLoader(c.userRoot, c.fileOpts)
+		case strings.HasPrefix(moduleURL, githubScheme):
+			gh := newGitHubLoader(c.cacheDir, c.lockPath, c.client, c.fileOpts)
+			if c.githubAPIBase != "" {
+				gh.apiBase = c.githubAPIBase
+			}
+			if c.githubRawBase != "" {
+				gh.rawBase = c.githubRawBase
+			}
+			sub = gh
 		case len(moduleURL) > 1 && moduleURL[0] == '@' && strings.Contains(moduleURL, "//"):
 			sub = &RegistryLoader{}
 		default:
