@@ -6,8 +6,8 @@ package loader_test
 // Run with: go test -tags integration ./internal/starlark/loader/...
 //
 // This test is intentionally excluded from normal CI. It validates that the
-// live registry index and meowctl-hello release asset are reachable and that
-// loading @meowctl-hello//hello.star returns greeting = "hello".
+// live registry index and hello release asset are reachable and that
+// loading @hello//hello.star returns greeting = "hello".
 
 import (
 	"net/http"
@@ -21,7 +21,7 @@ import (
 	"github.com/meowshed/meowctl/internal/starlark/loader"
 )
 
-// TestLiveRegistry_HelloGreeting loads @meowctl-hello//hello.star from the
+// TestLiveRegistry_HelloGreeting loads @hello//hello.star from the
 // live meowctl-registry index and asserts greeting = "hello".
 func TestLiveRegistry_HelloGreeting(t *testing.T) {
 	cacheDir := t.TempDir()
@@ -44,9 +44,9 @@ func TestLiveRegistry_HelloGreeting(t *testing.T) {
 	)
 
 	thread := &gostarlark.Thread{Name: "live-integration"}
-	globals, err := cl.Load(thread, "@meowctl-hello//hello.star", gostarlark.StringDict{})
+	globals, err := cl.Load(thread, "@hello//hello.star", gostarlark.StringDict{})
 	if err != nil {
-		t.Fatalf("Load @meowctl-hello//hello.star: %v", err)
+		t.Fatalf("Load @hello//hello.star: %v", err)
 	}
 
 	v, ok := globals["greeting"]
