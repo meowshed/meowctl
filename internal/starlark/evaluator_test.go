@@ -21,7 +21,7 @@ func newEvaluator(p starlark.PlatformInfo) *starlark.Evaluator {
 // newEvaluatorWithLoader returns an Evaluator backed by a CompositeLoader rooted at root.
 func newEvaluatorWithLoader(root string, p starlark.PlatformInfo) *starlark.Evaluator {
 	return &starlark.Evaluator{
-		Loader:   loader.NewCompositeLoader(root, &syntax.FileOptions{}),
+		Loader:   loader.NewCompositeLoader(root, &syntax.FileOptions{}, loader.CompositeLoaderOptions{}),
 		Platform: p,
 	}
 }
