@@ -37,6 +37,11 @@ type indexEntry struct {
 
 // registryIndex is the top-level structure of index.toml.
 type registryIndex struct {
+	// Compat is the schema version of the index. Loaders MUST warn (not fail)
+	// when Compat > 1. A missing compat field decodes as 0 (TOML zero-value),
+	// which is treated identically to compat = 1 (silent). The supported compat
+	// level is 1; update this comment and the warning text together if that changes.
+	Compat  int                   `toml:"compat"`
 	Modules map[string]indexEntry `toml:"modules"`
 }
 
@@ -232,6 +237,9 @@ func (l *RegistryLoader) fetchIndex() (*registryIndex, error) {
 	var idx registryIndex
 	if _, err := toml.Decode(string(body), &idx); err != nil {
 		return nil, fmt.Errorf("parse registry index: %w", err)
+	}
+	if idx.Compat > 1 {
+		fmt.Fprintf(os.Stderr, "meowctl: warning: registry index requires compat=%d; this version of meowctl supports compat=1. Some features may be unavailable — upgrade meowctl if modules fail to load.\n", idx.Compat)
 	}
 	return &idx, nil
 }
