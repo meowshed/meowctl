@@ -28,6 +28,8 @@ func TestLiveRegistry_HelloGreeting(t *testing.T) {
 	lockPath := filepath.Join(t.TempDir(), "meowctl.lock")
 
 	// NewRegistryLoaderForTest with empty overrides → uses production defaults.
+	// os.TempDir() is passed as the dotfiles root (used by self// scheme only —
+	// not exercised here, so any readable directory works).
 	cl := loader.NewRegistryLoaderForTest(
 		os.TempDir(),
 		&syntax.FileOptions{},

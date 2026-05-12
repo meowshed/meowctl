@@ -39,7 +39,8 @@ type indexEntry struct {
 type registryIndex struct {
 	// Compat is the schema version of the index. Loaders MUST warn (not fail)
 	// when Compat > 1. A missing compat field decodes as 0 (TOML zero-value),
-	// which is treated identically to compat = 1.
+	// which is treated identically to compat = 1 (silent). The supported compat
+	// level is 1; update this comment and the warning text together if that changes.
 	Compat  int                   `toml:"compat"`
 	Modules map[string]indexEntry `toml:"modules"`
 }

@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"crypto/sha512"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -403,8 +404,10 @@ func TestRegistryLoader_CompatWarn(t *testing.T) {
 	defer tarballServer.Close()
 
 	// Build a raw TOML index with compat = 2.
-	indexBody := []byte("compat = 2\n\n[modules.compat]\nversions = [\"v1.0.0\"]\nsource = \"" +
-		tarballServer.URL + "/compat-{version}.tar.gz\"\n")
+	indexBody := []byte(fmt.Sprintf(
+		"compat = 2\n\n[modules.compat]\nversions = [\"v1.0.0\"]\nsource = \"%s/compat-{version}.tar.gz\"\n",
+		tarballServer.URL,
+	))
 
 	indexServer := testServer(t, map[string][]byte{"/": indexBody})
 	defer indexServer.Close()
@@ -443,8 +446,10 @@ func TestRegistryLoader_CompatWarn(t *testing.T) {
 	}
 }
 
-// TestRegistryLoader_CompatNoWarn verifies that a registry index without a
-// compat field (or compat = 1) does NOT emit any warning to stderr.
+// TestRegistryLoader_CompatNoWarn verifies that a registry index with no compat
+// field (TOML zero-value → Compat == 0) does NOT emit any warning to stderr.
+// This is the case a loader sees when fetching a legacy or minimal index.toml
+// that omits the compat key entirely.
 func TestRegistryLoader_CompatNoWarn(t *testing.T) {
 	modContent := []byte(`quiet_val = "quiet"`)
 	tarball := buildTarGz(t, map[string][]byte{"quiet.star": modContent})
@@ -454,9 +459,12 @@ func TestRegistryLoader_CompatNoWarn(t *testing.T) {
 	})
 	defer tarballServer.Close()
 
-	// Build a raw TOML index with compat = 1 (no warning expected).
-	indexBody := []byte("compat = 1\n\n[modules.quiet]\nversions = [\"v1.0.0\"]\nsource = \"" +
-		tarballServer.URL + "/quiet-{version}.tar.gz\"\n")
+	// Build a raw TOML index with NO compat field — Go decodes missing int as 0,
+	// which is ≤ 1 → silent (per ADR-004 zero-value contract).
+	indexBody := []byte(fmt.Sprintf(
+		"[modules.quiet]\nversions = [\"v1.0.0\"]\nsource = \"%s/quiet-{version}.tar.gz\"\n",
+		tarballServer.URL,
+	))
 
 	indexServer := testServer(t, map[string][]byte{"/": indexBody})
 	defer indexServer.Close()
@@ -486,9 +494,9 @@ func TestRegistryLoader_CompatNoWarn(t *testing.T) {
 	}
 
 	if loadErr != nil {
-		t.Fatalf("Load should succeed with compat=1, got: %v", loadErr)
+		t.Fatalf("Load should succeed with no compat field, got: %v", loadErr)
 	}
 	if strings.Contains(stderrBuf.String(), "compat") {
-		t.Errorf("expected no compat warning for compat=1, got: %q", stderrBuf.String())
+		t.Errorf("expected no compat warning for absent compat field, got: %q", stderrBuf.String())
 	}
 }
