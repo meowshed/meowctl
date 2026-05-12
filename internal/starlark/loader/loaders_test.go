@@ -93,7 +93,8 @@ func TestCompositeLoader_Dispatch_SelfScheme(t *testing.T) {
 	}
 }
 
-// TestCompositeLoader_Dispatch_GitHubScheme verifies that github:// returns not-implemented error.
+// TestCompositeLoader_Dispatch_GitHubScheme verifies that github:// returns an error
+// when no cache or lock is configured (zero-value CompositeLoaderOptions).
 func TestCompositeLoader_Dispatch_GitHubScheme(t *testing.T) {
 	cl := loader.NewCompositeLoader(t.TempDir(), &syntax.FileOptions{}, loader.CompositeLoaderOptions{})
 	thread := &gostarlark.Thread{Name: "test"}
@@ -104,7 +105,8 @@ func TestCompositeLoader_Dispatch_GitHubScheme(t *testing.T) {
 	}
 }
 
-// TestCompositeLoader_Dispatch_RegistryScheme verifies that @name// returns not-implemented error.
+// TestCompositeLoader_Dispatch_RegistryScheme verifies that @name// returns an error
+// when no registry is reachable (zero-value CompositeLoaderOptions).
 func TestCompositeLoader_Dispatch_RegistryScheme(t *testing.T) {
 	cl := loader.NewCompositeLoader(t.TempDir(), &syntax.FileOptions{}, loader.CompositeLoaderOptions{})
 	thread := &gostarlark.Thread{Name: "test"}
