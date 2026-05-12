@@ -1,12 +1,14 @@
 // Package ctx implements the ctx object passed to lifecycle hook functions in
 // user-authored Starlark component files. CtxValue satisfies starlark.HasAttrs
-// and exposes 21 methods and 6 data properties.
+// and exposes a set of methods and data properties — see AttrNames for the
+// authoritative list.
 package ctx
 
 import (
 	"fmt"
 	"sort"
 
+	"github.com/meowshed/meowctl/internal/rollback"
 	gostarlark "go.starlark.net/starlark"
 )
 
@@ -29,6 +31,15 @@ type Capabilities struct {
 	Platform gostarlark.Value
 	// Env is a copy of the process environment, used by ctx.env().
 	Env map[string]string
+	// Phase is the current lifecycle phase name (e.g. "install").
+	Phase string
+	// Component is the component ID being executed (e.g. "components/neovim").
+	Component string
+	// RollbackStack is the write-ahead log for reversible operations.
+	// May be nil (dry-run mode or read-only phases like verify).
+	RollbackStack *rollback.Stack
+	// Log is the function used for ctx.log() output. Defaults to fmt.Println.
+	Log func(msg string)
 }
 
 // CtxValue is the ctx object passed to lifecycle hook functions. It implements
@@ -49,7 +60,7 @@ var (
 	_ gostarlark.HasAttrs = (*CtxValue)(nil)
 )
 
-// New constructs a CtxValue with all 21 methods registered and all 6 data
+// New constructs a CtxValue with all methods registered and all data
 // properties populated from caps. The returned value is ready to pass to
 // Evaluator.CallHook as the ctx argument.
 func New(caps *Capabilities) *CtxValue {
@@ -132,7 +143,7 @@ func (c *CtxValue) Attr(name string) (gostarlark.Value, error) {
 }
 
 // AttrNames implements starlark.HasAttrs. Returns a sorted list of all
-// property and method names — 27 in total for a fully constructed CtxValue.
+// property and method names registered on this CtxValue.
 func (c *CtxValue) AttrNames() []string {
 	names := make([]string, 0, len(c.props)+len(c.methods))
 	for k := range c.props {
