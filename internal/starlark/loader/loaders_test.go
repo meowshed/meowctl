@@ -81,7 +81,7 @@ func TestCompositeLoader_Dispatch_SelfScheme(t *testing.T) {
 	dir := t.TempDir()
 	writeStarFile(t, dir, "mod.star", `answer = 1`)
 
-	cl := loader.NewCompositeLoader(dir, &syntax.FileOptions{})
+	cl := loader.NewCompositeLoader(dir, &syntax.FileOptions{}, loader.CompositeLoaderOptions{})
 	thread := &gostarlark.Thread{Name: "test"}
 
 	globals, err := cl.Load(thread, "self//mod.star", gostarlark.StringDict{})
@@ -95,7 +95,7 @@ func TestCompositeLoader_Dispatch_SelfScheme(t *testing.T) {
 
 // TestCompositeLoader_Dispatch_GitHubScheme verifies that github:// returns not-implemented error.
 func TestCompositeLoader_Dispatch_GitHubScheme(t *testing.T) {
-	cl := loader.NewCompositeLoader(t.TempDir(), &syntax.FileOptions{})
+	cl := loader.NewCompositeLoader(t.TempDir(), &syntax.FileOptions{}, loader.CompositeLoaderOptions{})
 	thread := &gostarlark.Thread{Name: "test"}
 
 	_, err := cl.Load(thread, "github://org/repo@1.0.0//lib.star", gostarlark.StringDict{})
@@ -106,7 +106,7 @@ func TestCompositeLoader_Dispatch_GitHubScheme(t *testing.T) {
 
 // TestCompositeLoader_Dispatch_RegistryScheme verifies that @name// returns not-implemented error.
 func TestCompositeLoader_Dispatch_RegistryScheme(t *testing.T) {
-	cl := loader.NewCompositeLoader(t.TempDir(), &syntax.FileOptions{})
+	cl := loader.NewCompositeLoader(t.TempDir(), &syntax.FileOptions{}, loader.CompositeLoaderOptions{})
 	thread := &gostarlark.Thread{Name: "test"}
 
 	_, err := cl.Load(thread, "@mymod//lib.star", gostarlark.StringDict{})
@@ -117,7 +117,7 @@ func TestCompositeLoader_Dispatch_RegistryScheme(t *testing.T) {
 
 // TestCompositeLoader_Dispatch_UnknownScheme verifies that an unknown scheme returns an error.
 func TestCompositeLoader_Dispatch_UnknownScheme(t *testing.T) {
-	cl := loader.NewCompositeLoader(t.TempDir(), &syntax.FileOptions{})
+	cl := loader.NewCompositeLoader(t.TempDir(), &syntax.FileOptions{}, loader.CompositeLoaderOptions{})
 	thread := &gostarlark.Thread{Name: "test"}
 
 	_, err := cl.Load(thread, "http://example.com/lib.star", gostarlark.StringDict{})
@@ -131,7 +131,7 @@ func TestCompositeLoader_Cache(t *testing.T) {
 	dir := t.TempDir()
 	writeStarFile(t, dir, "once.star", `val = "cached"`)
 
-	cl := loader.NewCompositeLoader(dir, &syntax.FileOptions{})
+	cl := loader.NewCompositeLoader(dir, &syntax.FileOptions{}, loader.CompositeLoaderOptions{})
 	thread := &gostarlark.Thread{Name: "test"}
 
 	g1, err := cl.Load(thread, "self//once.star", gostarlark.StringDict{})
@@ -159,7 +159,7 @@ func TestCompositeLoader_CacheConcurrent(t *testing.T) {
 	dir := t.TempDir()
 	writeStarFile(t, dir, "concurrent.star", `n = 99`)
 
-	cl := loader.NewCompositeLoader(dir, &syntax.FileOptions{})
+	cl := loader.NewCompositeLoader(dir, &syntax.FileOptions{}, loader.CompositeLoaderOptions{})
 
 	const goroutines = 10
 	var wg sync.WaitGroup
