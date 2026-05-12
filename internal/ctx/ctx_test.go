@@ -1,6 +1,8 @@
 package ctx_test
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -50,6 +52,14 @@ func testCaps() *ctx.Capabilities {
 		Platform:     gostarlark.None,
 		Env:          map[string]string{"HOME": "/home/user", "EDITOR": "vim"},
 	}
+}
+
+// dryRunCaps returns Capabilities with DryRun set. Use for tests that exercise
+// network or system-call methods where real execution is undesirable.
+func dryRunCaps() *ctx.Capabilities {
+	caps := testCaps()
+	caps.DryRun = true
+	return caps
 }
 
 // TestCtxValue_AttrNames asserts the full 27-name surface — the structural
@@ -284,7 +294,7 @@ func TestStarRun_ArgsOptional(t *testing.T) {
 }
 
 func TestStarGitClone_RefOptional(t *testing.T) {
-	c := ctx.New(testCaps())
+	c := ctx.New(dryRunCaps())
 	_, err := callBuiltin(t, c, "git_clone",
 		gostarlark.Tuple{gostarlark.String("https://github.com/x/y"), gostarlark.String("/tmp/y")}, nil)
 	if err != nil {
@@ -293,7 +303,7 @@ func TestStarGitClone_RefOptional(t *testing.T) {
 }
 
 func TestStarDownload_ChecksumOptional(t *testing.T) {
-	c := ctx.New(testCaps())
+	c := ctx.New(dryRunCaps())
 	_, err := callBuiltin(t, c, "download",
 		gostarlark.Tuple{gostarlark.String("https://example.com/file"), gostarlark.String("/tmp/file")}, nil)
 	if err != nil {
@@ -327,7 +337,7 @@ func TestStarDefaultsWrite_RequiresAllArgs(t *testing.T) {
 }
 
 func TestStarPlistSet_RequiresAllArgs(t *testing.T) {
-	c := ctx.New(testCaps())
+	c := ctx.New(dryRunCaps())
 	_, err := callBuiltin(t, c, "plist_set",
 		gostarlark.Tuple{
 			gostarlark.String("/Library/Preferences/foo.plist"),
@@ -426,7 +436,13 @@ func TestStarRender_MissingVarsErrors(t *testing.T) {
 }
 
 func TestStarRenderFile_ValidCall(t *testing.T) {
-	c := ctx.New(testCaps())
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "tmpl.txt"), []byte("hello {{NAME}}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	caps := testCaps()
+	caps.ComponentDir = tmp
+	c := ctx.New(caps)
 	_, err := callBuiltin(t, c, "render_file",
 		gostarlark.Tuple{gostarlark.String("tmpl.txt"), &gostarlark.Dict{}}, nil)
 	if err != nil {

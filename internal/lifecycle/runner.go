@@ -1,0 +1,195 @@
+// Package lifecycle implements the meowctl phase runner and component execution
+// order for lifecycle operations (install, uninstall, verify, etc.).
+package lifecycle
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/meowshed/meowctl/internal/rollback"
+	"github.com/meowshed/meowctl/internal/state"
+)
+
+// Phase identifies one of the 7 meowctl lifecycle phases.
+type Phase string
+
+// Phase constants define the 7 lifecycle phases in execution order.
+const (
+	PhaseBootstrap Phase = "bootstrap"
+	PhaseInit      Phase = "init"
+	PhaseInstall   Phase = "install"
+	PhaseSetup     Phase = "setup"
+	PhaseShell     Phase = "shell"
+	PhaseUninstall Phase = "uninstall"
+	PhaseVerify    Phase = "verify"
+)
+
+// Phase sets define the ordered phases for each top-level command.
+// PhaseSetUpdate is reserved for the future meowctl update command and is not
+// currently wired to any CLI command.
+var (
+	PhaseSetInstall   = []Phase{PhaseBootstrap, PhaseInit, PhaseInstall, PhaseSetup, PhaseShell}
+	PhaseSetUpdate    = []Phase{PhaseInstall, PhaseSetup, PhaseShell}
+	PhaseSetUninstall = []Phase{PhaseUninstall}
+	PhaseSetVerify    = []Phase{PhaseVerify}
+)
+
+// HookCaller executes a named lifecycle hook for one component.
+// componentID is the component identifier; the implementation resolves the
+// corresponding Starlark file path internally.
+// hookName is the hook function name (e.g. "install", "uninstall").
+// Returns nil if the hook is absent (optional hooks).
+type HookCaller interface {
+	CallHook(componentID, hookName string) error
+}
+
+// ComponentFailure records a hook execution error for one component.
+type ComponentFailure struct {
+	Component string
+	Err       error
+}
+
+// PhaseError is returned when one or more components fail during a phase.
+type PhaseError struct {
+	Phase    Phase
+	Failures []ComponentFailure
+}
+
+// Error implements the error interface.
+func (e *PhaseError) Error() string {
+	msgs := make([]string, len(e.Failures))
+	for i, f := range e.Failures {
+		msgs[i] = fmt.Sprintf("%s: %v", f.Component, f.Err)
+	}
+	return fmt.Sprintf("phase %s: %d component(s) failed: %s",
+		e.Phase, len(e.Failures), strings.Join(msgs, "; "))
+}
+
+// Runner executes lifecycle phases for an ordered list of components.
+type Runner struct {
+	// Order is the dependency-first list of component IDs to execute.
+	Order []ComponentID
+	// HookCaller executes individual hooks.
+	Caller HookCaller
+	// Stack is the rollback write-ahead log. May be nil for dry-run or verify phases.
+	Stack *rollback.Stack
+	// Sentinel tracks run progress. May be nil to skip state tracking.
+	Sentinel *state.Manager
+	// NoRollback disables automatic rollback on phase failure.
+	NoRollback bool
+	// Log is called for warning/error output. Defaults to fmt.Printf when nil.
+	Log func(format string, args ...any)
+}
+
+// log calls r.Log if set, otherwise falls back to fmt.Printf.
+func (r *Runner) log(format string, args ...any) {
+	if r.Log != nil {
+		r.Log(format, args...)
+	} else {
+		fmt.Printf(format, args...)
+	}
+}
+
+// RunPhaseSet runs each phase in phases sequentially. On the first phase failure
+// it triggers rollback (unless NoRollback is true) and returns the error.
+func (r *Runner) RunPhaseSet(phaseSetName string, phases []Phase) error {
+	if r.Sentinel != nil {
+		if err := r.Sentinel.RecordRunStart(phaseSetName); err != nil {
+			// Non-fatal: log and continue.
+			r.log("meowctl: warning: could not write state: %v\n", err)
+		}
+	}
+
+	var runErr error
+	for _, phase := range phases {
+		if err := r.RunPhase(phase); err != nil {
+			runErr = err
+			break
+		}
+	}
+
+	if runErr != nil {
+		var rb state.RolledBack
+		if !r.NoRollback && r.Stack != nil {
+			// Rollback enabled and a stack is open — attempt reverse.
+			rb = r.executeRollback()
+		} else {
+			// No rollback attempted: either --no-rollback flag or dry-run (Stack==nil).
+			rb = state.RolledBackNone
+		}
+		if r.Sentinel != nil {
+			_ = r.Sentinel.RecordRunEnd(false, rb)
+		}
+		return runErr
+	}
+
+	// Success path.
+	if r.Stack != nil {
+		if err := r.Stack.Truncate(); err != nil {
+			// A truncate failure leaves stale records in the journal; the next
+			// run might attempt to replay them against an already-clean system.
+			// Treat this as a hard error so the caller can alert the user.
+			r.log("meowctl: error: could not truncate rollback journal: %v\n", err)
+			return fmt.Errorf("rollback journal truncate: %w", err)
+		}
+	}
+	if r.Sentinel != nil {
+		_ = r.Sentinel.RecordRunEnd(true, state.RolledBackNone)
+	}
+	return nil
+}
+
+// RunPhase executes one phase for all components in order.
+// Fail-slow: all components are attempted even if earlier ones fail, so that
+// the caller receives a complete error picture rather than stopping at the
+// first failure. Sentinel state is only recorded when the entire phase
+// succeeds — if any component fails, rollback may undo work that would
+// otherwise be stale in the sentinel.
+func (r *Runner) RunPhase(phase Phase) error {
+	hookName := string(phase)
+	var failures []ComponentFailure
+
+	for _, id := range r.Order {
+		// Component files are named by convention: <id>/<phase>.star or just <id>.star
+		// For now pass the phase name as the hook name; the HookCaller resolves the file.
+		if err := r.Caller.CallHook(id, hookName); err != nil {
+			failures = append(failures, ComponentFailure{Component: id, Err: err})
+		}
+	}
+
+	if len(failures) > 0 {
+		return &PhaseError{Phase: phase, Failures: failures}
+	}
+
+	// Record completed components only after the phase is fully clean.
+	if r.Sentinel != nil {
+		for _, id := range r.Order {
+			if err := r.Sentinel.RecordComponent(string(phase), id); err != nil {
+				r.log("meowctl: warning: could not record component state: %v\n", err)
+			}
+		}
+	}
+	return nil
+}
+
+// executeRollback runs the rollback stack and returns the outcome status.
+func (r *Runner) executeRollback() state.RolledBack {
+	result := r.Stack.Execute()
+	if result.Err != nil {
+		r.log("meowctl: error: rollback journal unreadable: %v\n", result.Err)
+		return state.RolledBackFailed
+	}
+	if result.SkippedLines > 0 {
+		r.log("meowctl: warning: rollback skipped %d malformed journal line(s) at lines %v; some ops may not have been reversed\n", result.SkippedLines, result.SkippedAt)
+	}
+	if len(result.Failures) == 0 {
+		// Warning already logged above if SkippedLines > 0; treat as OK since
+		// all parseable ops were reversed successfully.
+		return state.RolledBackOK
+	}
+	r.log("meowctl: warning: rollback completed with %d failure(s):\n", len(result.Failures))
+	for _, f := range result.Failures {
+		r.log("  [%s] %s/%s: %v\n", f.Record.Kind, f.Record.Phase, f.Record.Component, f.Err)
+	}
+	return state.RolledBackPartial
+}
