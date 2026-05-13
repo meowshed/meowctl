@@ -42,6 +42,15 @@ type Capabilities struct {
 	// PMRegistry holds the registered package manager handlers, built during
 	// pass-1 component evaluation. May be nil if no PM components were loaded.
 	PMRegistry *pkg.PMRegistry
+	// RuntimeHook is true when ctx is running inside meowctl hook <phase>
+	// rather than during install-time lifecycle execution. When true, ctx.emit
+	// writes to stdout so the shell can eval the output.
+	RuntimeHook bool
+	// EmitFile is the absolute path of the shell init file that ctx.emit
+	// appends to during install-time execution. Empty string disables file
+	// writing (emit becomes a no-op outside shell/login phases or under
+	// dry-run). Ignored when RuntimeHook is true.
+	EmitFile string
 	// Log is the function used for ctx.log() output. Defaults to fmt.Println.
 	Log func(msg string)
 }

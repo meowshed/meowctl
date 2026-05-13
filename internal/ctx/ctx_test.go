@@ -375,6 +375,42 @@ func TestStarEmit_RequiresLine(t *testing.T) {
 	}
 }
 
+// TestStarEmit_NoopWithoutEmitFile verifies that emit is a no-op when
+// RuntimeHook is false and EmitFile is empty.
+func TestStarEmit_NoopWithoutEmitFile(t *testing.T) {
+	caps := testCaps()
+	caps.RuntimeHook = false
+	caps.EmitFile = ""
+	c := ctx.New(caps)
+	_, err := callBuiltin(t, c, "emit", gostarlark.Tuple{gostarlark.String("export FOO=bar")}, nil)
+	if err != nil {
+		t.Fatalf("emit no-op: unexpected error: %v", err)
+	}
+}
+
+// TestStarEmit_WritesToEmitFile verifies that emit appends to EmitFile during
+// install-time (RuntimeHook=false).
+func TestStarEmit_WritesToEmitFile(t *testing.T) {
+	dir := t.TempDir()
+	emitFile := filepath.Join(dir, ".zshrc")
+
+	caps := testCaps()
+	caps.RuntimeHook = false
+	caps.EmitFile = emitFile
+	c := ctx.New(caps)
+	_, err := callBuiltin(t, c, "emit", gostarlark.Tuple{gostarlark.String("export FOO=bar")}, nil)
+	if err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	content, readErr := os.ReadFile(emitFile) // #nosec G304
+	if readErr != nil {
+		t.Fatalf("read emit file: %v", readErr)
+	}
+	if !strings.Contains(string(content), "export FOO=bar") {
+		t.Errorf("emit file content = %q; want to contain %q", string(content), "export FOO=bar")
+	}
+}
+
 func TestStarRun_MissingCmdErrors(t *testing.T) {
 	c := ctx.New(testCaps())
 	_, err := callBuiltin(t, c, "run", nil, nil)

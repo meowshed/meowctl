@@ -59,7 +59,40 @@ func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.S
 	}
 }
 
-// starlarkHookCaller implements lifecycle.HookCaller via the Starlark evaluator.
+// phaseEmitFile returns the absolute path of the shell init file that
+// ctx.emit should append to during install-time execution of the given phase.
+// Returns empty string if the phase does not write to any rc file, or if the
+// shell name is unrecognised.
+func phaseEmitFile(home, phase, shellName string) string {
+	switch phase {
+	case string(lifecycle.PhaseShell):
+		switch shellName {
+		case "zsh":
+			return filepath.Join(home, ".zshrc")
+		case "bash":
+			return filepath.Join(home, ".bashrc")
+		case "fish":
+			return filepath.Join(home, ".config", "fish", "config.fish")
+		}
+	case string(lifecycle.PhaseLogin):
+		switch shellName {
+		case "zsh":
+			return filepath.Join(home, ".zprofile")
+		case "bash":
+			return filepath.Join(home, ".bash_profile")
+		case "fish":
+			return filepath.Join(home, ".config", "fish", "conf.d", "meowctl.fish")
+		}
+	}
+	return ""
+}
+
+// shellFromEnv returns the base name of the user's login shell derived from
+// the SHELL environment variable (e.g. "zsh", "bash", "fish").
+func shellFromEnv() string {
+	return strings.ToLower(filepath.Base(os.Getenv("SHELL")))
+}
+
 type starlarkHookCaller struct {
 	configDir  string
 	eval       *starlarkpkg.Evaluator
@@ -90,6 +123,7 @@ func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
 	if home, err := os.UserHomeDir(); err == nil {
 		caps.Home = home
 		caps.StateDir = filepath.Join(home, ".local", "share", "meowctl", componentID)
+		caps.EmitFile = phaseEmitFile(home, hookName, shellFromEnv())
 	}
 
 	ctxVal := ctx.New(caps)
