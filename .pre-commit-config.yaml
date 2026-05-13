@@ -15,6 +15,24 @@ repos:
     hooks:
       - id: golangci-lint
 
+  - repo: local
+    hooks:
+      - id: gosec
+        name: gosec security scanner
+        language: golang
+        entry: gosec
+        args: [./...]
+        pass_filenames: false
+        additional_dependencies: [github.com/securego/gosec/v2/cmd/gosec@v2.26.1]
+
+      - id: govulncheck
+        name: govulncheck vulnerability scanner
+        language: golang
+        entry: govulncheck
+        args: [./...]
+        pass_filenames: false
+        additional_dependencies: [golang.org/x/vuln/cmd/govulncheck@latest]
+
   - repo: https://github.com/trufflesecurity/trufflehog
     rev: v3.88.14
     hooks:
