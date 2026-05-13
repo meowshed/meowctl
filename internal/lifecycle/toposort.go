@@ -17,55 +17,13 @@ type ComponentID = string
 //
 // Returns an error if the graph contains a cycle.
 func TopoSort(deps map[ComponentID][]ComponentID) ([]ComponentID, error) {
-	// Deduplicate dep lists to avoid inflated in-degree counts and
-	// double-enqueue during Kahn's traversal.
-	dedupedDeps := make(map[ComponentID][]ComponentID, len(deps))
-	for id, depList := range deps {
-		seen := make(map[ComponentID]struct{}, len(depList))
-		deduped := depList[:0]
-		for _, d := range depList {
-			if _, ok := seen[d]; !ok {
-				seen[d] = struct{}{}
-				deduped = append(deduped, d)
-			}
-		}
-		dedupedDeps[id] = deduped
-	}
-	deps = dedupedDeps
-
-	// Collect all nodes, including those referenced only as deps.
-	allNodes := make(map[ComponentID]struct{})
-	for id, depList := range deps {
-		allNodes[id] = struct{}{}
-		for _, d := range depList {
-			allNodes[d] = struct{}{}
-		}
-	}
-
-	// Compute in-degree for each node.
-	// deps[id] = [d1, d2] means id depends on d1, d2 — so id cannot run until
-	// d1 and d2 have run. In-degree of id = len(deps[id]).
-	inDegree := make(map[ComponentID]int, len(allNodes))
-	for id := range allNodes {
-		inDegree[id] = 0
-	}
-	for id, depList := range deps {
-		inDegree[id] += len(depList)
-	}
-
-	// Kahn's algorithm: seed queue with zero in-degree nodes.
-	// Use a deterministic order so output is stable across runs.
-	queue := make([]ComponentID, 0, len(allNodes))
-	for id := range allNodes {
-		if inDegree[id] == 0 {
-			queue = append(queue, id)
-		}
-	}
-	sort.Strings(queue)
+	deps = deduplicateDeps(deps)
+	allNodes := collectNodes(deps)
+	inDegree := buildInDegree(allNodes, deps)
+	queue := initialQueue(allNodes, inDegree)
 
 	result := make([]ComponentID, 0, len(allNodes))
 	for len(queue) > 0 {
-		// Dequeue first element (deterministic).
 		node := queue[0]
 		queue = queue[1:]
 		result = append(result, node)
@@ -93,4 +51,62 @@ func TopoSort(deps map[ComponentID][]ComponentID) ([]ComponentID, error) {
 		return nil, fmt.Errorf("lifecycle: dependency graph contains a cycle")
 	}
 	return result, nil
+}
+
+// deduplicateDeps removes duplicate entries from each dep list to avoid
+// inflated in-degree counts and double-enqueue during Kahn's traversal.
+func deduplicateDeps(deps map[ComponentID][]ComponentID) map[ComponentID][]ComponentID {
+	out := make(map[ComponentID][]ComponentID, len(deps))
+	for id, depList := range deps {
+		seen := make(map[ComponentID]struct{}, len(depList))
+		deduped := make([]ComponentID, 0, len(depList))
+		for _, d := range depList {
+			if _, ok := seen[d]; !ok {
+				seen[d] = struct{}{}
+				deduped = append(deduped, d)
+			}
+		}
+		out[id] = deduped
+	}
+	return out
+}
+
+// collectNodes returns the set of all nodes, including those referenced only
+// as dependencies (i.e. not appearing as keys in deps).
+func collectNodes(deps map[ComponentID][]ComponentID) map[ComponentID]struct{} {
+	nodes := make(map[ComponentID]struct{})
+	for id, depList := range deps {
+		nodes[id] = struct{}{}
+		for _, d := range depList {
+			nodes[d] = struct{}{}
+		}
+	}
+	return nodes
+}
+
+// buildInDegree computes the initial in-degree for each node.
+// deps[id] = [d1, d2] means id depends on d1 and d2, so id's in-degree is
+// len(deps[id]).
+func buildInDegree(allNodes map[ComponentID]struct{}, deps map[ComponentID][]ComponentID) map[ComponentID]int {
+	inDegree := make(map[ComponentID]int, len(allNodes))
+	for id := range allNodes {
+		inDegree[id] = 0
+	}
+	for id, depList := range deps {
+		inDegree[id] += len(depList)
+	}
+	return inDegree
+}
+
+// initialQueue returns the sorted list of nodes with zero in-degree to seed
+// Kahn's algorithm. Sorting ensures deterministic output across identical inputs.
+func initialQueue(allNodes map[ComponentID]struct{}, inDegree map[ComponentID]int) []ComponentID {
+	queue := make([]ComponentID, 0, len(allNodes))
+	for id := range allNodes {
+		if inDegree[id] == 0 {
+			queue = append(queue, id)
+		}
+	}
+	sort.Strings(queue)
+	return queue
 }

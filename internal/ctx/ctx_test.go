@@ -312,8 +312,9 @@ func TestStarDownload_ChecksumOptional(t *testing.T) {
 }
 
 func TestStarDefaultsWrite_RequiresAllArgs(t *testing.T) {
+	// Missing-value check uses a real ctx; the call fails on argument
+	// validation before any subprocess is spawned.
 	c := ctx.New(testCaps())
-	// Missing value.
 	_, err := callBuiltin(t, c, "defaults_write",
 		gostarlark.Tuple{
 			gostarlark.String("com.apple.finder"),
@@ -323,8 +324,10 @@ func TestStarDefaultsWrite_RequiresAllArgs(t *testing.T) {
 	if err == nil {
 		t.Error("defaults_write(domain, key, type): expected error for missing value")
 	}
-	// All args present.
-	_, err = callBuiltin(t, c, "defaults_write",
+	// All-args check must use dry-run to avoid exec'ing the macOS-only
+	// `defaults` binary, which is absent on Linux CI runners.
+	cd := ctx.New(dryRunCaps())
+	_, err = callBuiltin(t, cd, "defaults_write",
 		gostarlark.Tuple{
 			gostarlark.String("com.apple.finder"),
 			gostarlark.String("AppleShowAllFiles"),
