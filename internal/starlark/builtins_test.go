@@ -35,6 +35,55 @@ func TestBuiltinComponent_Basic(t *testing.T) {
 	}
 }
 
+func TestBuiltinComponent_WithAfter(t *testing.T) {
+	acc := &Accumulator{}
+	thread := newThread(acc)
+
+	list := gostarlark.NewList([]gostarlark.Value{gostarlark.String("mise"), gostarlark.String("shell")})
+	kwargs := []gostarlark.Tuple{
+		{gostarlark.String("after"), list},
+	}
+	_, err := builtinComponent(
+		thread, nil,
+		gostarlark.Tuple{gostarlark.String("node")},
+		kwargs,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := acc.Components[0].After
+	if len(got) != 2 || got[0] != "mise" || got[1] != "shell" {
+		t.Errorf("expected after=[mise shell], got %v", got)
+	}
+}
+
+func TestBuiltinComponent_AfterNotList(t *testing.T) {
+	acc := &Accumulator{}
+	thread := newThread(acc)
+
+	kwargs := []gostarlark.Tuple{
+		{gostarlark.String("after"), gostarlark.String("mise")},
+	}
+	_, err := builtinComponent(thread, nil, gostarlark.Tuple{gostarlark.String("node")}, kwargs)
+	if err == nil {
+		t.Fatal("expected error when after is not a list")
+	}
+}
+
+func TestBuiltinComponent_AfterNonStringElement(t *testing.T) {
+	acc := &Accumulator{}
+	thread := newThread(acc)
+
+	list := gostarlark.NewList([]gostarlark.Value{gostarlark.MakeInt(42)})
+	kwargs := []gostarlark.Tuple{
+		{gostarlark.String("after"), list},
+	}
+	_, err := builtinComponent(thread, nil, gostarlark.Tuple{gostarlark.String("node")}, kwargs)
+	if err == nil {
+		t.Fatal("expected error when after element is not a string")
+	}
+}
+
 func TestBuiltinComponent_WithKwargs(t *testing.T) {
 	acc := &Accumulator{}
 	thread := newThread(acc)
