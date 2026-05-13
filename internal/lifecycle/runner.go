@@ -8,6 +8,7 @@ import (
 
 	"github.com/meowshed/meowctl/internal/rollback"
 	"github.com/meowshed/meowctl/internal/state"
+	"github.com/meowshed/meowctl/internal/tui"
 )
 
 // Phase identifies one of the 7 meowctl lifecycle phases.
@@ -77,17 +78,17 @@ type Runner struct {
 	Sentinel *state.Manager
 	// NoRollback disables automatic rollback on phase failure.
 	NoRollback bool
-	// Log is called for warning/error output. Defaults to fmt.Printf when nil.
-	Log func(format string, args ...any)
+	// Writer receives progress and log events. When nil a PlainWriter to
+	// os.Stdout is used.
+	Writer tui.Writer
 }
 
-// log calls r.Log if set, otherwise falls back to fmt.Printf.
-func (r *Runner) log(format string, args ...any) {
-	if r.Log != nil {
-		r.Log(format, args...)
-	} else {
-		fmt.Printf(format, args...)
+// writer returns r.Writer, falling back to a plain stdout writer when nil.
+func (r *Runner) writer() tui.Writer {
+	if r.Writer != nil {
+		return r.Writer
 	}
+	return tui.NewPlainWriter(nil) // os.Stdout set inside NewPlainWriter when nil
 }
 
 // RunPhaseSet runs each phase in phases sequentially. On the first phase failure
@@ -96,7 +97,7 @@ func (r *Runner) RunPhaseSet(phaseSetName string, phases []Phase) error {
 	if r.Sentinel != nil {
 		if err := r.Sentinel.RecordRunStart(phaseSetName); err != nil {
 			// Non-fatal: log and continue.
-			r.log("meowctl: warning: could not write state: %v\n", err)
+			r.writer().Log("meowctl: warning: could not write state: %v\n", err)
 		}
 	}
 
@@ -129,7 +130,7 @@ func (r *Runner) RunPhaseSet(phaseSetName string, phases []Phase) error {
 			// A truncate failure leaves stale records in the journal; the next
 			// run might attempt to replay them against an already-clean system.
 			// Treat this as a hard error so the caller can alert the user.
-			r.log("meowctl: error: could not truncate rollback journal: %v\n", err)
+			r.writer().Log("meowctl: error: could not truncate rollback journal: %v\n", err)
 			return fmt.Errorf("rollback journal truncate: %w", err)
 		}
 	}
@@ -152,8 +153,11 @@ func (r *Runner) RunPhase(phase Phase) error {
 	for _, id := range r.Order {
 		// Component files are named by convention: <id>/<phase>.star or just <id>.star
 		// For now pass the phase name as the hook name; the HookCaller resolves the file.
-		if err := r.Caller.CallHook(id, hookName); err != nil {
-			failures = append(failures, ComponentFailure{Component: id, Err: err})
+		r.writer().ComponentStart(id)
+		hookErr := r.Caller.CallHook(id, hookName)
+		r.writer().ComponentDone(id, hookErr)
+		if hookErr != nil {
+			failures = append(failures, ComponentFailure{Component: id, Err: hookErr})
 		}
 	}
 
@@ -165,7 +169,7 @@ func (r *Runner) RunPhase(phase Phase) error {
 	if r.Sentinel != nil {
 		for _, id := range r.Order {
 			if err := r.Sentinel.RecordComponent(string(phase), id); err != nil {
-				r.log("meowctl: warning: could not record component state: %v\n", err)
+				r.writer().Log("meowctl: warning: could not record component state: %v\n", err)
 			}
 		}
 	}
@@ -176,20 +180,20 @@ func (r *Runner) RunPhase(phase Phase) error {
 func (r *Runner) executeRollback() state.RolledBack {
 	result := r.Stack.Execute()
 	if result.Err != nil {
-		r.log("meowctl: error: rollback journal unreadable: %v\n", result.Err)
+		r.writer().Log("meowctl: error: rollback journal unreadable: %v\n", result.Err)
 		return state.RolledBackFailed
 	}
 	if result.SkippedLines > 0 {
-		r.log("meowctl: warning: rollback skipped %d malformed journal line(s) at lines %v; some ops may not have been reversed\n", result.SkippedLines, result.SkippedAt)
+		r.writer().Log("meowctl: warning: rollback skipped %d malformed journal line(s) at lines %v; some ops may not have been reversed\n", result.SkippedLines, result.SkippedAt)
 	}
 	if len(result.Failures) == 0 {
 		// Warning already logged above if SkippedLines > 0; treat as OK since
 		// all parseable ops were reversed successfully.
 		return state.RolledBackOK
 	}
-	r.log("meowctl: warning: rollback completed with %d failure(s):\n", len(result.Failures))
+	r.writer().Log("meowctl: warning: rollback completed with %d failure(s):\n", len(result.Failures))
 	for _, f := range result.Failures {
-		r.log("  [%s] %s/%s: %v\n", f.Record.Kind, f.Record.Phase, f.Record.Component, f.Err)
+		r.writer().Log("  [%s] %s/%s: %v\n", f.Record.Kind, f.Record.Phase, f.Record.Component, f.Err)
 	}
 	return state.RolledBackPartial
 }
