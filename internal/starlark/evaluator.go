@@ -100,8 +100,9 @@ func (e *Evaluator) ReadComponentGlobals(filename string, src any) (*EvalResult,
 	return e.ExecFile(filename, src, nil, nil)
 }
 
+// CallHook invokes hookName from globals with ctx as its sole argument.
 // globals must be the Globals field from an EvalResult. filename is the source file path,
-// used in error messages. ctx is passed as the sole argument.
+// used in error messages.
 func (e *Evaluator) CallHook(globals gostarlark.StringDict, hookName, filename string, ctx gostarlark.Value) error {
 	fn, ok := globals[hookName]
 	if !ok {
