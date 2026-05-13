@@ -140,6 +140,9 @@ func newHookCmd(gf *globalFlags) *cobra.Command {
 				configDir:  configDir,
 				eval:       &starlarkpkg.Evaluator{},
 				pmRegistry: pmReg,
+				// loader is nil: meowctl hook only executes bare-name local components
+				// from <configDir>/components/. URL-scheme components (github://, @stdlib//)
+				// are loaded during install; their hooks are not re-run at runtime.
 			}
 
 			w := tui.New(os.Stdout)

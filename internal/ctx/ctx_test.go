@@ -64,7 +64,7 @@ func dryRunCaps() *ctx.Capabilities {
 	return caps
 }
 
-// TestCtxValue_AttrNames asserts the full 27-name surface — the structural
+// TestCtxValue_AttrNames asserts the full 28-name surface — the structural
 // guard that catches missing method registrations at test time.
 func TestCtxValue_AttrNames(t *testing.T) {
 	c := ctx.New(testCaps())
