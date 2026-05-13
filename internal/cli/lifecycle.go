@@ -174,11 +174,8 @@ func dispatchPackages(phase string, packages []starlarkpkg.PkgDecl, reg *pkg.PMR
 func envMap() map[string]string {
 	env := make(map[string]string, len(os.Environ()))
 	for _, kv := range os.Environ() {
-		for i := 0; i < len(kv); i++ {
-			if kv[i] == '=' {
-				env[kv[:i]] = kv[i+1:]
-				break
-			}
+		if k, v, ok := strings.Cut(kv, "="); ok {
+			env[k] = v
 		}
 	}
 	return env
@@ -277,6 +274,7 @@ func readComponentGlobals(configDir string, eval *starlarkpkg.Evaluator, c starl
 	}
 	fileResult, readErr := eval.ReadComponentGlobals(componentFile, nil)
 	if readErr != nil {
+		fmt.Fprintln(os.Stderr, "warning: reading component globals:", readErr)
 		return merged, nil
 	}
 	return mergeAfterFromGlobals(merged, fileResult.Globals), fileResult.Globals

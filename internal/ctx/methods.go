@@ -595,8 +595,13 @@ func (c *CtxValue) starDownload(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0o750); err != nil {
 		return nil, fmt.Errorf("download: mkdir: %w", err)
 	}
-	//nolint:gosec,noctx // URL comes from user Starlark config; no context available here.
-	resp, err := http.Get(string(rawURL)) // #nosec G107
+	dlCtx, dlCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer dlCancel()
+	req, err := http.NewRequestWithContext(dlCtx, http.MethodGet, string(rawURL), nil) // #nosec G107
+	if err != nil {
+		return nil, fmt.Errorf("download: build request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download: GET: %w", err)
 	}

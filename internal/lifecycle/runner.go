@@ -11,7 +11,7 @@ import (
 	"github.com/meowshed/meowctl/internal/tui"
 )
 
-// Phase identifies one of the 7 meowctl lifecycle phases.
+// Phase identifies one of the 8 meowctl lifecycle phases.
 type Phase string
 
 // Phase constants define the 8 lifecycle phases in execution order.

@@ -1,5 +1,3 @@
-// Package lifecycle implements the meowctl phase runner, component execution order,
-// and topological sort of the component dependency graph.
 package lifecycle
 
 import (

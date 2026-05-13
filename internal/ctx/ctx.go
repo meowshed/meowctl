@@ -79,7 +79,7 @@ var (
 func New(caps *Capabilities) *CtxValue {
 	c := &CtxValue{
 		caps:    caps,
-		methods: make(map[string]*gostarlark.Builtin, 21),
+		methods: make(map[string]*gostarlark.Builtin, 22),
 		props:   make(map[string]gostarlark.Value, 6),
 	}
 

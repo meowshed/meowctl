@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/meowshed/meowctl/internal/ctx"
 	"github.com/meowshed/meowctl/internal/lifecycle"
 	"github.com/meowshed/meowctl/internal/pkg"
-	"github.com/meowshed/meowctl/internal/rollback"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
 	"github.com/meowshed/meowctl/internal/starlark/loader"
 	"github.com/meowshed/meowctl/internal/state"
@@ -91,6 +91,14 @@ func (h *runtimeHookCaller) buildCaps(componentID, componentFile, hookName strin
 
 // resolveComponentDir mirrors starlarkHookCaller.resolveComponentDir.
 func (h *runtimeHookCaller) resolveComponentDir(componentID, componentFile string) string {
+	if strings.Contains(componentID, "//") {
+		if h.loader != nil {
+			if dir, err := h.loader.ComponentDir(componentID); err == nil && dir != "" {
+				return dir
+			}
+		}
+		return ""
+	}
 	if h.loader != nil {
 		if dir, err := h.loader.ComponentDir(componentID); err == nil && dir != "" {
 			return dir
@@ -143,7 +151,7 @@ func newHookCmd(gf *globalFlags) *cobra.Command {
 			runner := &lifecycle.Runner{
 				Order:      order,
 				Caller:     caller,
-				Stack:      (*rollback.Stack)(nil),
+				Stack:      nil,
 				Sentinel:   sentinel,
 				NoRollback: true,
 				Writer:     w,
