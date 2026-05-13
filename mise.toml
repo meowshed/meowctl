@@ -1,0 +1,7 @@
+# mise configuration for meowctl
+# See https://mise.jdx.dev/configuration.html
+
+[tools]
+go            = "1.25"
+golangci-lint = "latest"
+opencode      = "latest"
