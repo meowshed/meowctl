@@ -77,6 +77,8 @@ jobs:
       - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           cache: true
+      - name: Add Go to PATH for gosec
+        run: echo "$(mise where go)/bin" >> "$GITHUB_PATH"
       - name: Run gosec
         uses: securego/gosec@9c4bb74a6258fe3818db8354b376ecca985704aa # v2.26.1
         with:
