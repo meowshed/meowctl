@@ -24,19 +24,26 @@ Go-based successor to the `.meow` shell scripting system.
 
 ## Requirements
 
-- Go 1.24+
-- macOS, Linux, or WSL
+- Go 1.25+
+- [mise](https://mise.jdx.dev) (recommended) or any Go toolchain
 
-## Building
+## Development
+
+Install tools and run common tasks via [mise](https://mise.jdx.dev):
 
 ```sh
-task build
+mise install          # install Go, golangci-lint, opencode
+mise run build        # build bin/meowctl
+mise run test         # run tests
+mise run lint         # run golangci-lint
+mise run install      # install to GOPATH/bin
+mise run clean        # remove build artifacts
 ```
 
-Or without Task:
+Without mise:
 
 ```sh
-CGO_ENABLED=0 go build -o meowctl ./cmd/meowctl
+CGO_ENABLED=0 go build -o bin/meowctl ./cmd/meowctl
 ```
 
 ## License
