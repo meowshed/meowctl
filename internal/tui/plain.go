@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"os"
 )
 
 // PlainWriter writes uncoloured, line-buffered progress output. It is used in
@@ -11,9 +12,13 @@ type PlainWriter struct {
 	out io.Writer
 }
 
-// NewPlainWriter returns a [PlainWriter] writing to out. Prefer [New] in
-// production code; use NewPlainWriter directly in tests.
+// NewPlainWriter returns a [PlainWriter] writing to out. When out is nil,
+// os.Stdout is used. Prefer [New] in production code; use NewPlainWriter
+// directly in tests.
 func NewPlainWriter(out io.Writer) *PlainWriter {
+	if out == nil {
+		out = os.Stdout
+	}
 	return &PlainWriter{out: out}
 }
 

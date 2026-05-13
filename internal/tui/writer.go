@@ -24,7 +24,7 @@ type Writer interface {
 // New returns a [Writer] suitable for out. When out is a TTY it returns a
 // [BubbleTeaWriter]; otherwise it returns a [PlainWriter].
 func New(out io.Writer) Writer {
-	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) { //nolint:gosec // G115: uintptr→int safe for fd values
 		return newBubbleTeaWriter(out)
 	}
 	return NewPlainWriter(out)
