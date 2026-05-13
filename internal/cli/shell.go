@@ -9,11 +9,15 @@ import (
 // shellSnippets maps shell name → integration snippet.
 var shellSnippets = map[string]string{
 	"bash": `# meowctl shell integration for bash
-# Add this to your ~/.bashrc or ~/.bash_profile:
+# Add this to your ~/.bashrc:
 #   eval "$(meowctl shell bash)"
 
 meowctl_shell_init() {
     export MEOWCTL_SHELL=bash
+    if [ -z "$_MEOWCTL_SHELL_DONE" ]; then
+        export _MEOWCTL_SHELL_DONE=1
+        eval "$(meowctl hook shell)"
+    fi
 }
 meowctl_shell_init
 `,
@@ -23,6 +27,9 @@ meowctl_shell_init
 
 meowctl_shell_init() {
     export MEOWCTL_SHELL=zsh
+    [[ -n "$_MEOWCTL_SHELL_DONE" ]] && return
+    export _MEOWCTL_SHELL_DONE=1
+    eval "$(meowctl hook shell)"
 }
 meowctl_shell_init
 `,
@@ -31,6 +38,10 @@ meowctl_shell_init
 #   meowctl shell fish | source
 
 set -gx MEOWCTL_SHELL fish
+if not set -q _MEOWCTL_SHELL_DONE
+    set -gx _MEOWCTL_SHELL_DONE 1
+    meowctl hook shell | source
+end
 `,
 }
 
