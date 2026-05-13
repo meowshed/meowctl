@@ -1,8 +1,29 @@
 package cli
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 )
+
+// starterTemplate is the content written to meowctl.star by meowctl init.
+const starterTemplate = `# meowctl.star — dotfiles configuration
+# See https://github.com/meowshed/meowctl for documentation.
+
+module(
+    name = "my-dotfiles",
+    version = "0.1.0",
+)
+
+# Declare components. Each component corresponds to a <name>.star file
+# in the components/ directory.
+#
+# component("shell")
+# component("git")
+# component("neovim")
+`
 
 func newBootstrapCmd() *cobra.Command {
 	return &cobra.Command{
@@ -15,13 +36,40 @@ func newBootstrapCmd() *cobra.Command {
 	}
 }
 
-func newInitCmd() *cobra.Command {
+func newInitCmd(gf *globalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "init",
-		Short: "Run the init phase of all components (not yet implemented)",
+		Short: "Scaffold a meowctl config directory with a starter meowctl.star",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return errNotImplemented("init")
+			configDir, err := resolveConfigDir(gf)
+			if err != nil {
+				return err
+			}
+
+			starPath := filepath.Join(configDir, "meowctl.star")
+			if _, err := os.Lstat(starPath); err == nil {
+				return exitErrorf(ExitConfig, "meowctl.star already exists at %s\n  run 'meowctl install' to apply it", starPath)
+			}
+
+			if err := os.MkdirAll(configDir, 0o700); err != nil {
+				return fmt.Errorf("init: create config directory: %w", err)
+			}
+			componentsDir := filepath.Join(configDir, "components")
+			if err := os.MkdirAll(componentsDir, 0o700); err != nil {
+				return fmt.Errorf("init: create components directory: %w", err)
+			}
+
+			if err := os.WriteFile(starPath, []byte(starterTemplate), 0o600); err != nil {
+				return fmt.Errorf("init: write meowctl.star: %w", err)
+			}
+
+			fmt.Printf("Initialized meowctl config at %s\n\n", configDir)
+			fmt.Printf("Next steps:\n")
+			fmt.Printf("  1. Edit %s to declare your components\n", starPath)
+			fmt.Printf("  2. Add component files to %s/\n", componentsDir)
+			fmt.Printf("  3. Run: meowctl install\n")
+			return nil
 		},
 	}
 }
