@@ -11,15 +11,16 @@ import (
 	"github.com/meowshed/meowctl/internal/tui"
 )
 
-// Phase identifies one of the 7 meowctl lifecycle phases.
+// Phase identifies one of the 8 meowctl lifecycle phases.
 type Phase string
 
-// Phase constants define the 7 lifecycle phases in execution order.
+// Phase constants define the 8 lifecycle phases in execution order.
 const (
 	PhaseBootstrap Phase = "bootstrap"
 	PhaseInit      Phase = "init"
 	PhaseInstall   Phase = "install"
 	PhaseSetup     Phase = "setup"
+	PhaseLogin     Phase = "login"
 	PhaseShell     Phase = "shell"
 	PhaseUninstall Phase = "uninstall"
 	PhaseVerify    Phase = "verify"
@@ -29,8 +30,8 @@ const (
 // PhaseSetUpdate is reserved for the future meowctl update command and is not
 // currently wired to any CLI command.
 var (
-	PhaseSetInstall   = []Phase{PhaseBootstrap, PhaseInit, PhaseInstall, PhaseSetup, PhaseShell}
-	PhaseSetUpdate    = []Phase{PhaseInstall, PhaseSetup, PhaseShell}
+	PhaseSetInstall   = []Phase{PhaseBootstrap, PhaseInit, PhaseInstall, PhaseSetup, PhaseLogin, PhaseShell}
+	PhaseSetUpdate    = []Phase{PhaseInstall, PhaseSetup, PhaseLogin, PhaseShell}
 	PhaseSetUninstall = []Phase{PhaseUninstall}
 	PhaseSetVerify    = []Phase{PhaseVerify}
 )
