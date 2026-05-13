@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/meowshed/meowctl/internal/ctx"
 	"github.com/meowshed/meowctl/internal/lifecycle"
@@ -12,6 +13,7 @@ import (
 	"github.com/meowshed/meowctl/internal/state"
 	"github.com/meowshed/meowctl/internal/tui"
 	"github.com/spf13/cobra"
+	gostarlark "go.starlark.net/starlark"
 )
 
 // runConfig holds runtime parameters shared across lifecycle commands.
@@ -109,32 +111,134 @@ func envMap() map[string]string {
 	return env
 }
 
-// loadComponents evaluates <configDir>/meowctl.star and returns the declared
-// component IDs in declaration order.
-func loadComponents(configDir string, filter []string) ([]lifecycle.ComponentID, error) {
+// loadComponentsWithDeps evaluates <configDir>/meowctl.star, performs pass 1 across
+// bare-name component files to collect after deps from globals, merges with after=
+// kwargs from component() declarations, topo-sorts the result, and returns the
+// ordered component IDs (logical names).
+func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.ComponentID, error) {
 	starPath := filepath.Join(configDir, "meowctl.star")
 	eval := &starlarkpkg.Evaluator{}
+
 	result, err := eval.ExecFile(starPath, nil, nil, nil)
 	if err != nil {
 		return nil, exitErrorf(ExitConfig, "load meowctl.star: %v", err)
 	}
 
+	decls, err := filterDecls(result.Declarations.Components, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	deps := buildDepsMap(configDir, eval, decls)
+	declIdx := buildDeclIndex(decls)
+
+	ordered, sortErr := lifecycle.TopoSort(deps, declIdx)
+	if sortErr != nil {
+		return nil, exitErrorf(ExitConfig, "component dependency cycle: %v", sortErr)
+	}
+
+	return retainDeclared(ordered, declIdx), nil
+}
+
+// filterDecls returns the subset of decls matching the filter (by logical name).
+// If filter is non-empty and no match is found, returns ExitUsage error.
+func filterDecls(all []starlarkpkg.ComponentDecl, filter []string) ([]starlarkpkg.ComponentDecl, error) {
+	if len(filter) == 0 {
+		return all, nil
+	}
 	filterSet := make(map[string]bool, len(filter))
 	for _, name := range filter {
 		filterSet[name] = true
 	}
-
-	ids := make([]lifecycle.ComponentID, 0, len(result.Declarations.Components))
-	for _, c := range result.Declarations.Components {
-		if len(filterSet) > 0 && !filterSet[c.Name] {
-			continue
+	out := make([]starlarkpkg.ComponentDecl, 0, len(all))
+	for _, c := range all {
+		if filterSet[c.LogicalName()] {
+			out = append(out, c)
 		}
-		ids = append(ids, c.Name)
 	}
-	if len(filter) > 0 && len(ids) == 0 {
+	if len(out) == 0 {
 		return nil, exitErrorf(ExitUsage, "no matching components found for: %v", filter)
 	}
-	return ids, nil
+	return out, nil
+}
+
+// buildDepsMap runs pass 1: for each component, merges after= kwarg with
+// file-global after list (bare-name components only) and returns a deps map.
+func buildDepsMap(configDir string, eval *starlarkpkg.Evaluator, decls []starlarkpkg.ComponentDecl) map[lifecycle.ComponentID][]lifecycle.ComponentID {
+	deps := make(map[lifecycle.ComponentID][]lifecycle.ComponentID, len(decls))
+	for _, c := range decls {
+		merged := readComponentDeps(configDir, eval, c)
+		deps[c.LogicalName()] = merged
+	}
+	return deps
+}
+
+// readComponentDeps returns the merged after list for a single component declaration.
+func readComponentDeps(configDir string, eval *starlarkpkg.Evaluator, c starlarkpkg.ComponentDecl) []string {
+	merged := make([]string, len(c.After))
+	copy(merged, c.After)
+	if strings.Contains(c.Name, "//") {
+		return merged
+	}
+	componentFile := filepath.Join(configDir, "components", c.Name+".star")
+	if _, statErr := os.Lstat(componentFile); statErr != nil {
+		return merged
+	}
+	fileResult, readErr := eval.ReadComponentGlobals(componentFile, nil)
+	if readErr != nil {
+		return merged
+	}
+	return mergeAfterFromGlobals(merged, fileResult.Globals)
+}
+
+// buildDeclIndex returns a map from logical name to declaration index.
+func buildDeclIndex(decls []starlarkpkg.ComponentDecl) map[lifecycle.ComponentID]int {
+	idx := make(map[lifecycle.ComponentID]int, len(decls))
+	for i, c := range decls {
+		idx[c.LogicalName()] = i
+	}
+	return idx
+}
+
+// retainDeclared filters the topo-sorted list to only include declared components.
+func retainDeclared(ordered []lifecycle.ComponentID, declIdx map[lifecycle.ComponentID]int) []lifecycle.ComponentID {
+	ids := make([]lifecycle.ComponentID, 0, len(declIdx))
+	for _, id := range ordered {
+		if _, ok := declIdx[id]; ok {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// mergeAfterFromGlobals reads the "after" global from a component's StringDict
+// and merges it into existing deps, deduplicating entries.
+func mergeAfterFromGlobals(existing []string, globals gostarlark.StringDict) []string {
+	afterVal, ok := globals["after"]
+	if !ok {
+		return existing
+	}
+	list, ok := afterVal.(*gostarlark.List)
+	if !ok {
+		return existing
+	}
+	seen := make(map[string]bool, len(existing))
+	for _, e := range existing {
+		seen[e] = true
+	}
+	result := existing
+	for i := 0; i < list.Len(); i++ {
+		s, ok := list.Index(i).(gostarlark.String)
+		if !ok {
+			continue
+		}
+		name := string(s)
+		if !seen[name] {
+			seen[name] = true
+			result = append(result, name)
+		}
+	}
+	return result
 }
 
 func newInstallCmd(gf *globalFlags) *cobra.Command {
@@ -213,7 +317,7 @@ func newVerifyCmd(gf *globalFlags) *cobra.Command {
 
 // runLifecyclePhaseSet executes a named phase set, loading components from meowctl.star.
 func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, filter []string) error {
-	order, err := loadComponents(cfg.ConfigDir, filter)
+	order, err := loadComponentsWithDeps(cfg.ConfigDir, filter)
 	if err != nil {
 		return err
 	}

@@ -35,7 +35,7 @@ func newComponentListCmd(gf *globalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ids, err := loadComponents(configDir, nil)
+			ids, err := loadComponentsWithDeps(configDir, nil)
 			if err != nil {
 				return err
 			}
@@ -63,7 +63,7 @@ func newComponentStatusCmd(gf *globalFlags) *cobra.Command {
 				return err
 			}
 
-			ids, err := loadComponents(configDir, args)
+			ids, err := loadComponentsWithDeps(configDir, args)
 			if err != nil {
 				return err
 			}

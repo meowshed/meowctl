@@ -14,13 +14,21 @@ type ComponentID = string
 // TopoSort returns the components in dependency-first order from the provided
 // adjacency list. deps maps each component to the list of components it depends
 // on. Components with no entry are treated as having no deps.
+// declOrder is the declaration-order index of each component; it is used as a
+// stable tie-breaker when multiple components are ready at the same time.
+// Pass nil or an empty map to fall back to alphabetical order.
 //
 // Returns an error if the graph contains a cycle.
-func TopoSort(deps map[ComponentID][]ComponentID) ([]ComponentID, error) {
+func TopoSort(deps map[ComponentID][]ComponentID, declOrder ...map[ComponentID]int) ([]ComponentID, error) {
+	var priority map[ComponentID]int
+	if len(declOrder) > 0 {
+		priority = declOrder[0]
+	}
+
 	deps = deduplicateDeps(deps)
 	allNodes := collectNodes(deps)
 	inDegree := buildInDegree(allNodes, deps)
-	queue := initialQueue(allNodes, inDegree)
+	queue := initialQueue(allNodes, inDegree, priority)
 
 	result := make([]ComponentID, 0, len(allNodes))
 	for len(queue) > 0 {
@@ -29,9 +37,8 @@ func TopoSort(deps map[ComponentID][]ComponentID) ([]ComponentID, error) {
 		result = append(result, node)
 
 		// For each node that has node as a direct dependency, decrement its
-		// in-degree. Collect newly-ready nodes, sort that batch, then append
-		// so the overall traversal order is stable across identical inputs.
-		// O(V*E) overall: for each of V nodes we scan all edges E.
+		// in-degree. Collect newly-ready nodes, sort that batch by priority,
+		// then append so the overall traversal order is stable across identical inputs.
 		var newlyReady []ComponentID
 		for id, depList := range deps {
 			for _, d := range depList {
@@ -43,7 +50,7 @@ func TopoSort(deps map[ComponentID][]ComponentID) ([]ComponentID, error) {
 				}
 			}
 		}
-		sort.Strings(newlyReady)
+		sortByPriority(newlyReady, priority)
 		queue = append(queue, newlyReady...)
 	}
 
@@ -51,6 +58,29 @@ func TopoSort(deps map[ComponentID][]ComponentID) ([]ComponentID, error) {
 		return nil, fmt.Errorf("lifecycle: dependency graph contains a cycle")
 	}
 	return result, nil
+}
+
+// sortByPriority sorts nodes by priority map value (ascending), falling back to
+// alphabetical order for nodes not in the priority map.
+func sortByPriority(nodes []ComponentID, priority map[ComponentID]int) {
+	if len(priority) == 0 {
+		sort.Strings(nodes)
+		return
+	}
+	sort.SliceStable(nodes, func(i, j int) bool {
+		pi, iOk := priority[nodes[i]]
+		pj, jOk := priority[nodes[j]]
+		if iOk && jOk {
+			return pi < pj
+		}
+		if iOk {
+			return true // known < unknown
+		}
+		if jOk {
+			return false
+		}
+		return nodes[i] < nodes[j] // both unknown: alphabetical
+	})
 }
 
 // deduplicateDeps removes duplicate entries from each dep list to avoid
@@ -98,15 +128,15 @@ func buildInDegree(allNodes map[ComponentID]struct{}, deps map[ComponentID][]Com
 	return inDegree
 }
 
-// initialQueue returns the sorted list of nodes with zero in-degree to seed
-// Kahn's algorithm. Sorting ensures deterministic output across identical inputs.
-func initialQueue(allNodes map[ComponentID]struct{}, inDegree map[ComponentID]int) []ComponentID {
+// initialQueue returns the nodes with zero in-degree to seed Kahn's algorithm,
+// sorted by priority (declaration order) to ensure deterministic output.
+func initialQueue(allNodes map[ComponentID]struct{}, inDegree map[ComponentID]int, priority map[ComponentID]int) []ComponentID {
 	queue := make([]ComponentID, 0, len(allNodes))
 	for id := range allNodes {
 		if inDegree[id] == 0 {
 			queue = append(queue, id)
 		}
 	}
-	sort.Strings(queue)
+	sortByPriority(queue, priority)
 	return queue
 }
