@@ -11,6 +11,7 @@ import (
 	"github.com/meowshed/meowctl/internal/pkg"
 	"github.com/meowshed/meowctl/internal/rollback"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
+	"github.com/meowshed/meowctl/internal/starlark/loader"
 	"github.com/meowshed/meowctl/internal/state"
 	"github.com/meowshed/meowctl/internal/tui"
 	"github.com/spf13/cobra"
@@ -65,6 +66,7 @@ type starlarkHookCaller struct {
 	dryRun     bool
 	stack      *rollback.Stack
 	pmRegistry *pkg.PMRegistry
+	loader     *loader.CompositeLoader // may be nil for bare-name only configs
 }
 
 // CallHook evaluates the component's Starlark file and calls the named hook.
@@ -78,7 +80,7 @@ func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
 
 	caps := &ctx.Capabilities{
 		DryRun:        h.dryRun,
-		ComponentDir:  filepath.Dir(componentFile),
+		ComponentDir:  h.resolveComponentDir(componentID, componentFile),
 		Phase:         hookName,
 		Component:     componentID,
 		RollbackStack: h.stack,
@@ -105,6 +107,19 @@ func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
 	}
 
 	return nil
+}
+
+// resolveComponentDir returns the filesystem directory for a component's source file.
+// For URL-named components (containing "//"), it tries CompositeLoader.ComponentDir first.
+// For bare-name local components, or when the loader is nil, it falls back to
+// filepath.Dir(componentFile).
+func (h *starlarkHookCaller) resolveComponentDir(componentID, componentFile string) string {
+	if h.loader != nil && strings.Contains(componentID, "//") {
+		if dir, err := h.loader.ComponentDir(componentID); err == nil {
+			return dir
+		}
+	}
+	return filepath.Dir(componentFile)
 }
 
 // dispatchPackages iterates pkg declarations and calls the appropriate PM handler.
