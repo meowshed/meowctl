@@ -99,6 +99,7 @@ func New(caps *Capabilities) *CtxValue {
 	c.methods["copy_file"] = gostarlark.NewBuiltin("copy_file", c.starCopyFile)
 	c.methods["symlink"] = gostarlark.NewBuiltin("symlink", c.starSymlink)
 	c.methods["remove_symlink"] = gostarlark.NewBuiltin("remove_symlink", c.starRemoveSymlink)
+	c.methods["link_file"] = gostarlark.NewBuiltin("link_file", c.starLinkFile)
 	c.methods["mkdir"] = gostarlark.NewBuiltin("mkdir", c.starMkdir)
 	c.methods["read_file"] = gostarlark.NewBuiltin("read_file", c.starReadFile)
 	c.methods["file_exists"] = gostarlark.NewBuiltin("file_exists", c.starFileExists)

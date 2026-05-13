@@ -300,6 +300,86 @@ func (c *CtxValue) starRemoveSymlink(_ *gostarlark.Thread, _ *gostarlark.Builtin
 	return gostarlark.None, nil
 }
 
+// prepareLinkFileDst inspects the current state of dstPath and returns the
+// backup path and wasBackedUp flag. It creates any missing parent directories.
+// Returns an error if dstPath exists as a non-symlink and backup is false.
+func prepareLinkFileDst(dstPath string, backup bool) (backupPath string, wasBackedUp bool, err error) {
+	if mkErr := os.MkdirAll(filepath.Dir(dstPath), 0o750); mkErr != nil {
+		return "", false, fmt.Errorf("link_file: mkdir: %w", mkErr)
+	}
+	fi, lstatErr := os.Lstat(dstPath)
+	if os.IsNotExist(lstatErr) {
+		return "", false, nil
+	}
+	if lstatErr != nil {
+		return "", false, fmt.Errorf("link_file: lstat %s: %w", dstPath, lstatErr)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		// Existing symlink pointing elsewhere — caller will remove it without backup.
+		return "", false, nil
+	}
+	// Regular file (or other non-symlink type).
+	if !backup {
+		return "", false, fmt.Errorf("link_file: %s exists and is not a symlink; pass backup=True to allow backup", dstPath)
+	}
+	ts := fmt.Sprintf("%d", time.Now().UnixNano())
+	return dstPath + ".meowctl-bak." + ts, true, nil
+}
+
+// starLinkFile implements ctx.link_file(src, dst, backup=True).
+// src is resolved relative to caps.ComponentDir. dst must be an absolute path.
+// If dst already points to the resolved src, this is a no-op. If dst exists
+// as a regular file and backup=True, it is renamed to dst.meowctl-bak.<ts>
+// before the symlink is created. If backup=False and dst is a regular file,
+// the call returns an error rather than overwriting it.
+func (c *CtxValue) starLinkFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+	var src, dst gostarlark.String
+	backup := gostarlark.Bool(true)
+	if err := gostarlark.UnpackArgs("link_file", args, kwargs, "src", &src, "dst", &dst, "backup?", &backup); err != nil {
+		return nil, err
+	}
+	srcRel, dstPath := string(src), string(dst)
+	if filepath.IsAbs(srcRel) {
+		return nil, fmt.Errorf("link_file: src must be a relative path; got %q", srcRel)
+	}
+	if err := requirePath("link_file", dstPath); err != nil {
+		return nil, err
+	}
+	srcPath := filepath.Join(c.caps.ComponentDir, srcRel)
+	if c.caps.DryRun {
+		c.dryLog("link_file", "src="+srcPath, "dst="+dstPath, fmt.Sprintf("backup=%v", bool(backup)))
+		return gostarlark.None, nil
+	}
+	// Check if dst already points to srcPath — no-op.
+	if target, err := os.Readlink(dstPath); err == nil && target == srcPath {
+		return gostarlark.None, nil
+	}
+	backupPath, wasBackedUp, err := prepareLinkFileDst(dstPath, bool(backup))
+	if err != nil {
+		return nil, err
+	}
+	// Record intent before any destructive operation.
+	if c.caps.RollbackStack != nil {
+		if err := c.caps.RollbackStack.AppendLinkFile(c.caps.Phase, c.caps.Component, dstPath, backupPath, wasBackedUp); err != nil {
+			return nil, fmt.Errorf("link_file: record rollback: %w", err)
+		}
+	}
+	if wasBackedUp {
+		if err := os.Rename(dstPath, backupPath); err != nil {
+			return nil, fmt.Errorf("link_file: backup %s -> %s: %w", dstPath, backupPath, err)
+		}
+	} else {
+		// Remove existing symlink if present (no-op if absent).
+		if err := os.Remove(dstPath); err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("link_file: remove existing %s: %w", dstPath, err)
+		}
+	}
+	if err := os.Symlink(srcPath, dstPath); err != nil {
+		return nil, fmt.Errorf("link_file: %w", err)
+	}
+	return gostarlark.None, nil
+}
+
 // starMkdir implements ctx.mkdir(path).
 // No-op if the directory already exists. Records rollback only when it creates.
 func (c *CtxValue) starMkdir(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
