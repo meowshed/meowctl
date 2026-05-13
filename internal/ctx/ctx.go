@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/meowshed/meowctl/internal/pkg"
 	"github.com/meowshed/meowctl/internal/rollback"
 	gostarlark "go.starlark.net/starlark"
 )
@@ -38,6 +39,9 @@ type Capabilities struct {
 	// RollbackStack is the write-ahead log for reversible operations.
 	// May be nil (dry-run mode or read-only phases like verify).
 	RollbackStack *rollback.Stack
+	// PMRegistry holds the registered package manager handlers, built during
+	// pass-1 component evaluation. May be nil if no PM components were loaded.
+	PMRegistry *pkg.PMRegistry
 	// Log is the function used for ctx.log() output. Defaults to fmt.Println.
 	Log func(msg string)
 }

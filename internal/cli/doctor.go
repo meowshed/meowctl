@@ -39,7 +39,7 @@ func runDoctor(configDir string, jsonOut bool) error {
 
 	// Check 1: meowctl.star exists.
 	starPath := filepath.Join(configDir, "meowctl.star")
-	if _, err := loadComponentsWithDeps(configDir, nil); err != nil {
+	if _, _, err := loadComponentsWithDeps(configDir, nil); err != nil {
 		checks = append(checks, doctorCheck{"meowctl.star", "error", err.Error()})
 	} else {
 		checks = append(checks, doctorCheck{"meowctl.star", "ok", starPath})

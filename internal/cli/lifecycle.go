@@ -8,6 +8,7 @@ import (
 
 	"github.com/meowshed/meowctl/internal/ctx"
 	"github.com/meowshed/meowctl/internal/lifecycle"
+	"github.com/meowshed/meowctl/internal/pkg"
 	"github.com/meowshed/meowctl/internal/rollback"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
 	"github.com/meowshed/meowctl/internal/state"
@@ -38,13 +39,14 @@ func addInstallFlags(cmd *cobra.Command, cfg *runConfig) {
 }
 
 // buildRunner constructs a Runner for the given config and component order.
-func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.Stack, sentinel *state.Manager, w tui.Writer) *lifecycle.Runner {
+func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.Stack, sentinel *state.Manager, w tui.Writer, pmReg *pkg.PMRegistry) *lifecycle.Runner {
 	eval := &starlarkpkg.Evaluator{}
 	caller := &starlarkHookCaller{
-		configDir: cfg.ConfigDir,
-		eval:      eval,
-		dryRun:    cfg.DryRun,
-		stack:     stack,
+		configDir:  cfg.ConfigDir,
+		eval:       eval,
+		dryRun:     cfg.DryRun,
+		stack:      stack,
+		pmRegistry: pmReg,
 	}
 	return &lifecycle.Runner{
 		Order:      order,
@@ -58,10 +60,11 @@ func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.S
 
 // starlarkHookCaller implements lifecycle.HookCaller via the Starlark evaluator.
 type starlarkHookCaller struct {
-	configDir string
-	eval      *starlarkpkg.Evaluator
-	dryRun    bool
-	stack     *rollback.Stack
+	configDir  string
+	eval       *starlarkpkg.Evaluator
+	dryRun     bool
+	stack      *rollback.Stack
+	pmRegistry *pkg.PMRegistry
 }
 
 // CallHook evaluates the component's Starlark file and calls the named hook.
@@ -79,6 +82,7 @@ func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
 		Phase:         hookName,
 		Component:     componentID,
 		RollbackStack: h.stack,
+		PMRegistry:    h.pmRegistry,
 		Env:           envMap(),
 	}
 	if home, err := os.UserHomeDir(); err == nil {
@@ -93,6 +97,26 @@ func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
 	}
 	if err := h.eval.CallHook(result.Globals, hookName, componentFile, ctxVal); err != nil {
 		return fmt.Errorf("component %s hook %s: %w", componentID, hookName, err)
+	}
+
+	// Dispatch pkg() declarations to registered PM handlers.
+	if err := dispatchPackages(hookName, result.Declarations.Packages, h.pmRegistry, ctxVal); err != nil {
+		return fmt.Errorf("component %s pkg dispatch: %w", componentID, err)
+	}
+
+	return nil
+}
+
+// dispatchPackages iterates pkg declarations and calls the appropriate PM handler.
+// Only install and uninstall phases trigger dispatch; other phases are no-ops.
+func dispatchPackages(phase string, packages []starlarkpkg.PkgDecl, reg *pkg.PMRegistry, ctxVal gostarlark.Value) error {
+	if reg == nil || len(packages) == 0 {
+		return nil
+	}
+	for _, p := range packages {
+		if err := reg.Dispatch(phase, p.Manager, p.Name, p.Version, p.Kwargs, ctxVal); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -114,30 +138,30 @@ func envMap() map[string]string {
 // loadComponentsWithDeps evaluates <configDir>/meowctl.star, performs pass 1 across
 // bare-name component files to collect after deps from globals, merges with after=
 // kwargs from component() declarations, topo-sorts the result, and returns the
-// ordered component IDs (logical names).
-func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.ComponentID, error) {
+// ordered component IDs (logical names) and a PMRegistry built from pass-1 globals.
+func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.ComponentID, *pkg.PMRegistry, error) {
 	starPath := filepath.Join(configDir, "meowctl.star")
 	eval := &starlarkpkg.Evaluator{}
 
 	result, err := eval.ExecFile(starPath, nil, nil, nil)
 	if err != nil {
-		return nil, exitErrorf(ExitConfig, "load meowctl.star: %v", err)
+		return nil, nil, exitErrorf(ExitConfig, "load meowctl.star: %v", err)
 	}
 
 	decls, err := filterDecls(result.Declarations.Components, filter)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	deps := buildDepsMap(configDir, eval, decls)
+	deps, pmReg := buildDepsAndRegistry(configDir, eval, decls)
 	declIdx := buildDeclIndex(decls)
 
 	ordered, sortErr := lifecycle.TopoSort(deps, declIdx)
 	if sortErr != nil {
-		return nil, exitErrorf(ExitConfig, "component dependency cycle: %v", sortErr)
+		return nil, nil, exitErrorf(ExitConfig, "component dependency cycle: %v", sortErr)
 	}
 
-	return retainDeclared(ordered, declIdx), nil
+	return retainDeclared(ordered, declIdx), pmReg, nil
 }
 
 // filterDecls returns the subset of decls matching the filter (by logical name).
@@ -162,33 +186,51 @@ func filterDecls(all []starlarkpkg.ComponentDecl, filter []string) ([]starlarkpk
 	return out, nil
 }
 
-// buildDepsMap runs pass 1: for each component, merges after= kwarg with
-// file-global after list (bare-name components only) and returns a deps map.
-func buildDepsMap(configDir string, eval *starlarkpkg.Evaluator, decls []starlarkpkg.ComponentDecl) map[lifecycle.ComponentID][]lifecycle.ComponentID {
+// buildDepsAndRegistry runs pass 1: for each component, merges after= kwarg with
+// file-global after list (bare-name components only), scans globals for PM registration,
+// and returns a deps map and a populated PMRegistry.
+func buildDepsAndRegistry(configDir string, eval *starlarkpkg.Evaluator, decls []starlarkpkg.ComponentDecl) (map[lifecycle.ComponentID][]lifecycle.ComponentID, *pkg.PMRegistry) {
 	deps := make(map[lifecycle.ComponentID][]lifecycle.ComponentID, len(decls))
+	pmReg := pkg.NewPMRegistry()
 	for _, c := range decls {
-		merged := readComponentDeps(configDir, eval, c)
+		merged, globals := readComponentGlobals(configDir, eval, c)
 		deps[c.LogicalName()] = merged
+		if globals != nil {
+			h := pkg.ScanGlobals(c.LogicalName(), globals, func(msg string) {
+				fmt.Fprintln(os.Stderr, "warning:", msg)
+			})
+			if h != nil {
+				// Register by pm_name (the manager identifier, e.g. "npm"),
+				// not by the component's logical name (e.g. "node").
+				if pmNameVal, ok := globals["pm_name"]; ok {
+					if pmNameStr, ok := pmNameVal.(gostarlark.String); ok {
+						pmReg.Register(string(pmNameStr), h)
+					}
+				}
+			}
+		}
 	}
-	return deps
+	return deps, pmReg
 }
 
-// readComponentDeps returns the merged after list for a single component declaration.
-func readComponentDeps(configDir string, eval *starlarkpkg.Evaluator, c starlarkpkg.ComponentDecl) []string {
+// readComponentGlobals returns the merged after list and the raw globals dict for a single
+// component declaration. globals is nil if the component file is a URL-named component
+// or if reading the file failed (non-fatal; deps gracefully degrade).
+func readComponentGlobals(configDir string, eval *starlarkpkg.Evaluator, c starlarkpkg.ComponentDecl) ([]string, gostarlark.StringDict) {
 	merged := make([]string, len(c.After))
 	copy(merged, c.After)
 	if strings.Contains(c.Name, "//") {
-		return merged
+		return merged, nil
 	}
 	componentFile := filepath.Join(configDir, "components", c.Name+".star")
 	if _, statErr := os.Lstat(componentFile); statErr != nil {
-		return merged
+		return merged, nil
 	}
 	fileResult, readErr := eval.ReadComponentGlobals(componentFile, nil)
 	if readErr != nil {
-		return merged
+		return merged, nil
 	}
-	return mergeAfterFromGlobals(merged, fileResult.Globals)
+	return mergeAfterFromGlobals(merged, fileResult.Globals), fileResult.Globals
 }
 
 // buildDeclIndex returns a map from logical name to declaration index.
@@ -317,7 +359,7 @@ func newVerifyCmd(gf *globalFlags) *cobra.Command {
 
 // runLifecyclePhaseSet executes a named phase set, loading components from meowctl.star.
 func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, filter []string) error {
-	order, err := loadComponentsWithDeps(cfg.ConfigDir, filter)
+	order, pmReg, err := loadComponentsWithDeps(cfg.ConfigDir, filter)
 	if err != nil {
 		return err
 	}
@@ -338,6 +380,6 @@ func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, 
 
 	statePath := filepath.Join(cfg.ConfigDir, "state.toml")
 	sentinel := state.NewManager(statePath)
-	runner := buildRunner(cfg, order, stack, sentinel, w)
+	runner := buildRunner(cfg, order, stack, sentinel, w, pmReg)
 	return runner.RunPhaseSet(name, phases)
 }
