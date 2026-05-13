@@ -16,10 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
-          go-version-file: go.mod
-          cache: false
+          cache: true
       - uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9
         with:
           version: v2.12.2
@@ -29,9 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
-          go-version-file: go.mod
+          cache: true
       - name: Run tests
         run: CGO_ENABLED=0 go test -count=1 -coverprofile=coverage.out -covermode=atomic ./...
       - name: Upload coverage to Codecov
@@ -64,9 +63,9 @@ jobs:
             goarch: amd64
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
-          go-version-file: go.mod
+          cache: true
       - name: Build binary
         run: CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o meowctl-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/meowctl
 
@@ -75,19 +74,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
-          go-version-file: go.mod
+          cache: true
       - name: Run gosec
-        uses: securego/gosec@9c4bb74a6258fe3818db8354b376ecca985704aa # v2.26.1
-        with:
-          args: ./...
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.26.1
+          gosec ./...
       - name: Run govulncheck
-        uses: golang/govulncheck-action@31f7c5463448f83528bd771c2d978d940080c9fd # master (2026-02-28)
-        with:
-          go-version-file: go.mod
-          go-package: ./...
-          repo-checkout: false
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
 
   secrets:
     name: Secrets (trufflehog)
@@ -107,9 +104,9 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
-          go-version-file: go.mod
+          cache: true
       - name: Build binary
         run: CGO_ENABLED=0 go build -o meowctl ./cmd/meowctl
       - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
