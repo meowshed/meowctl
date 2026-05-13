@@ -64,3 +64,53 @@ func TestTopoSort_empty(t *testing.T) {
 		t.Fatalf("expected empty result, got %v", got)
 	}
 }
+
+func TestTopoSort_declarationOrderTieBreaker(t *testing.T) {
+	// shell declared first, git second — no deps — should come out in declaration order.
+	deps := map[ComponentID][]ComponentID{
+		"shell": {},
+		"git":   {},
+	}
+	priority := map[ComponentID]int{
+		"shell": 0,
+		"git":   1,
+	}
+	got, err := TopoSort(deps, priority)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 || got[0] != "shell" || got[1] != "git" {
+		t.Errorf("expected [shell git], got %v", got)
+	}
+}
+
+func TestTopoSort_declarationOrderWithDeps(t *testing.T) {
+	// git depends on shell; neovim and tmux have no deps (decl order: shell, git, neovim, tmux).
+	// Expected: shell, then git (constrained), then neovim before tmux (decl order).
+	deps := map[ComponentID][]ComponentID{
+		"shell":  {},
+		"git":    {"shell"},
+		"neovim": {},
+		"tmux":   {},
+	}
+	priority := map[ComponentID]int{
+		"shell":  0,
+		"git":    1,
+		"neovim": 2,
+		"tmux":   3,
+	}
+	got, err := TopoSort(deps, priority)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	pos := make(map[string]int, len(got))
+	for i, id := range got {
+		pos[id] = i
+	}
+	if pos["shell"] >= pos["git"] {
+		t.Errorf("shell must come before git; got %v", got)
+	}
+	if pos["neovim"] >= pos["tmux"] {
+		t.Errorf("neovim must come before tmux (decl order); got %v", got)
+	}
+}

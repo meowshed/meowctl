@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
+	"github.com/meowshed/meowctl/internal/lock"
 	gostarlark "go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 )
@@ -39,9 +40,10 @@ type CompositeLoader struct {
 
 	// sf deduplicates concurrent load calls for the same module URL so evaluation
 	// happens at most once even when multiple goroutines race to load the same module.
-	sf    singleflight.Group
-	mu    sync.RWMutex
-	cache map[string]gostarlark.StringDict
+	sf            singleflight.Group
+	mu            sync.RWMutex
+	cache         map[string]gostarlark.StringDict
+	resolvedPaths map[string]string // moduleURL → resolved filesystem directory
 }
 
 // CompositeLoaderOptions holds optional configuration for NewCompositeLoader.
@@ -69,14 +71,15 @@ func NewCompositeLoader(root string, fileOpts *syntax.FileOptions, opts Composit
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
 	return &CompositeLoader{
-		root:        root,
-		userRoot:    opts.UserRoot,
-		cacheDir:    opts.CacheDir,
-		lockPath:    opts.LockPath,
-		registryURL: opts.RegistryURL,
-		fileOpts:    fileOpts,
-		client:      client,
-		cache:       make(map[string]gostarlark.StringDict),
+		root:          root,
+		userRoot:      opts.UserRoot,
+		cacheDir:      opts.CacheDir,
+		lockPath:      opts.LockPath,
+		registryURL:   opts.RegistryURL,
+		fileOpts:      fileOpts,
+		client:        client,
+		cache:         make(map[string]gostarlark.StringDict),
+		resolvedPaths: make(map[string]string),
 	}
 }
 
@@ -130,6 +133,9 @@ func (c *CompositeLoader) Load(thread *gostarlark.Thread, moduleURL string, pred
 		}
 		c.mu.Lock()
 		c.cache[moduleURL] = globals
+		if dir := c.resolveDir(moduleURL); dir != "" {
+			c.resolvedPaths[moduleURL] = dir
+		}
 		c.mu.Unlock()
 		return globals, nil
 	})
@@ -137,4 +143,102 @@ func (c *CompositeLoader) Load(thread *gostarlark.Thread, moduleURL string, pred
 		return nil, err
 	}
 	return v.(gostarlark.StringDict), nil
+}
+
+// ComponentDir returns the resolved filesystem directory for a previously-loaded module URL.
+// It returns an error if the module has not been loaded yet or if the URL scheme is unsupported.
+// For bare-name local components that are not loaded via CompositeLoader, callers should fall
+// back to filepath.Dir(componentFile).
+func (c *CompositeLoader) ComponentDir(moduleURL string) (string, error) {
+	c.mu.RLock()
+	dir, ok := c.resolvedPaths[moduleURL]
+	c.mu.RUnlock()
+	if ok {
+		return dir, nil
+	}
+	// Not yet loaded — compute from URL without evaluating.
+	dir = c.resolveDir(moduleURL)
+	if dir == "" {
+		return "", fmt.Errorf("CompositeLoader: cannot resolve directory for %q (not loaded or unknown scheme)", moduleURL)
+	}
+	return dir, nil
+}
+
+// resolveDir computes the filesystem directory for a module URL without evaluation.
+// Returns "" for unknown or unsupported schemes.
+func (c *CompositeLoader) resolveDir(moduleURL string) string {
+	switch {
+	case strings.HasPrefix(moduleURL, selfScheme):
+		rel := strings.TrimPrefix(moduleURL, selfScheme)
+		abs := filepath.Join(c.root, filepath.FromSlash(rel))
+		return filepath.Dir(abs)
+	case strings.HasPrefix(moduleURL, userScheme):
+		rel := strings.TrimPrefix(moduleURL, userScheme)
+		abs := filepath.Join(c.userRoot, filepath.FromSlash(rel))
+		return filepath.Dir(abs)
+	case strings.HasPrefix(moduleURL, githubScheme):
+		u, err := parseGitHubURL(moduleURL)
+		if err != nil {
+			return ""
+		}
+		// Look up commit from lock file; fall back to ref if not locked.
+		commit := u.ref
+		if c.lockPath != "" {
+			if lf, readErr := readLockForGitHub(c.lockPath, u.owner, u.repo); readErr == nil {
+				commit = lf
+			}
+		}
+		cachePath := filepath.Join(c.cacheDir, "github", u.owner, u.repo, commit, filepath.FromSlash(u.path))
+		return filepath.Dir(cachePath)
+	case len(moduleURL) > 1 && moduleURL[0] == '@' && strings.Contains(moduleURL, "//"):
+		// @name//path/to/file.star → <cacheDir>/modules/<name>/<version>/<path>
+		// Parse: strip "@", split on first "//"
+		withoutAt := moduleURL[1:]
+		parts := strings.SplitN(withoutAt, "//", 2)
+		if len(parts) != 2 {
+			return ""
+		}
+		name := parts[0]
+		filePath := parts[1]
+		// Try to look up version from lock file.
+		version := "latest"
+		if c.lockPath != "" {
+			if v, err := readLockForRegistry(c.lockPath, name); err == nil && v != "" {
+				version = v
+			}
+		}
+		abs := filepath.Join(c.cacheDir, "modules", name, version, filepath.FromSlash(filePath))
+		return filepath.Dir(abs)
+	}
+	return ""
+}
+
+// readLockForGitHub reads the lock file and returns the pinned commit SHA for a GitHub file
+// identified by owner/repo and ref. Returns an error if the lock file is missing, unreadable,
+// or has no entry for the given repo+ref combination.
+func readLockForGitHub(lockPath, owner, repo string) (string, error) {
+	lf, err := lock.Read(lockPath)
+	if err != nil {
+		return "", err
+	}
+	// The lock key format is owner/repo@ref//path; we look for any entry matching owner/repo.
+	prefix := owner + "/" + repo + "@"
+	for key, entry := range lf.GitHub {
+		if strings.HasPrefix(key, prefix) && entry.Commit != "" {
+			return entry.Commit, nil
+		}
+	}
+	return "", fmt.Errorf("no lock entry for %s/%s", owner, repo)
+}
+
+// readLockForRegistry reads the lock file and returns the resolved version for a registry module.
+func readLockForRegistry(lockPath, name string) (string, error) {
+	lf, err := lock.Read(lockPath)
+	if err != nil {
+		return "", err
+	}
+	if entry, ok := lf.Modules[name]; ok && entry.Version != "" {
+		return entry.Version, nil
+	}
+	return "", fmt.Errorf("no lock entry for module %s", name)
 }

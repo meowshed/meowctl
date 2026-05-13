@@ -177,3 +177,47 @@ func TestCompositeLoader_CacheConcurrent(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// TestCompositeLoader_ComponentDir verifies that ComponentDir returns the filesystem
+// directory of a loaded self// module.
+func TestCompositeLoader_ComponentDir(t *testing.T) {
+	dir := t.TempDir()
+	subDir := filepath.Join(dir, "components")
+	if err := os.MkdirAll(subDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeStarFile(t, subDir, "mycomp.star", `x = 1`)
+
+	cl := loader.NewCompositeLoader(dir, &syntax.FileOptions{}, loader.CompositeLoaderOptions{})
+
+	// Load the module first so the resolved path is cached.
+	thread := &gostarlark.Thread{Name: "test"}
+	if _, err := cl.Load(thread, "self//components/mycomp.star", gostarlark.StringDict{}); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+
+	got, err := cl.ComponentDir("self//components/mycomp.star")
+	if err != nil {
+		t.Fatalf("ComponentDir: %v", err)
+	}
+	want := subDir
+	if got != want {
+		t.Errorf("ComponentDir = %q, want %q", got, want)
+	}
+}
+
+// TestCompositeLoader_ComponentDir_WithoutLoad verifies that ComponentDir can compute
+// the directory for a self// URL without a prior load call.
+func TestCompositeLoader_ComponentDir_WithoutLoad(t *testing.T) {
+	dir := t.TempDir()
+	cl := loader.NewCompositeLoader(dir, &syntax.FileOptions{}, loader.CompositeLoaderOptions{})
+
+	got, err := cl.ComponentDir("self//lib/helpers.star")
+	if err != nil {
+		t.Fatalf("ComponentDir: %v", err)
+	}
+	want := filepath.Join(dir, "lib")
+	if got != want {
+		t.Errorf("ComponentDir = %q, want %q", got, want)
+	}
+}
