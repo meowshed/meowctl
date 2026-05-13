@@ -5,3 +5,33 @@
 go            = "1.25"
 golangci-lint = "latest"
 opencode      = "latest"
+"pipx:pre-commit" = "latest"
+
+[tasks.build]
+description = "Build the meowctl binary"
+run = [
+  "mkdir -p bin",
+  """CGO_ENABLED=0 go build \
+    -ldflags="-s -w \
+      -X github.com/meowshed/meowctl/internal/version.Version=$(git describe --tags --exact-match 2>/dev/null || echo dev) \
+      -X github.com/meowshed/meowctl/internal/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) \
+      -X github.com/meowshed/meowctl/internal/version.BuildDate=$(date -u +%Y-%m-%d)" \
+    -o bin/meowctl ./cmd/meowctl""",
+]
+
+[tasks.test]
+description = "Run all tests"
+run = "CGO_ENABLED=0 go test -race -count=1 ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run ./..."
+
+[tasks.install]
+description = "Install meowctl to GOPATH/bin"
+depends = ["build"]
+run = "cp bin/meowctl $(go env GOPATH)/bin/meowctl"
+
+[tasks.clean]
+description = "Remove build artifacts"
+run = "rm -rf bin"
