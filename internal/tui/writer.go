@@ -15,7 +15,8 @@ type Writer interface {
 	// ComponentDone marks a component as completed. A non-nil err indicates
 	// failure.
 	ComponentDone(name string, err error)
-	// Log emits a free-form log line.
+	// Log emits a free-form log line. The format string must include any
+	// desired trailing newline.
 	Log(format string, args ...any)
 	// Close flushes output and shuts down the underlying program (if any).
 	Close() error
@@ -24,7 +25,7 @@ type Writer interface {
 // New returns a [Writer] suitable for out. When out is a TTY it returns a
 // [BubbleTeaWriter]; otherwise it returns a [PlainWriter].
 func New(out io.Writer) Writer {
-	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) { //nolint:gosec // G115: uintptr→int safe for fd values
+	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) { // #nosec G115 -- fd values fit int on all supported platforms
 		return newBubbleTeaWriter(out)
 	}
 	return NewPlainWriter(out)

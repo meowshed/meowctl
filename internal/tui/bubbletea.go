@@ -11,6 +11,14 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// Package-level styles to avoid allocating on every View() call.
+var (
+	stylePending = lipgloss.NewStyle().Faint(true)
+	styleOK      = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	styleFail    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	styleSpinner = lipgloss.NewStyle().Foreground(lipgloss.Color("33"))
+)
+
 // rowState represents the display state of a component row.
 type rowState int
 
@@ -29,13 +37,13 @@ type componentRow struct {
 	err     error
 }
 
-// ComponentStartMsg is sent to the Bubble Tea model when a component begins.
-type ComponentStartMsg struct{ Name string }
+// componentStartMsg is sent to the Bubble Tea model when a component begins.
+type componentStartMsg struct{ name string }
 
-// ComponentDoneMsg is sent to the Bubble Tea model when a component finishes.
-type ComponentDoneMsg struct {
-	Name string
-	Err  error
+// componentDoneMsg is sent to the Bubble Tea model when a component finishes.
+type componentDoneMsg struct {
+	name string
+	err  error
 }
 
 // logMsg carries a free-form log line to append below the component rows.
@@ -47,46 +55,52 @@ type btModel struct {
 	logs []string
 }
 
-// Init starts spinner ticks for any rows already in running state (none at
-// construction time, but included for correctness).
+// Init starts spinner ticks for rows in running state on program startup.
+// Guards against future pre-populated rows.
 func (m btModel) Init() tea.Cmd {
 	var cmds []tea.Cmd
 	for _, row := range m.rows {
 		if row.state == rowRunning {
-			row := row
-			cmds = append(cmds, func() tea.Msg { return row.spinner.Tick() })
+			cmds = append(cmds, row.spinner.Tick)
 		}
 	}
 	return tea.Batch(cmds...)
 }
 
 // Update handles incoming messages and returns the updated model and commands.
+// btModel uses pointer-typed rows so index-based mutation is safe across the
+// value-receiver copy: all mutations go through the pointer, never the slice
+// header itself.
 func (m btModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case ComponentStartMsg:
-		for _, row := range m.rows {
-			if row.name == msg.Name {
-				row.state = rowRunning
-				row.spinner = spinner.New(spinner.WithSpinner(spinner.MiniDot),
-					spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("33"))))
-				return m, func() tea.Msg { return row.spinner.Tick() }
+	case componentStartMsg:
+		for i, row := range m.rows {
+			if row.name == msg.name {
+				s := spinner.New(
+					spinner.WithSpinner(spinner.MiniDot),
+					spinner.WithStyle(styleSpinner),
+				)
+				m.rows[i].state = rowRunning
+				m.rows[i].spinner = s
+				return m, s.Tick
 			}
 		}
 		// Component not yet registered — add it.
-		s := spinner.New(spinner.WithSpinner(spinner.MiniDot),
-			spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("33"))))
-		row := &componentRow{name: msg.Name, state: rowRunning, spinner: s}
-		m.rows = append(m.rows, row)
-		return m, func() tea.Msg { return s.Tick() }
+		s := spinner.New(
+			spinner.WithSpinner(spinner.MiniDot),
+			spinner.WithStyle(styleSpinner),
+		)
+		m.rows = append(m.rows, &componentRow{name: msg.name, state: rowRunning, spinner: s})
+		return m, s.Tick
 
-	case ComponentDoneMsg:
-		for _, row := range m.rows {
-			if row.name == msg.Name {
-				if msg.Err != nil {
-					row.state = rowFailed
-					row.err = msg.Err
+	case componentDoneMsg:
+		for i, row := range m.rows {
+			if row.name == msg.name {
+				if msg.err != nil {
+					m.rows[i].state = rowFailed
+					m.rows[i].err = msg.err
 				} else {
-					row.state = rowOK
+					m.rows[i].state = rowOK
 				}
 				return m, nil
 			}
@@ -99,10 +113,10 @@ func (m btModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case spinner.TickMsg:
 		var cmds []tea.Cmd
-		for _, row := range m.rows {
+		for i, row := range m.rows {
 			if row.state == rowRunning {
-				newSpinner, cmd := row.spinner.Update(msg)
-				row.spinner = newSpinner
+				newSpinner, cmd := m.rows[i].spinner.Update(msg)
+				m.rows[i].spinner = newSpinner
 				if cmd != nil {
 					cmds = append(cmds, cmd)
 				}
@@ -121,19 +135,21 @@ func (m btModel) View() tea.View {
 	for _, row := range m.rows {
 		switch row.state {
 		case rowPending:
-			sb.WriteString(lipgloss.NewStyle().Faint(true).Render("  … "+row.name) + "\n")
+			sb.WriteString(stylePending.Render("  … "+row.name) + "\n")
 		case rowRunning:
 			sb.WriteString("  " + row.spinner.View() + " " + row.name + "\n")
 		case rowOK:
-			ok := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("✓")
-			sb.WriteString("  " + ok + " " + row.name + "\n")
+			sb.WriteString("  " + styleOK.Render("✓") + " " + row.name + "\n")
 		case rowFailed:
-			fail := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render("✗")
-			sb.WriteString("  " + fail + " " + row.name + ": " + row.err.Error() + "\n")
+			sb.WriteString("  " + styleFail.Render("✗") + " " + row.name + ": " + row.err.Error() + "\n")
 		}
 	}
 	for _, line := range m.logs {
-		sb.WriteString(line)
+		if !strings.HasSuffix(line, "\n") {
+			sb.WriteString(line + "\n")
+		} else {
+			sb.WriteString(line)
+		}
 	}
 	return tea.NewView(sb.String())
 }
@@ -143,8 +159,11 @@ func (m btModel) View() tea.View {
 // Use [New] to obtain a BubbleTeaWriter; it is returned when stdout is a TTY.
 type BubbleTeaWriter struct {
 	program *tea.Program
-	done    chan struct{}
-	once    sync.Once
+	// done is closed by the program goroutine when p.Run() returns.
+	done chan struct{}
+	// once ensures Close() is idempotent.
+	once   sync.Once
+	runErr error
 }
 
 func newBubbleTeaWriter(out io.Writer) *BubbleTeaWriter {
@@ -157,8 +176,7 @@ func newBubbleTeaWriter(out io.Writer) *BubbleTeaWriter {
 	go func() {
 		defer close(w.done)
 		if _, err := p.Run(); err != nil {
-			// Non-fatal: output is best-effort in TUI mode.
-			_, _ = fmt.Fprintf(out, "meowctl: tui: %v\n", err)
+			w.runErr = err
 		}
 	}()
 	return w
@@ -166,24 +184,29 @@ func newBubbleTeaWriter(out io.Writer) *BubbleTeaWriter {
 
 // ComponentStart marks a component as in-progress.
 func (w *BubbleTeaWriter) ComponentStart(name string) {
-	w.program.Send(ComponentStartMsg{Name: name})
+	w.program.Send(componentStartMsg{name: name})
 }
 
 // ComponentDone marks a component as completed.
 func (w *BubbleTeaWriter) ComponentDone(name string, err error) {
-	w.program.Send(ComponentDoneMsg{Name: name, Err: err})
+	w.program.Send(componentDoneMsg{name: name, err: err})
 }
 
-// Log emits a formatted log line.
+// Log emits a formatted log line. The format string must include any desired
+// trailing newline (consistent with the [Writer] interface contract).
 func (w *BubbleTeaWriter) Log(format string, args ...any) {
 	w.program.Send(logMsg{line: fmt.Sprintf(format, args...)})
 }
 
-// Close shuts down the Bubble Tea program and waits for it to exit.
+// Close shuts down the Bubble Tea program, waits for it to exit, and returns
+// any error from the program run. Safe to call even if no messages were sent.
+// Concurrent calls are safe; only the first call performs the shutdown.
 func (w *BubbleTeaWriter) Close() error {
+	var err error
 	w.once.Do(func() {
 		w.program.Quit()
 		<-w.done
+		err = w.runErr
 	})
-	return nil
+	return err
 }
