@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/meowshed/meowctl/internal/pkg"
 	"github.com/meowshed/meowctl/internal/rollback"
 	gostarlark "go.starlark.net/starlark"
 )
@@ -38,6 +39,18 @@ type Capabilities struct {
 	// RollbackStack is the write-ahead log for reversible operations.
 	// May be nil (dry-run mode or read-only phases like verify).
 	RollbackStack *rollback.Stack
+	// PMRegistry holds the registered package manager handlers, built during
+	// pass-1 component evaluation. May be nil if no PM components were loaded.
+	PMRegistry *pkg.PMRegistry
+	// RuntimeHook is true when ctx is running inside meowctl hook <phase>
+	// rather than during install-time lifecycle execution. When true, ctx.emit
+	// writes to stdout so the shell can eval the output.
+	RuntimeHook bool
+	// EmitFile is the absolute path of the shell init file that ctx.emit
+	// appends to during install-time execution. Empty string disables file
+	// writing (emit becomes a no-op outside shell/login phases or under
+	// dry-run). Ignored when RuntimeHook is true.
+	EmitFile string
 	// Log is the function used for ctx.log() output. Defaults to fmt.Println.
 	Log func(msg string)
 }
@@ -66,7 +79,7 @@ var (
 func New(caps *Capabilities) *CtxValue {
 	c := &CtxValue{
 		caps:    caps,
-		methods: make(map[string]*gostarlark.Builtin, 21),
+		methods: make(map[string]*gostarlark.Builtin, 22),
 		props:   make(map[string]gostarlark.Value, 6),
 	}
 
@@ -95,6 +108,7 @@ func New(caps *Capabilities) *CtxValue {
 	c.methods["copy_file"] = gostarlark.NewBuiltin("copy_file", c.starCopyFile)
 	c.methods["symlink"] = gostarlark.NewBuiltin("symlink", c.starSymlink)
 	c.methods["remove_symlink"] = gostarlark.NewBuiltin("remove_symlink", c.starRemoveSymlink)
+	c.methods["link_file"] = gostarlark.NewBuiltin("link_file", c.starLinkFile)
 	c.methods["mkdir"] = gostarlark.NewBuiltin("mkdir", c.starMkdir)
 	c.methods["read_file"] = gostarlark.NewBuiltin("read_file", c.starReadFile)
 	c.methods["file_exists"] = gostarlark.NewBuiltin("file_exists", c.starFileExists)
