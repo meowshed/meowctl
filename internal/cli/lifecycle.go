@@ -10,6 +10,7 @@ import (
 	"github.com/meowshed/meowctl/internal/rollback"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
 	"github.com/meowshed/meowctl/internal/state"
+	"github.com/meowshed/meowctl/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +36,7 @@ func addInstallFlags(cmd *cobra.Command, cfg *runConfig) {
 }
 
 // buildRunner constructs a Runner for the given config and component order.
-func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.Stack, sentinel *state.Manager) *lifecycle.Runner {
+func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.Stack, sentinel *state.Manager, w tui.Writer) *lifecycle.Runner {
 	eval := &starlarkpkg.Evaluator{}
 	caller := &starlarkHookCaller{
 		configDir: cfg.ConfigDir,
@@ -49,6 +50,7 @@ func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.S
 		Stack:      stack,
 		Sentinel:   sentinel,
 		NoRollback: cfg.NoRollback,
+		Writer:     w,
 	}
 }
 
@@ -227,8 +229,11 @@ func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, 
 		defer func() { _ = stack.Close() }()
 	}
 
+	w := tui.New(os.Stdout)
+	defer func() { _ = w.Close() }()
+
 	statePath := filepath.Join(cfg.ConfigDir, "state.toml")
 	sentinel := state.NewManager(statePath)
-	runner := buildRunner(cfg, order, stack, sentinel)
+	runner := buildRunner(cfg, order, stack, sentinel, w)
 	return runner.RunPhaseSet(name, phases)
 }
