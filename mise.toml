@@ -5,6 +5,7 @@
 go            = "1.25"
 golangci-lint = "latest"
 opencode      = "latest"
+"pipx:pre-commit" = "latest"
 
 [tasks.build]
 description = "Build the meowctl binary"
