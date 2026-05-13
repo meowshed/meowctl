@@ -1,6 +1,10 @@
 package starlark
 
-import gostarlark "go.starlark.net/starlark"
+import (
+	"strings"
+
+	gostarlark "go.starlark.net/starlark"
+)
 
 // Accumulator collects declarations made by Starlark configuration files during evaluation.
 // It is stored as a thread-local value under the key "acc" before each ExecFileOptions call.
@@ -15,7 +19,8 @@ type Accumulator struct {
 // ComponentDecl records a component() declaration.
 type ComponentDecl struct {
 	Name   string
-	Kwargs map[string]any
+	After  []string       // logical dep names from after= kwarg; may be nil
+	Kwargs map[string]any // remaining kwargs after After is extracted
 }
 
 // PkgDecl records a pkg() declaration.
@@ -41,4 +46,26 @@ type ModuleDecl struct {
 type SelectCase struct {
 	Condition string
 	Value     gostarlark.Value
+}
+
+// LogicalName returns the logical component name: the last non-empty path segment
+// of the raw name passed to component().
+//
+// Examples:
+//
+//	"@stdlib//components/node" → "node"
+//	"github://owner/repo//components/neovim" → "neovim"
+//	"shell" → "shell"
+func (c ComponentDecl) LogicalName() string {
+	return logicalName(c.Name)
+}
+
+// logicalName extracts the last non-empty path segment from a raw component name.
+func logicalName(name string) string {
+	// Strip any trailing slashes before splitting.
+	name = strings.TrimRight(name, "/")
+	if idx := strings.LastIndex(name, "/"); idx >= 0 {
+		return name[idx+1:]
+	}
+	return name
 }

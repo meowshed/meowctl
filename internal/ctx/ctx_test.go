@@ -4,14 +4,15 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/meowshed/meowctl/internal/ctx"
 	gostarlark "go.starlark.net/starlark"
 )
 
-// expectedAttrNames is the complete sorted list of all 27 ctx attributes
-// (6 properties + 21 methods).
+// expectedAttrNames is the complete sorted list of all 28 ctx attributes
+// (6 properties + 22 methods).
 var expectedAttrNames = []string{
 	"append_file",
 	"component_dir",
@@ -25,6 +26,7 @@ var expectedAttrNames = []string{
 	"file_exists",
 	"git_clone",
 	"home",
+	"link_file",
 	"list_dir",
 	"log",
 	"mkdir",
@@ -62,7 +64,7 @@ func dryRunCaps() *ctx.Capabilities {
 	return caps
 }
 
-// TestCtxValue_AttrNames asserts the full 27-name surface — the structural
+// TestCtxValue_AttrNames asserts the full 28-name surface — the structural
 // guard that catches missing method registrations at test time.
 func TestCtxValue_AttrNames(t *testing.T) {
 	c := ctx.New(testCaps())
@@ -373,6 +375,42 @@ func TestStarEmit_RequiresLine(t *testing.T) {
 	}
 }
 
+// TestStarEmit_NoopWithoutEmitFile verifies that emit is a no-op when
+// RuntimeHook is false and EmitFile is empty.
+func TestStarEmit_NoopWithoutEmitFile(t *testing.T) {
+	caps := testCaps()
+	caps.RuntimeHook = false
+	caps.EmitFile = ""
+	c := ctx.New(caps)
+	_, err := callBuiltin(t, c, "emit", gostarlark.Tuple{gostarlark.String("export FOO=bar")}, nil)
+	if err != nil {
+		t.Fatalf("emit no-op: unexpected error: %v", err)
+	}
+}
+
+// TestStarEmit_WritesToEmitFile verifies that emit appends to EmitFile during
+// install-time (RuntimeHook=false).
+func TestStarEmit_WritesToEmitFile(t *testing.T) {
+	dir := t.TempDir()
+	emitFile := filepath.Join(dir, ".zshrc")
+
+	caps := testCaps()
+	caps.RuntimeHook = false
+	caps.EmitFile = emitFile
+	c := ctx.New(caps)
+	_, err := callBuiltin(t, c, "emit", gostarlark.Tuple{gostarlark.String("export FOO=bar")}, nil)
+	if err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	content, readErr := os.ReadFile(emitFile) // #nosec G304
+	if readErr != nil {
+		t.Fatalf("read emit file: %v", readErr)
+	}
+	if !strings.Contains(string(content), "export FOO=bar") {
+		t.Errorf("emit file content = %q; want to contain %q", string(content), "export FOO=bar")
+	}
+}
+
 func TestStarRun_MissingCmdErrors(t *testing.T) {
 	c := ctx.New(testCaps())
 	_, err := callBuiltin(t, c, "run", nil, nil)
@@ -483,5 +521,143 @@ func TestStarReadFile_ReturnsString(t *testing.T) {
 	}
 	if _, ok := v.(gostarlark.String); !ok {
 		t.Errorf("read_file: got %T, want String", v)
+	}
+}
+
+// TestStarLinkFile_RequiresBothArgs verifies that link_file errors when src or
+// dst is missing.
+func TestStarLinkFile_RequiresBothArgs(t *testing.T) {
+	c := ctx.New(testCaps())
+	_, err := callBuiltin(t, c, "link_file", gostarlark.Tuple{gostarlark.String("file.zsh")}, nil)
+	if err == nil {
+		t.Fatal("link_file with only src: expected error, got nil")
+	}
+}
+
+// TestStarLinkFile_AbsSrcErrors verifies that an absolute src path is rejected.
+func TestStarLinkFile_AbsSrcErrors(t *testing.T) {
+	c := ctx.New(testCaps())
+	_, err := callBuiltin(t, c, "link_file",
+		gostarlark.Tuple{gostarlark.String("/abs/src"), gostarlark.String("/tmp/dst")},
+		nil,
+	)
+	if err == nil {
+		t.Fatal("link_file with absolute src: expected error, got nil")
+	}
+}
+
+// TestStarLinkFile_DryRun verifies that link_file is a no-op under dry-run.
+func TestStarLinkFile_DryRun(t *testing.T) {
+	caps := dryRunCaps()
+	caps.ComponentDir = "/some/component"
+	c := ctx.New(caps)
+	_, err := callBuiltin(t, c, "link_file",
+		gostarlark.Tuple{gostarlark.String("file.zsh"), gostarlark.String("/tmp/dst")},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("link_file dry-run: unexpected error: %v", err)
+	}
+}
+
+// TestStarLinkFile_CreatesSymlink verifies that link_file creates a symlink
+// from dst -> resolved src when dst does not exist.
+func TestStarLinkFile_CreatesSymlink(t *testing.T) {
+	dir := t.TempDir()
+	srcFile := filepath.Join(dir, "file.zsh")
+	if err := os.WriteFile(srcFile, []byte("# zsh"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(dir, "link.zsh")
+	if err := os.Symlink(srcFile, dst); err != nil {
+		t.Fatal(err)
+	}
+
+	caps := testCaps()
+	caps.ComponentDir = dir
+	c := ctx.New(caps)
+	_, err := callBuiltin(t, c, "link_file",
+		gostarlark.Tuple{gostarlark.String("file.zsh"), gostarlark.String(dst)},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("link_file no-op: %v", err)
+	}
+	// dst should still point to srcFile unchanged.
+	target, _ := os.Readlink(dst)
+	if target != srcFile {
+		t.Errorf("symlink target after no-op = %q; want %q", target, srcFile)
+	}
+}
+
+// TestStarLinkFile_BackupsRegularFile verifies that a regular file at dst is
+// backed up when backup=True (the default).
+func TestStarLinkFile_BackupsRegularFile(t *testing.T) {
+	dir := t.TempDir()
+	srcFile := filepath.Join(dir, "file.zsh")
+	if err := os.WriteFile(srcFile, []byte("# new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(dir, "link.zsh")
+	if err := os.WriteFile(dst, []byte("# old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	caps := testCaps()
+	caps.ComponentDir = dir
+	c := ctx.New(caps)
+	_, err := callBuiltin(t, c, "link_file",
+		gostarlark.Tuple{gostarlark.String("file.zsh"), gostarlark.String(dst)},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("link_file backup: %v", err)
+	}
+	target, readErr := os.Readlink(dst)
+	if readErr != nil {
+		t.Fatalf("readlink after backup: %v", readErr)
+	}
+	if target != srcFile {
+		t.Errorf("symlink target = %q; want %q", target, srcFile)
+	}
+	// Backup file must exist and contain original content.
+	entries, _ := os.ReadDir(dir)
+	var backupFound bool
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "link.zsh.meowctl-bak.") {
+			backupFound = true
+			content, _ := os.ReadFile(filepath.Join(dir, e.Name())) // #nosec G304
+			if string(content) != "# old" {
+				t.Errorf("backup content = %q; want \"# old\"", string(content))
+			}
+		}
+	}
+	if !backupFound {
+		t.Error("no backup file found")
+	}
+}
+
+// TestStarLinkFile_NoBackupErrors verifies that link_file errors when dst is a
+// regular file and backup=False.
+func TestStarLinkFile_NoBackupErrors(t *testing.T) {
+	dir := t.TempDir()
+	srcFile := filepath.Join(dir, "file.zsh")
+	if err := os.WriteFile(srcFile, []byte("# new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(dir, "link.zsh")
+	if err := os.WriteFile(dst, []byte("# old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	caps := testCaps()
+	caps.ComponentDir = dir
+	c := ctx.New(caps)
+	_, err := callBuiltin(t, c, "link_file",
+		gostarlark.Tuple{gostarlark.String("file.zsh"), gostarlark.String(dst)},
+		[]gostarlark.Tuple{{gostarlark.String("backup"), gostarlark.Bool(false)}},
+	)
+	if err == nil {
+		t.Fatal("link_file backup=False with regular file: expected error, got nil")
 	}
 }
