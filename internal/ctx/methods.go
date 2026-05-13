@@ -2,6 +2,7 @@ package ctx
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -427,8 +428,7 @@ func (c *CtxValue) starRun(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 		}
 		cmdArgs[i] = string(s)
 	}
-	//nolint:gosec,noctx // cmd and args come from user Starlark config — intentional.
-	c2 := exec.Command(string(cmd), cmdArgs...)
+	c2 := exec.CommandContext(context.Background(), string(cmd), cmdArgs...) // #nosec G204 -- cmd/args from validated Starlark config; no ctx available in hooks
 	// Merge provided env over current env.
 	c2.Env = os.Environ()
 	for _, kv := range runEnv.Items() {
@@ -489,8 +489,7 @@ func (c *CtxValue) starGitClone(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 	if refStr, ok := ref.(gostarlark.String); ok && string(refStr) != "" {
 		cloneArgs = append(cloneArgs, "--branch", string(refStr))
 	}
-	//nolint:gosec,noctx // args built from validated Starlark strings.
-	cmd := exec.Command("git", cloneArgs...)
+	cmd := exec.CommandContext(context.Background(), "git", cloneArgs...) // #nosec G204 -- args from validated Starlark strings; no ctx available in hooks
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("git_clone: %w\n%s", err, out)
 	}
@@ -634,8 +633,7 @@ func (c *CtxValue) starDefaultsWrite(_ *gostarlark.Thread, _ *gostarlark.Builtin
 	// defaults write expects booleans as "YES"/"NO"; %v on gostarlark.Bool produces
 	// "True"/"False" (Starlark casing), which the command would reject.
 	valStr := starlarkValueToShellArg(value)
-	//nolint:gosec,noctx // args from validated Starlark config.
-	cmd := exec.Command("defaults", "write", string(domain), string(key), "-"+string(valueType), valStr)
+	cmd := exec.CommandContext(context.Background(), "defaults", "write", string(domain), string(key), "-"+string(valueType), valStr) // #nosec G204 -- args from validated Starlark config; no ctx available in hooks
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("defaults_write: %w\n%s", err, out)
 	}
@@ -665,8 +663,7 @@ func (c *CtxValue) starPlistSet(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 	// PlistBuddy parses the -c string itself; keys or values containing spaces
 	// must be quoted so PlistBuddy does not split them into extra tokens.
 	cmdStr := fmt.Sprintf("Set :%s %s", shellQuote(string(key)), shellQuote(valStr))
-	//nolint:gosec,noctx // args from validated Starlark config.
-	cmd := exec.Command("/usr/libexec/PlistBuddy", "-c", cmdStr, string(file))
+	cmd := exec.CommandContext(context.Background(), "/usr/libexec/PlistBuddy", "-c", cmdStr, string(file)) // #nosec G204 -- args from validated Starlark config; no ctx available in hooks
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("plist_set: %w\n%s", err, out)
 	}
