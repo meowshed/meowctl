@@ -10,9 +10,10 @@ import (
 // ExportDefaultConfigDir exposes defaultConfigDir for tests.
 var ExportDefaultConfigDir = defaultConfigDir
 
-// ExportLoadComponents exposes loadComponents for tests.
+// ExportLoadComponents exposes loadComponentsWithDeps for tests.
 func ExportLoadComponents(configDir string, filter []string) ([]lifecycle.ComponentID, error) {
-	return loadComponents(configDir, filter)
+	ids, _, err := loadComponentsWithDeps(configDir, filter)
+	return ids, err
 }
 
 // NewRootCmdForTest returns a fresh root command for use in tests.

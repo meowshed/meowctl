@@ -42,9 +42,9 @@ func makePredeclared(platform PlatformInfo) gostarlark.StringDict {
 	}
 }
 
-// builtinComponent implements component(name, **kwargs).
+// builtinComponent implements component(name, after=[], **kwargs).
 func builtinComponent(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
-	// Extract name from positional args or kwargs; allow arbitrary extra kwargs.
+	// Extract name from positional args or kwargs; extract after= as []string; allow arbitrary extra kwargs.
 	var nameStr string
 	positionalName := false
 	if len(args) > 0 {
@@ -55,10 +55,12 @@ func builtinComponent(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 		nameStr = string(s)
 		positionalName = true
 	}
+	var after []string
 	extra := make(map[string]any, len(kwargs))
 	for _, kv := range kwargs {
 		key := string(kv[0].(gostarlark.String))
-		if key == "name" {
+		switch key {
+		case "name":
 			if positionalName {
 				return nil, fmt.Errorf("component: name supplied both positionally and as keyword argument")
 			}
@@ -67,7 +69,20 @@ func builtinComponent(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 				return nil, fmt.Errorf("component: name must be a string, got %s", kv[1].Type())
 			}
 			nameStr = string(s)
-		} else {
+		case "after":
+			list, ok := kv[1].(*gostarlark.List)
+			if !ok {
+				return nil, fmt.Errorf("component: after must be a list, got %s", kv[1].Type())
+			}
+			after = make([]string, list.Len())
+			for i := range after {
+				s, ok := list.Index(i).(gostarlark.String)
+				if !ok {
+					return nil, fmt.Errorf("component: after[%d] must be a string, got %s", i, list.Index(i).Type())
+				}
+				after[i] = string(s)
+			}
+		default:
 			extra[key] = kv[1]
 		}
 	}
@@ -80,6 +95,7 @@ func builtinComponent(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 	}
 	acc.Components = append(acc.Components, ComponentDecl{
 		Name:   nameStr,
+		After:  after,
 		Kwargs: extra,
 	})
 	return gostarlark.None, nil

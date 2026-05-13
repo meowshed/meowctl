@@ -300,6 +300,86 @@ func (c *CtxValue) starRemoveSymlink(_ *gostarlark.Thread, _ *gostarlark.Builtin
 	return gostarlark.None, nil
 }
 
+// prepareLinkFileDst inspects the current state of dstPath and returns the
+// backup path and wasBackedUp flag. It creates any missing parent directories.
+// Returns an error if dstPath exists as a non-symlink and backup is false.
+func prepareLinkFileDst(dstPath string, backup bool) (backupPath string, wasBackedUp bool, err error) {
+	if mkErr := os.MkdirAll(filepath.Dir(dstPath), 0o750); mkErr != nil {
+		return "", false, fmt.Errorf("link_file: mkdir: %w", mkErr)
+	}
+	fi, lstatErr := os.Lstat(dstPath)
+	if os.IsNotExist(lstatErr) {
+		return "", false, nil
+	}
+	if lstatErr != nil {
+		return "", false, fmt.Errorf("link_file: lstat %s: %w", dstPath, lstatErr)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		// Existing symlink pointing elsewhere — caller will remove it without backup.
+		return "", false, nil
+	}
+	// Regular file (or other non-symlink type).
+	if !backup {
+		return "", false, fmt.Errorf("link_file: %s exists and is not a symlink; pass backup=True to allow backup", dstPath)
+	}
+	ts := fmt.Sprintf("%d", time.Now().UnixNano())
+	return dstPath + ".meowctl-bak." + ts, true, nil
+}
+
+// starLinkFile implements ctx.link_file(src, dst, backup=True).
+// src is resolved relative to caps.ComponentDir. dst must be an absolute path.
+// If dst already points to the resolved src, this is a no-op. If dst exists
+// as a regular file and backup=True, it is renamed to dst.meowctl-bak.<ts>
+// before the symlink is created. If backup=False and dst is a regular file,
+// the call returns an error rather than overwriting it.
+func (c *CtxValue) starLinkFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+	var src, dst gostarlark.String
+	backup := gostarlark.Bool(true)
+	if err := gostarlark.UnpackArgs("link_file", args, kwargs, "src", &src, "dst", &dst, "backup?", &backup); err != nil {
+		return nil, err
+	}
+	srcRel, dstPath := string(src), string(dst)
+	if filepath.IsAbs(srcRel) {
+		return nil, fmt.Errorf("link_file: src must be a relative path; got %q", srcRel)
+	}
+	if err := requirePath("link_file", dstPath); err != nil {
+		return nil, err
+	}
+	srcPath := filepath.Join(c.caps.ComponentDir, srcRel)
+	if c.caps.DryRun {
+		c.dryLog("link_file", "src="+srcPath, "dst="+dstPath, fmt.Sprintf("backup=%v", bool(backup)))
+		return gostarlark.None, nil
+	}
+	// Check if dst already points to srcPath — no-op.
+	if target, err := os.Readlink(dstPath); err == nil && target == srcPath {
+		return gostarlark.None, nil
+	}
+	backupPath, wasBackedUp, err := prepareLinkFileDst(dstPath, bool(backup))
+	if err != nil {
+		return nil, err
+	}
+	// Record intent before any destructive operation.
+	if c.caps.RollbackStack != nil {
+		if err := c.caps.RollbackStack.AppendLinkFile(c.caps.Phase, c.caps.Component, dstPath, backupPath, wasBackedUp); err != nil {
+			return nil, fmt.Errorf("link_file: record rollback: %w", err)
+		}
+	}
+	if wasBackedUp {
+		if err := os.Rename(dstPath, backupPath); err != nil {
+			return nil, fmt.Errorf("link_file: backup %s -> %s: %w", dstPath, backupPath, err)
+		}
+	} else {
+		// Remove existing symlink if present (no-op if absent).
+		if err := os.Remove(dstPath); err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("link_file: remove existing %s: %w", dstPath, err)
+		}
+	}
+	if err := os.Symlink(srcPath, dstPath); err != nil {
+		return nil, fmt.Errorf("link_file: %w", err)
+	}
+	return gostarlark.None, nil
+}
+
 // starMkdir implements ctx.mkdir(path).
 // No-op if the directory already exists. Records rollback only when it creates.
 func (c *CtxValue) starMkdir(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
@@ -515,8 +595,13 @@ func (c *CtxValue) starDownload(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0o750); err != nil {
 		return nil, fmt.Errorf("download: mkdir: %w", err)
 	}
-	//nolint:gosec,noctx // URL comes from user Starlark config; no context available here.
-	resp, err := http.Get(string(rawURL)) // #nosec G107
+	dlCtx, dlCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer dlCancel()
+	req, err := http.NewRequestWithContext(dlCtx, http.MethodGet, string(rawURL), nil) // #nosec G107
+	if err != nil {
+		return nil, fmt.Errorf("download: build request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download: GET: %w", err)
 	}
@@ -693,7 +778,10 @@ func (c *CtxValue) starPrompt(_ *gostarlark.Thread, _ *gostarlark.Builtin, args 
 }
 
 // starEmit implements ctx.emit(line).
-// Appends line to the shell init file currently being built.
+// During runtime hook execution (RuntimeHook=true) the line is written to
+// stdout so the calling shell can eval it. During install-time execution the
+// line is appended to the EmitFile rc file (if set). If EmitFile is empty and
+// RuntimeHook is false, emit is a no-op outside shell/login phases.
 func (c *CtxValue) starEmit(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
 	var line gostarlark.String
 	if err := gostarlark.UnpackArgs("emit", args, kwargs, "line", &line); err != nil {
@@ -703,8 +791,22 @@ func (c *CtxValue) starEmit(_ *gostarlark.Thread, _ *gostarlark.Builtin, args go
 		c.dryLog("emit", "line="+string(line))
 		return gostarlark.None, nil
 	}
-	// Emit is handled by the shell phase runner; for now write to stdout.
-	fmt.Println(string(line))
+	if c.caps.RuntimeHook {
+		fmt.Println(string(line))
+		return gostarlark.None, nil
+	}
+	if c.caps.EmitFile == "" {
+		// Not in a shell/login phase — emit is a no-op.
+		return gostarlark.None, nil
+	}
+	f, err := os.OpenFile(c.caps.EmitFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600) // #nosec G304
+	if err != nil {
+		return nil, fmt.Errorf("emit: open %s: %w", c.caps.EmitFile, err)
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := fmt.Fprintln(f, string(line)); err != nil {
+		return nil, fmt.Errorf("emit: write %s: %w", c.caps.EmitFile, err)
+	}
 	return gostarlark.None, nil
 }
 

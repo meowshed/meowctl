@@ -21,6 +21,7 @@ const (
 	KindAppendFile   = "append_file"
 	KindCopyFile     = "copy_file"
 	KindSymlink      = "symlink"
+	KindLinkFile     = "link_file"
 	KindMkdir        = "mkdir"
 	KindDownload     = "download"
 	KindDefaultWrite = "defaults_write"
@@ -63,6 +64,15 @@ type inverseSymlink struct {
 	Dst         string `json:"dst"`
 	PriorTarget string `json:"prior_target,omitempty"`
 	HadPrior    bool   `json:"had_prior"`
+}
+
+// inverseLinkFile removes the symlink at Dst. When WasBackedUp is true the
+// original file was renamed to BackupPath and rollback restores it; when false
+// rollback simply removes the symlink.
+type inverseLinkFile struct {
+	Dst         string `json:"dst"`
+	BackupPath  string `json:"backup_path,omitempty"`
+	WasBackedUp bool   `json:"was_backed_up"`
 }
 
 // inverseMkdir removes the directory if meowctl created it.
@@ -245,6 +255,8 @@ func applyInverse(rec OpRecord) error {
 		return applyInverseCopyFile(rec.Inverse)
 	case KindSymlink:
 		return applyInverseSymlink(rec.Inverse)
+	case KindLinkFile:
+		return applyInverseLinkFile(rec.Inverse)
 	case KindMkdir:
 		return applyInverseMkdir(rec.Inverse)
 	case KindDownload:
@@ -303,6 +315,22 @@ func applyInverseSymlink(raw json.RawMessage) error {
 		return nil
 	}
 	return deleteIfExists(inv.Dst)
+}
+
+func applyInverseLinkFile(raw json.RawMessage) error {
+	var inv inverseLinkFile
+	if err := json.Unmarshal(raw, &inv); err != nil {
+		return err
+	}
+	if err := deleteIfExists(inv.Dst); err != nil {
+		return fmt.Errorf("rollback: remove link_file symlink %s: %w", inv.Dst, err)
+	}
+	if inv.WasBackedUp {
+		if err := os.Rename(inv.BackupPath, inv.Dst); err != nil {
+			return fmt.Errorf("rollback: restore backup %s -> %s: %w", inv.BackupPath, inv.Dst, err)
+		}
+	}
+	return nil
 }
 
 // applyInverseMkdir removes a directory that meowctl created. It uses
@@ -477,6 +505,18 @@ func (s *Stack) AppendSymlink(phase, component, dst, priorTarget string, hadPrio
 		Dst:         dst,
 		PriorTarget: priorTarget,
 		HadPrior:    hadPrior,
+	})
+}
+
+// AppendLinkFile records a link_file inverse op before execution.
+// backupPath is the path the original file was renamed to (empty when no
+// backup was made). wasBackedUp must be true when an existing regular file was
+// backed up so that rollback can restore it.
+func (s *Stack) AppendLinkFile(phase, component, dst, backupPath string, wasBackedUp bool) error {
+	return s.Append(phase, component, KindLinkFile, inverseLinkFile{
+		Dst:         dst,
+		BackupPath:  backupPath,
+		WasBackedUp: wasBackedUp,
 	})
 }
 

@@ -35,6 +35,55 @@ func TestBuiltinComponent_Basic(t *testing.T) {
 	}
 }
 
+func TestBuiltinComponent_WithAfter(t *testing.T) {
+	acc := &Accumulator{}
+	thread := newThread(acc)
+
+	list := gostarlark.NewList([]gostarlark.Value{gostarlark.String("mise"), gostarlark.String("shell")})
+	kwargs := []gostarlark.Tuple{
+		{gostarlark.String("after"), list},
+	}
+	_, err := builtinComponent(
+		thread, nil,
+		gostarlark.Tuple{gostarlark.String("node")},
+		kwargs,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := acc.Components[0].After
+	if len(got) != 2 || got[0] != "mise" || got[1] != "shell" {
+		t.Errorf("expected after=[mise shell], got %v", got)
+	}
+}
+
+func TestBuiltinComponent_AfterNotList(t *testing.T) {
+	acc := &Accumulator{}
+	thread := newThread(acc)
+
+	kwargs := []gostarlark.Tuple{
+		{gostarlark.String("after"), gostarlark.String("mise")},
+	}
+	_, err := builtinComponent(thread, nil, gostarlark.Tuple{gostarlark.String("node")}, kwargs)
+	if err == nil {
+		t.Fatal("expected error when after is not a list")
+	}
+}
+
+func TestBuiltinComponent_AfterNonStringElement(t *testing.T) {
+	acc := &Accumulator{}
+	thread := newThread(acc)
+
+	list := gostarlark.NewList([]gostarlark.Value{gostarlark.MakeInt(42)})
+	kwargs := []gostarlark.Tuple{
+		{gostarlark.String("after"), list},
+	}
+	_, err := builtinComponent(thread, nil, gostarlark.Tuple{gostarlark.String("node")}, kwargs)
+	if err == nil {
+		t.Fatal("expected error when after element is not a string")
+	}
+}
+
 func TestBuiltinComponent_WithKwargs(t *testing.T) {
 	acc := &Accumulator{}
 	thread := newThread(acc)
@@ -200,10 +249,10 @@ func TestBuiltinSelect_MatchesPlatform(t *testing.T) {
 	thread := newThread(acc)
 
 	cases, _ := gostarlark.Call(thread, fn, gostarlark.Tuple{
-		buildSelectDict(t, map[string]gostarlark.Value{
-			"//platform:macos":     gostarlark.String("mac-value"),
-			"//platform:linux":     gostarlark.String("linux-value"),
-			"//conditions:default": gostarlark.String("default-value"),
+		buildSelectDict(t, []selectEntry{
+			{"//platform:macos", gostarlark.String("mac-value")},
+			{"//platform:linux", gostarlark.String("linux-value")},
+			{"//conditions:default", gostarlark.String("default-value")},
 		}),
 	}, nil)
 
@@ -222,9 +271,9 @@ func TestBuiltinSelect_FallsBackToDefault(t *testing.T) {
 	thread := newThread(acc)
 
 	result, _ := gostarlark.Call(thread, fn, gostarlark.Tuple{
-		buildSelectDict(t, map[string]gostarlark.Value{
-			"//platform:macos":     gostarlark.String("mac-value"),
-			"//conditions:default": gostarlark.String("default-value"),
+		buildSelectDict(t, []selectEntry{
+			{"//platform:macos", gostarlark.String("mac-value")},
+			{"//conditions:default", gostarlark.String("default-value")},
 		}),
 	}, nil)
 
@@ -240,8 +289,8 @@ func TestBuiltinSelect_NoMatchNoDefault(t *testing.T) {
 	thread := newThread(acc)
 
 	_, err := gostarlark.Call(thread, fn, gostarlark.Tuple{
-		buildSelectDict(t, map[string]gostarlark.Value{
-			"//platform:macos": gostarlark.String("mac-value"),
+		buildSelectDict(t, []selectEntry{
+			{"//platform:macos", gostarlark.String("mac-value")},
 		}),
 	}, nil)
 
@@ -258,8 +307,8 @@ func TestBuiltinSelect_MacOSArm64NeverMatches(t *testing.T) {
 	thread := newThread(&Accumulator{})
 
 	_, err := gostarlark.Call(thread, fn, gostarlark.Tuple{
-		buildSelectDict(t, map[string]gostarlark.Value{
-			"//platform:macos-arm64": gostarlark.String("arm64-value"),
+		buildSelectDict(t, []selectEntry{
+			{"//platform:macos-arm64", gostarlark.String("arm64-value")},
 		}),
 	}, nil)
 
@@ -348,13 +397,21 @@ func TestMatchesPlatform(t *testing.T) {
 
 // --- helpers ---
 
-// buildSelectDict builds a *starlark.Dict from a Go map, preserving insertion order
-// by using pairs. Order matters for select() first-match semantics.
-func buildSelectDict(t *testing.T, m map[string]gostarlark.Value) *gostarlark.Dict {
+// selectEntry is a key-value pair for buildSelectDict, preserving order for
+// select() first-match semantics.
+type selectEntry struct {
+	k string
+	v gostarlark.Value
+}
+
+// buildSelectDict builds a *starlark.Dict from an ordered slice of entries.
+// Order matters for select() first-match semantics; use this instead of a Go
+// map to avoid non-deterministic iteration.
+func buildSelectDict(t *testing.T, entries []selectEntry) *gostarlark.Dict {
 	t.Helper()
 	d := new(gostarlark.Dict)
-	for k, v := range m {
-		if err := d.SetKey(gostarlark.String(k), v); err != nil {
+	for _, e := range entries {
+		if err := d.SetKey(gostarlark.String(e.k), e.v); err != nil {
 			t.Fatalf("SetKey: %v", err)
 		}
 	}

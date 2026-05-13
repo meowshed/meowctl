@@ -92,9 +92,17 @@ func (e *Evaluator) ExecFile(filename string, src any, predeclared gostarlark.St
 	return &EvalResult{Globals: globals, Declarations: acc}, nil
 }
 
-// CallHook calls a named lifecycle hook function defined in a previously evaluated file.
+// ReadComponentGlobals evaluates a Starlark file to read its top-level globals
+// without a ctx value. This is used during pass 1 of component loading to extract
+// metadata (after, pm_name) before hooks are executed.
+// Returns the globals dict and accumulated declarations, or an error.
+func (e *Evaluator) ReadComponentGlobals(filename string, src any) (*EvalResult, error) {
+	return e.ExecFile(filename, src, nil, nil)
+}
+
+// CallHook invokes hookName from globals with ctx as its sole argument.
 // globals must be the Globals field from an EvalResult. filename is the source file path,
-// used in error messages. ctx is passed as the sole argument.
+// used in error messages.
 func (e *Evaluator) CallHook(globals gostarlark.StringDict, hookName, filename string, ctx gostarlark.Value) error {
 	fn, ok := globals[hookName]
 	if !ok {
