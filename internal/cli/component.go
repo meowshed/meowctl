@@ -97,7 +97,10 @@ func newComponentStatusCmd(gf *globalFlags) *cobra.Command {
 			}
 
 			if jsonOut {
-				out, _ := json.MarshalIndent(results, "", "  ")
+				out, err := json.MarshalIndent(results, "", "  ")
+				if err != nil {
+					return fmt.Errorf("component status: marshal json: %w", err)
+				}
 				fmt.Println(string(out))
 				return nil
 			}

@@ -29,7 +29,10 @@ func newStatusCmd(gf *globalFlags) *cobra.Command {
 			}
 
 			if jsonOut {
-				out, _ := json.MarshalIndent(sentinel, "", "  ")
+				out, err := json.MarshalIndent(sentinel, "", "  ")
+				if err != nil {
+					return fmt.Errorf("status: marshal json: %w", err)
+				}
 				fmt.Println(string(out))
 				return nil
 			}

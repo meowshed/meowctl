@@ -149,8 +149,9 @@ component("shell")
 // TestInitCmd_CreatesFiles verifies meowctl init creates config dir and meowctl.star.
 func TestInitCmd_CreatesFiles(t *testing.T) {
 	tmp := t.TempDir()
-	cli.RootCmd.SetArgs([]string{"--config", tmp, "init"})
-	if err := cli.RootCmd.Execute(); err != nil {
+	cmd := cli.NewRootCmdForTest()
+	cmd.SetArgs([]string{"--config", tmp, "init"})
+	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init failed: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(tmp, "meowctl.star")); err != nil {
@@ -167,8 +168,9 @@ func TestInitCmd_AlreadyExists(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(tmp, "meowctl.star"), []byte(""), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cli.RootCmd.SetArgs([]string{"--config", tmp, "init"})
-	err := cli.RootCmd.Execute()
+	cmd := cli.NewRootCmdForTest()
+	cmd.SetArgs([]string{"--config", tmp, "init"})
+	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected error when meowctl.star already exists")
 	}
@@ -184,17 +186,19 @@ func TestInitCmd_AlreadyExists(t *testing.T) {
 // TestShellCmd_Bash verifies shell bash emits a non-empty snippet.
 func TestShellCmd_Bash(t *testing.T) {
 	var buf strings.Builder
-	cli.RootCmd.SetOut(&buf)
-	cli.RootCmd.SetArgs([]string{"shell", "bash"})
-	if err := cli.RootCmd.Execute(); err != nil {
+	cmd := cli.NewRootCmdForTest()
+	cmd.SetOut(&buf)
+	cmd.SetArgs([]string{"shell", "bash"})
+	if err := cmd.Execute(); err != nil {
 		t.Fatalf("shell bash failed: %v", err)
 	}
 }
 
 // TestShellCmd_Unknown returns ExitUsage for an unknown shell.
 func TestShellCmd_Unknown(t *testing.T) {
-	cli.RootCmd.SetArgs([]string{"shell", "powershell"})
-	err := cli.RootCmd.Execute()
+	cmd := cli.NewRootCmdForTest()
+	cmd.SetArgs([]string{"shell", "powershell"})
+	err := cmd.Execute()
 	var exitErr *cli.ExitError
 	if !errors.As(err, &exitErr) {
 		t.Fatalf("expected *cli.ExitError, got %T: %v", err, err)
@@ -216,9 +220,10 @@ component("beta")
 		t.Fatal(err)
 	}
 	var out strings.Builder
-	cli.RootCmd.SetOut(&out)
-	cli.RootCmd.SetArgs([]string{"--config", tmp, "component", "list"})
-	if err := cli.RootCmd.Execute(); err != nil {
+	cmd := cli.NewRootCmdForTest()
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--config", tmp, "component", "list"})
+	if err := cmd.Execute(); err != nil {
 		t.Fatalf("component list failed: %v", err)
 	}
 }
@@ -226,9 +231,10 @@ component("beta")
 // TestLockShowCmd_MissingFile prints empty lock info without error when lock file is absent.
 func TestLockShowCmd_MissingFile(t *testing.T) {
 	tmp := t.TempDir()
-	cli.RootCmd.SetArgs([]string{"--config", tmp, "lock", "show"})
+	cmd := cli.NewRootCmdForTest()
+	cmd.SetArgs([]string{"--config", tmp, "lock", "show"})
 	// Missing lock file is not an error — lock.Read returns empty LockFile.
-	if err := cli.RootCmd.Execute(); err != nil {
+	if err := cmd.Execute(); err != nil {
 		t.Fatalf("lock show on missing file should not error, got: %v", err)
 	}
 }

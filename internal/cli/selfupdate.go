@@ -40,7 +40,7 @@ func fetchRelease(ctx context.Context) (*githubRelease, error) {
 	if err != nil {
 		return nil, exitErrorf(ExitModule, "self-update: build request: %v", err)
 	}
-	resp, err := http.DefaultClient.Do(req) // #nosec G704 -- fixed known GitHub API URL
+	resp, err := http.DefaultClient.Do(req) // #nosec G704 -- request URL is the fixed githubReleasesAPI constant
 	if err != nil {
 		return nil, exitErrorf(ExitModule, "self-update: fetch releases: %v", err)
 	}
@@ -65,7 +65,7 @@ func downloadBinary(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, exitErrorf(ExitModule, "self-update: build download request: %v", err)
 	}
-	resp, err := http.DefaultClient.Do(req) // #nosec G704 -- URL from trusted GitHub releases API response
+	resp, err := http.DefaultClient.Do(req) // #nosec G704 -- URL is from trusted GitHub releases API response; SRI verification deferred (TODO below)
 	if err != nil {
 		return nil, exitErrorf(ExitModule, "self-update: download: %v", err)
 	}
@@ -84,11 +84,11 @@ func downloadBinary(ctx context.Context, url string) ([]byte, error) {
 func replaceBinary(data []byte) error {
 	self, err := os.Executable()
 	if err != nil {
-		return exitErrorf(ExitError1, "self-update: locate binary: %v", err)
+		return exitErrorf(ExitGeneral, "self-update: locate binary: %v", err)
 	}
 	tmp, err := os.CreateTemp("", "meowctl-update-*") // #nosec G303
 	if err != nil {
-		return exitErrorf(ExitError1, "self-update: create temp file: %v", err)
+		return exitErrorf(ExitGeneral, "self-update: create temp file: %v", err)
 	}
 	tmpName := tmp.Name()
 	defer func() { _ = os.Remove(tmpName) }()
@@ -101,10 +101,10 @@ func replaceBinary(data []byte) error {
 		return exitErrorf(ExitModule, "self-update: close temp file: %v", err)
 	}
 	if err := os.Chmod(tmpName, 0o755); err != nil { // #nosec G703 G302 -- executable binary requires 0755; tmpName from os.CreateTemp
-		return exitErrorf(ExitError1, "self-update: chmod: %v", err)
+		return exitErrorf(ExitGeneral, "self-update: chmod: %v", err)
 	}
 	if err := os.Rename(tmpName, self); err != nil { // #nosec G703 -- self is os.Executable() path
-		return exitErrorf(ExitError1, "self-update: replace binary: %v", err)
+		return exitErrorf(ExitGeneral, "self-update: replace binary: %v", err)
 	}
 	return nil
 }
@@ -133,7 +133,7 @@ func runSelfUpdate() error {
 	wantName := fmt.Sprintf("meowctl_%s_%s_%s", latestVer, runtime.GOOS, runtime.GOARCH)
 	var downloadURL string
 	for _, a := range release.Assets {
-		if a.Name == wantName || a.Name == wantName+".tar.gz" {
+		if a.Name == wantName {
 			downloadURL = a.BrowserDownloadURL
 			break
 		}
@@ -149,6 +149,7 @@ func runSelfUpdate() error {
 		return err
 	}
 
+	// TODO: verify SHA-256 of data against a .sha256 sidecar asset before replacing binary.
 	if err := replaceBinary(data); err != nil {
 		return err
 	}

@@ -146,7 +146,6 @@ func newInstallCmd(gf *globalFlags) *cobra.Command {
 				return err
 			}
 			cfg.ConfigDir = configDir
-			cfg.DryRun = cfg.DryRun || gf.Verbose // verbose implies extra output but not dry-run; kept separate
 			return runLifecyclePhaseSet("install", lifecycle.PhaseSetInstall, cfg, args)
 		},
 	}

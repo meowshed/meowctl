@@ -63,20 +63,23 @@ func newLockVerifyCmd(gf *globalFlags) *cobra.Command {
 				// Deep SRI re-download is a future enhancement.
 				if entry.Integrity == "" {
 					results = append(results, verifyResult{name, "warn", "no integrity hash recorded"})
+					allOK = false
 				} else {
 					results = append(results, verifyResult{name, "ok", entry.Integrity})
 				}
 			}
 
 			if jsonOut {
-				out, _ := json.MarshalIndent(results, "", "  ")
+				out, err := json.MarshalIndent(results, "", "  ")
+				if err != nil {
+					return fmt.Errorf("lock verify: marshal json: %w", err)
+				}
 				fmt.Println(string(out))
 			} else {
 				for _, r := range results {
 					icon := "✓"
 					if r.Status != "ok" {
 						icon = "!"
-						allOK = false
 					}
 					fmt.Printf("  %s %s: %s\n", icon, r.Module, r.Detail)
 				}

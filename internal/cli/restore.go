@@ -41,7 +41,7 @@ func newRestoreCmd(gf *globalFlags) *cobra.Command {
 				for _, f := range result.Failures {
 					fmt.Printf("  failed: %s/%s: %v\n", f.Record.Component, f.Record.Kind, f.Err)
 				}
-				return exitErrorf(ExitError1, "restore: %d operation(s) failed", len(result.Failures))
+				return exitErrorf(ExitGeneral, "restore: %d operation(s) failed", len(result.Failures))
 			}
 			if result.SkippedLines > 0 {
 				fmt.Printf("Warning: %d malformed journal line(s) skipped (lines: %v).\n", result.SkippedLines, result.SkippedAt)

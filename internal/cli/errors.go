@@ -27,7 +27,7 @@ func exitErrorf(code int, format string, args ...any) *ExitError {
 // Exit code constants per spec.
 const (
 	ExitSuccess = 0
-	ExitError1  = 1 // general error
+	ExitGeneral = 1 // general error
 	ExitUsage   = 2 // usage error
 	ExitConfig  = 3 // invalid meowctl.star / config error
 	ExitModule  = 4 // module fetch / SRI failure
