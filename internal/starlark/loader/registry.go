@@ -412,6 +412,156 @@ func (l *RegistryLoader) writeLockEntry(name, version, source, integrity string)
 	return lock.Write(l.LockPath, lf)
 }
 
+// SyncResult is returned by SyncModules.
+type SyncResult struct {
+	// Resolved maps module name to the version that was resolved and locked.
+	// Replaced modules have Resolved[name] == "" (no version, local path).
+	Resolved map[string]string
+	// ReplacedPaths maps replaced module names to their local paths.
+	ReplacedPaths map[string]string
+}
+
+// SyncModules resolves all deps in the modfile, downloads changed tarballs,
+// and updates the lock file. It returns the resolved versions for diffing.
+// Replace directives are validated: a non-existent local path is a hard error.
+// Modules with active replace() are recorded in the lock with Replaced=true.
+func (l *RegistryLoader) SyncModules(deps []ModfileDep, replaces []ModfileReplace) (*SyncResult, error) {
+	// Build replace index for fast lookup.
+	replaceIndex := make(map[string]string, len(replaces))
+	for _, r := range replaces {
+		replaceIndex[r.Module] = r.Path
+	}
+
+	lf, err := lock.Read(l.LockPath)
+	if err != nil {
+		return nil, fmt.Errorf("sync: read lock: %w", err)
+	}
+	if lf.Modules == nil {
+		lf.Modules = make(map[string]lock.ModuleEntry)
+	}
+
+	result := &SyncResult{
+		Resolved:      make(map[string]string),
+		ReplacedPaths: make(map[string]string),
+	}
+
+	index, err := l.fetchIndex()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, dep := range deps {
+		if err := l.syncOneDep(dep, replaceIndex, index, lf.Modules, result); err != nil {
+			return nil, err
+		}
+	}
+
+	if writeErr := lock.Write(l.LockPath, lf); writeErr != nil {
+		return nil, fmt.Errorf("sync: write lock: %w", writeErr)
+	}
+	return result, nil
+}
+
+// syncOneDep resolves a single dep entry, updating modules and result in-place.
+func (l *RegistryLoader) syncOneDep(dep ModfileDep, replaceIndex map[string]string, index *registryIndex, modules map[string]lock.ModuleEntry, result *SyncResult) error {
+	modName, reqVersion := splitModuleURL(dep.URL)
+
+	if localPath, replaced := replaceIndex[modName]; replaced {
+		fmt.Fprintf(os.Stderr, "meowctl: warning: module %q is replaced by local path %q — skipping registry resolution\n", modName, localPath)
+		if _, statErr := os.Stat(localPath); statErr != nil {
+			return fmt.Errorf("sync: replace() path for %q does not exist: %s (G5)", modName, localPath)
+		}
+		modules[modName] = lock.ModuleEntry{Replaced: true, Path: localPath}
+		result.ReplacedPaths[modName] = localPath
+		return nil
+	}
+
+	entry, ok := index.Modules[modName]
+	if !ok {
+		return fmt.Errorf("sync: module %q not found in registry", modName)
+	}
+
+	version, integ, source, err := l.resolveDepVersion(modName, reqVersion, entry)
+	if err != nil {
+		return err
+	}
+
+	modules[modName] = lock.ModuleEntry{
+		Version:   version,
+		Source:    source,
+		Integrity: integ,
+	}
+	result.Resolved[modName] = version
+	return nil
+}
+
+// resolveDepVersion picks, fetches, and caches the tarball for a single dep.
+// Returns the resolved version, SRI, and source URL.
+func (l *RegistryLoader) resolveDepVersion(modName, reqVersion string, entry indexEntry) (version, integ, source string, err error) {
+	version = reqVersion
+	if version == "" || version == "latest" {
+		if len(entry.Versions) == 0 {
+			return "", "", "", fmt.Errorf("sync: module %q has no versions in registry", modName)
+		}
+		version = entry.Versions[len(entry.Versions)-1]
+	}
+
+	source = buildSourceURL(entry.Source, modName, version)
+	cacheDir := l.moduleCacheDir(modName, version)
+
+	integ, sriErr := readSRISidecar(cacheDir)
+	if sriErr != nil {
+		tarball, fetchErr := l.fetchTarball(source)
+		if fetchErr != nil {
+			return "", "", "", fmt.Errorf("sync: fetch %s@%s: %w", modName, version, fetchErr)
+		}
+		integ = computeSRI(tarball)
+		if _, statErr := os.Stat(cacheDir); statErr != nil {
+			if extractErr := l.extractTarball(tarball, cacheDir); extractErr != nil {
+				return "", "", "", fmt.Errorf("sync: extract %s@%s: %w", modName, version, extractErr)
+			}
+		}
+		_ = writeSRISidecar(cacheDir, integ)
+	}
+	return version, integ, source, nil
+}
+
+// LatestVersion returns the latest available version for modName from the registry.
+func (l *RegistryLoader) LatestVersion(modName string) (string, error) {
+	index, err := l.fetchIndex()
+	if err != nil {
+		return "", err
+	}
+	entry, ok := index.Modules[modName]
+	if !ok {
+		return "", fmt.Errorf("module %q not found in registry", modName)
+	}
+	if len(entry.Versions) == 0 {
+		return "", fmt.Errorf("module %q has no versions in registry", modName)
+	}
+	return entry.Versions[len(entry.Versions)-1], nil
+}
+
+// ModfileDep is a dep() entry from a modfile, used by SyncModules.
+type ModfileDep struct {
+	URL string
+}
+
+// ModfileReplace is a replace() entry from a modfile, used by SyncModules.
+type ModfileReplace struct {
+	Module string
+	Path   string
+}
+
+// splitModuleURL splits "github://owner/repo@v1.0.0" into ("github://owner/repo", "v1.0.0").
+// If no @version is present, version is "".
+func splitModuleURL(url string) (module, version string) {
+	if idx := strings.LastIndex(url, "@"); idx >= 0 {
+		return url[:idx], url[idx+1:]
+	}
+	return url, ""
+}
+
 // buildSourceURL substitutes {name} and {version} in the source URL template.
 func buildSourceURL(sourceTmpl, name, version string) string {
 	s := strings.ReplaceAll(sourceTmpl, "{name}", name)
