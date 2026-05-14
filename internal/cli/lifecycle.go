@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/meowshed/meowctl/internal/ctx"
@@ -17,6 +18,15 @@ import (
 	"github.com/spf13/cobra"
 	gostarlark "go.starlark.net/starlark"
 )
+
+// goosToPlatformOS maps runtime.GOOS values to the meowctl platform OS identifiers.
+// "darwin" → "macos"; all others pass through unchanged.
+func goosToPlatformOS(goos string) string {
+	if goos == "darwin" {
+		return "macos"
+	}
+	return goos
+}
 
 // runConfig holds runtime parameters shared across lifecycle commands.
 type runConfig struct {
@@ -193,7 +203,9 @@ func envMap() map[string]string {
 // ordered component IDs (logical names) and a PMRegistry built from pass-1 globals.
 func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.ComponentID, *pkg.PMRegistry, error) {
 	starPath := filepath.Join(configDir, "meowctl.star")
-	eval := &starlarkpkg.Evaluator{}
+	eval := &starlarkpkg.Evaluator{
+		Platform: starlarkpkg.PlatformInfo{OS: goosToPlatformOS(runtime.GOOS)},
+	}
 
 	result, err := eval.ExecFile(starPath, nil, nil, nil)
 	if err != nil {

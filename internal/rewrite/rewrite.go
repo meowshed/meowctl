@@ -29,5 +29,5 @@ func SetDepVersion(path, moduleName, newVersion string) error {
 	}
 
 	updated := pat.ReplaceAll(data, []byte(`${1}`+newVersion))
-	return os.WriteFile(path, updated, 0o600) // #nosec G703 -- path is caller-controlled trusted modfile path
+	return os.WriteFile(path, updated, 0o600) // #nosec G703 -- path is caller-controlled trusted modfile path; not user input
 }
