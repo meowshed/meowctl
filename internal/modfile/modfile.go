@@ -92,7 +92,10 @@ func accFromThread(t *gostarlark.Thread) *accumulator {
 	if v == nil {
 		return &accumulator{}
 	}
-	a, _ := v.(*accumulator)
+	a, ok := v.(*accumulator)
+	if !ok {
+		panic(fmt.Sprintf("accFromThread: unexpected type %T stored under \"acc\"", v))
+	}
 	return a
 }
 
