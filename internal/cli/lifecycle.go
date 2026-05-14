@@ -157,13 +157,19 @@ func (h *starlarkHookCaller) resolveComponentDir(componentID, componentFile stri
 }
 
 // dispatchPackages iterates pkg declarations and calls the appropriate PM handler.
-// Only install and uninstall phases trigger dispatch; other phases are no-ops.
+// Only install, uninstall, and update phases trigger dispatch; other phases are no-ops.
 func dispatchPackages(phase string, packages []starlarkpkg.PkgDecl, reg *pkg.PMRegistry, ctxVal gostarlark.Value) error {
 	if reg == nil || len(packages) == 0 {
 		return nil
 	}
 	for _, p := range packages {
-		if err := reg.Dispatch(phase, p.Manager, p.Name, p.Version, p.Kwargs, ctxVal); err != nil {
+		var err error
+		if phase == "update" {
+			err = reg.DispatchUpdate(p.Manager, p.Name, p.Kwargs, ctxVal)
+		} else {
+			err = reg.Dispatch(phase, p.Manager, p.Name, p.Version, p.Kwargs, ctxVal)
+		}
+		if err != nil {
 			return err
 		}
 	}
