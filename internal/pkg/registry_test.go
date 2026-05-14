@@ -80,6 +80,41 @@ func TestScanGlobals_AllPresent(t *testing.T) {
 	}
 }
 
+func TestPMRegistry_Dispatch_KwargsForwarded(t *testing.T) {
+	var receivedKwargs []gostarlark.Tuple
+	reg := pkg.NewPMRegistry()
+	reg.Register("brew", &pkg.PMHandler{
+		ComponentName: "homebrew",
+		InstallPkg: gostarlark.NewBuiltin("install_pkg", func(_ *gostarlark.Thread, _ *gostarlark.Builtin, _ gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+			receivedKwargs = kwargs
+			return gostarlark.None, nil
+		}),
+		UninstallPkg: makeCallable("uninstall_pkg", new(int)),
+		Interrogate:  makeCallable("interrogate", new(int)),
+	})
+
+	err := reg.Dispatch("install", "brew", "git", "2.0", map[string]any{
+		"with_docs": true,
+		"formula":   "git",
+	}, gostarlark.None)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(receivedKwargs) != 2 {
+		t.Errorf("expected 2 kwargs, got %d", len(receivedKwargs))
+	}
+	kwmap := make(map[string]gostarlark.Value)
+	for _, kv := range receivedKwargs {
+		kwmap[string(kv[0].(gostarlark.String))] = kv[1]
+	}
+	if kwmap["formula"] != gostarlark.String("git") {
+		t.Errorf("formula kwarg = %v, want %q", kwmap["formula"], "git")
+	}
+	if kwmap["with_docs"] != gostarlark.Bool(true) {
+		t.Errorf("with_docs kwarg = %v, want true", kwmap["with_docs"])
+	}
+}
+
 func TestScanGlobals_NoPMName(t *testing.T) {
 	globals := gostarlark.StringDict{
 		"install_pkg": makeCallable("install_pkg", new(int)),
