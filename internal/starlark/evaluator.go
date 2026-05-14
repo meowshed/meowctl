@@ -104,8 +104,9 @@ func (e *Evaluator) ReadComponentGlobals(filename string, src any) (*EvalResult,
 // CallAfterCallable invokes fn (the value of an after global) with an
 // AfterSentinelCtx. fn is expected to return a starlark.List of strings,
 // which is returned as a []string.
-// The callable already captures platform() from its original evaluation context,
-// so no additional predeclared setup is needed here.
+// The callable captures platform() from its original ExecFile evaluation context
+// (which has Platform populated from runtime.GOOS), so no additional predeclared
+// setup is needed here — the closure already has the correct platform info.
 func (e *Evaluator) CallAfterCallable(fn gostarlark.Callable) ([]string, error) {
 	thread := &gostarlark.Thread{Name: "after"}
 	sentinel := &ctx.AfterSentinelCtx{}
@@ -132,6 +133,7 @@ func (e *Evaluator) CallAfterCallable(fn gostarlark.Callable) ([]string, error) 
 	return out, nil
 }
 
+// CallHook invokes hookName from globals with ctx as its sole argument.
 // globals must be the Globals field from an EvalResult. filename is the source file path,
 // used in error messages.
 func (e *Evaluator) CallHook(globals gostarlark.StringDict, hookName, filename string, ctx gostarlark.Value) error {

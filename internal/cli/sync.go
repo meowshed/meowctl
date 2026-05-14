@@ -320,7 +320,8 @@ func splitGetArg(arg string) (module, version string) {
 }
 
 // splitModuleURLForCLI splits "github://owner/repo@v1.0.0" into the module
-// name (without @version). This mirrors splitModuleURL in the loader package
+// name ("github://owner/repo") and version ("v1.0.0"). If no @version is present,
+// version is "". This mirrors splitModuleURL in the loader package
 // but is unexported and local to the CLI layer.
 func splitModuleURLForCLI(url string) (module, version string) {
 	if idx := strings.LastIndex(url, "@"); idx >= 0 {
