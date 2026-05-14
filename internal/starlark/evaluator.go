@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/meowshed/meowctl/internal/ctx"
 	"github.com/meowshed/meowctl/internal/starlark/loader"
 	gostarlark "go.starlark.net/starlark"
 	"go.starlark.net/syntax"
@@ -100,7 +101,37 @@ func (e *Evaluator) ReadComponentGlobals(filename string, src any) (*EvalResult,
 	return e.ExecFile(filename, src, nil, nil)
 }
 
-// CallHook invokes hookName from globals with ctx as its sole argument.
+// CallAfterCallable invokes fn (the value of an after global) with an
+// AfterSentinelCtx. fn is expected to return a starlark.List of strings,
+// which is returned as a []string.
+// The callable already captures platform() from its original evaluation context,
+// so no additional predeclared setup is needed here.
+func (e *Evaluator) CallAfterCallable(fn gostarlark.Callable) ([]string, error) {
+	thread := &gostarlark.Thread{Name: "after"}
+	sentinel := &ctx.AfterSentinelCtx{}
+	result, err := gostarlark.Call(thread, fn, gostarlark.Tuple{sentinel}, nil)
+	if err != nil {
+		var evalErr *gostarlark.EvalError
+		if errors.As(err, &evalErr) {
+			return nil, fmt.Errorf("after() callable: %w", evalErr)
+		}
+		return nil, fmt.Errorf("after() callable: %w", err)
+	}
+	list, ok := result.(*gostarlark.List)
+	if !ok {
+		return nil, fmt.Errorf("after() callable must return a list, got %s", result.Type())
+	}
+	out := make([]string, 0, list.Len())
+	for i := 0; i < list.Len(); i++ {
+		s, ok := list.Index(i).(gostarlark.String)
+		if !ok {
+			continue
+		}
+		out = append(out, string(s))
+	}
+	return out, nil
+}
+
 // globals must be the Globals field from an EvalResult. filename is the source file path,
 // used in error messages.
 func (e *Evaluator) CallHook(globals gostarlark.StringDict, hookName, filename string, ctx gostarlark.Value) error {
