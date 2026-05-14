@@ -415,7 +415,7 @@ func (l *RegistryLoader) writeLockEntry(name, version, source, integrity string)
 // SyncResult is returned by SyncModules.
 type SyncResult struct {
 	// Resolved maps module name to the version that was resolved and locked.
-	// Replaced modules have Resolved[name] == "" (no version, local path).
+	// Replaced modules are not present in Resolved; they appear in ReplacedPaths instead.
 	Resolved map[string]string
 	// ReplacedPaths maps replaced module names to their local paths.
 	ReplacedPaths map[string]string
