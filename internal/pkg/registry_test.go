@@ -229,3 +229,100 @@ func TestScanGlobals_MissingFunctions(t *testing.T) {
 		t.Error("expected a warning message, got empty string")
 	}
 }
+
+// TestInterrogate_SignatureIsCtxOnly verifies that interrogate is called with a
+// single ctx argument (not ctx+name). The ADR-016 contract: interrogate(ctx) only.
+func TestInterrogate_SignatureIsCtxOnly(t *testing.T) {
+	var gotArgCount int
+	reg := pkg.NewPMRegistry()
+	reg.Register("test", &pkg.PMHandler{
+		ComponentName: "test-pm",
+		InstallPkg:    makeCallable("install_pkg", new(int)),
+		UninstallPkg:  makeCallable("uninstall_pkg", new(int)),
+		Interrogate: gostarlark.NewBuiltin("interrogate", func(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, _ []gostarlark.Tuple) (gostarlark.Value, error) {
+			gotArgCount = len(args)
+			return gostarlark.NewList([]gostarlark.Value{gostarlark.String("pkg-a")}), nil
+		}),
+	})
+
+	h := reg.Handler("test")
+	if h == nil {
+		t.Fatal("expected handler")
+	}
+	thread := &gostarlark.Thread{Name: "test"}
+	result, err := gostarlark.Call(thread, h.Interrogate, gostarlark.Tuple{gostarlark.None}, nil)
+	if err != nil {
+		t.Fatalf("interrogate call: %v", err)
+	}
+	if gotArgCount != 1 {
+		t.Errorf("interrogate received %d args, want 1 (ctx only)", gotArgCount)
+	}
+	list, ok := result.(*gostarlark.List)
+	if !ok {
+		t.Fatalf("interrogate must return a list, got %s", result.Type())
+	}
+	if list.Len() == 0 {
+		t.Error("interrogate returned empty list")
+	}
+}
+
+// TestInterrogate_NamesAcceptedByInstallPkg verifies the round-trip contract:
+// names returned by interrogate(ctx) are valid to pass to install_pkg(ctx, name, version).
+// This is the core PM contract — install what interrogate reports as installed.
+func TestInterrogate_NamesAcceptedByInstallPkg(t *testing.T) {
+	installedNames := []string{"git", "curl", "wget"}
+	var installPkgNames []string
+
+	reg := pkg.NewPMRegistry()
+	reg.Register("brew", &pkg.PMHandler{
+		ComponentName: "homebrew",
+		InstallPkg: gostarlark.NewBuiltin("install_pkg", func(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, _ []gostarlark.Tuple) (gostarlark.Value, error) {
+			if len(args) >= 2 {
+				installPkgNames = append(installPkgNames, string(args[1].(gostarlark.String)))
+			}
+			return gostarlark.None, nil
+		}),
+		UninstallPkg: makeCallable("uninstall_pkg", new(int)),
+		Interrogate: gostarlark.NewBuiltin("interrogate", func(_ *gostarlark.Thread, _ *gostarlark.Builtin, _ gostarlark.Tuple, _ []gostarlark.Tuple) (gostarlark.Value, error) {
+			vals := make([]gostarlark.Value, len(installedNames))
+			for i, n := range installedNames {
+				vals[i] = gostarlark.String(n)
+			}
+			return gostarlark.NewList(vals), nil
+		}),
+	})
+
+	// Call interrogate to get the names.
+	h := reg.Handler("brew")
+	thread := &gostarlark.Thread{Name: "test"}
+	result, err := gostarlark.Call(thread, h.Interrogate, gostarlark.Tuple{gostarlark.None}, nil)
+	if err != nil {
+		t.Fatalf("interrogate: %v", err)
+	}
+	list, ok := result.(*gostarlark.List)
+	if !ok {
+		t.Fatalf("interrogate must return list, got %s", result.Type())
+	}
+
+	// Dispatch install for each name interrogate returned.
+	for i := 0; i < list.Len(); i++ {
+		name, ok := list.Index(i).(gostarlark.String)
+		if !ok {
+			t.Errorf("interrogate list[%d] is not a string", i)
+			continue
+		}
+		if err := reg.Dispatch("install", "brew", string(name), "latest", nil, gostarlark.None); err != nil {
+			t.Errorf("install_pkg(%q): %v", string(name), err)
+		}
+	}
+
+	// Verify install_pkg received exactly the names interrogate returned, verbatim.
+	if len(installPkgNames) != len(installedNames) {
+		t.Fatalf("install_pkg called %d times, want %d", len(installPkgNames), len(installedNames))
+	}
+	for i, want := range installedNames {
+		if installPkgNames[i] != want {
+			t.Errorf("install_pkg name[%d] = %q, want %q", i, installPkgNames[i], want)
+		}
+	}
+}
