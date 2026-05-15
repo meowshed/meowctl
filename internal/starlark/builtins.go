@@ -39,6 +39,7 @@ func makePredeclared(platform PlatformInfo) gostarlark.StringDict {
 		"component": gostarlark.NewBuiltin("component", builtinComponent),
 		"pkg":       gostarlark.NewBuiltin("pkg", builtinPkg),
 		"unpkg":     gostarlark.NewBuiltin("unpkg", builtinUnpkg),
+		"repo":      gostarlark.NewBuiltin("repo", builtinRepo),
 		"query_pm":  gostarlark.NewBuiltin("query_pm", builtinQueryPM),
 		"dep":       gostarlark.NewBuiltin("dep", builtinDep),
 		"module":    gostarlark.NewBuiltin("module", builtinModule),
@@ -147,6 +148,76 @@ func builtinPkg(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlar
 		return nil, err
 	}
 	return gostarlark.None, nil
+}
+
+// builtinRepo implements repo(manager, **kwargs).
+// When called during module-level evaluation (acc is present on thread), the
+// declaration is accumulated for deferred dispatch after the hook returns.
+// When called during hook execution (acc is nil, ctx is present on thread),
+// the repo is set up immediately via ctx's PMRegistry.
+func builtinRepo(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+	managerStr, extra, err := parseRepoArgs(args, kwargs)
+	if err != nil {
+		return nil, err
+	}
+	acc := accFromThread(thread)
+	if acc != nil {
+		// Module-level call: accumulate for deferred dispatch.
+		acc.Repos = append(acc.Repos, RepoDecl{
+			Manager: managerStr,
+			Kwargs:  extra,
+		})
+		return gostarlark.None, nil
+	}
+	// Hook-level call: dispatch immediately via ctx's PMRegistry.
+	ctxVal := ctxFromThread(thread)
+	if ctxVal == nil {
+		return nil, fmt.Errorf("repo: no accumulator or ctx on thread; repo() must be called during module evaluation or hook execution")
+	}
+	caps := ctxVal.Caps()
+	if caps.PMRegistry == nil {
+		return nil, fmt.Errorf("repo: no PM registry available; ensure PM components are loaded before calling repo() in a hook")
+	}
+	if err := caps.PMRegistry.DispatchAddRepo(managerStr, extra, ctxVal); err != nil {
+		return nil, err
+	}
+	return gostarlark.None, nil
+}
+
+// parseRepoArgs extracts manager and extra kwargs from repo() arguments.
+// manager may be positional or keyword; all other kwargs go into extra.
+func parseRepoArgs(args gostarlark.Tuple, kwargs []gostarlark.Tuple) (string, map[string]any, error) {
+	var manager string
+	filled := false
+	extra := make(map[string]any, len(kwargs))
+
+	if len(args) > 0 {
+		s, ok := args[0].(gostarlark.String)
+		if !ok {
+			return "", nil, fmt.Errorf("repo: manager must be a string, got %s", args[0].Type())
+		}
+		manager = string(s)
+		filled = true
+	}
+	for _, kv := range kwargs {
+		key := string(kv[0].(gostarlark.String))
+		if key == "manager" {
+			if filled {
+				return "", nil, fmt.Errorf("repo: manager supplied both positionally and as keyword argument")
+			}
+			s, ok := kv[1].(gostarlark.String)
+			if !ok {
+				return "", nil, fmt.Errorf("repo: manager must be a string, got %s", kv[1].Type())
+			}
+			manager = string(s)
+		} else {
+			extra[key] = kv[1]
+		}
+	}
+	if manager == "" {
+		return "", nil, fmt.Errorf("repo: missing argument for manager")
+	}
+	return manager, extra, nil
 }
 
 // parsePkgArgs extracts manager, name, version, and extra kwargs from pkg() arguments.
