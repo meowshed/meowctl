@@ -5,6 +5,7 @@
 package ctx
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
@@ -53,6 +54,16 @@ type Capabilities struct {
 	EmitFile string
 	// Log is the function used for ctx.log() output. Defaults to fmt.Println.
 	Log func(msg string)
+	// RunFunc, if non-nil, is called by ctx.run() instead of exec.CommandContext.
+	// It receives the resolved command name, argument list, and merged environment
+	// (os.Environ() plus any caller-supplied overrides). Returning a non-empty
+	// stdout string and nil error is equivalent to a real subprocess exiting 0.
+	// Returning a non-nil error maps to exit code 1 with empty stdout; the error
+	// message is surfaced as the Starlark run result's stderr field. Partial stdout
+	// alongside a non-zero exit is not supported — return an error for failure cases.
+	// The context passed is always context.Background(); cancellation is not supported.
+	// Used by tests to intercept subprocess calls without spawning real processes.
+	RunFunc func(ctx context.Context, cmd string, args []string, env []string) (stdout string, err error)
 }
 
 // CtxValue is the ctx object passed to lifecycle hook functions. It implements
@@ -125,6 +136,11 @@ func New(caps *Capabilities) *CtxValue {
 
 	return c
 }
+
+// Caps returns the Capabilities backing this ctx value.
+// Intended for use by predeclared builtins (e.g. pkg, unpkg, query_pm) that
+// need to dispatch to the PMRegistry during hook execution.
+func (c *CtxValue) Caps() *Capabilities { return c.caps }
 
 // String implements starlark.Value.
 func (c *CtxValue) String() string { return "<ctx>" }
