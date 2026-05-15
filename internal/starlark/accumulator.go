@@ -6,6 +6,12 @@ import (
 	gostarlark "go.starlark.net/starlark"
 )
 
+// ReplaceDecl records a replace() declaration.
+type ReplaceDecl struct {
+	Module string
+	Path   string
+}
+
 // Accumulator collects declarations made by Starlark configuration files during evaluation.
 // It is stored as a thread-local value under the key "acc" before each ExecFileOptions call.
 type Accumulator struct {
@@ -14,6 +20,7 @@ type Accumulator struct {
 	Deps        []DepDecl
 	Module      *ModuleDecl
 	SelectCases []SelectCase
+	Replaces    []ReplaceDecl
 }
 
 // ComponentDecl records a component() declaration.
