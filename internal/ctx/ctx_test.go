@@ -11,9 +11,10 @@ import (
 	gostarlark "go.starlark.net/starlark"
 )
 
-// expectedAttrNames is the complete sorted list of all 28 ctx attributes
-// (6 properties + 22 methods).
+// expectedAttrNames is the complete sorted list of all 29 ctx attributes
+// (6 properties + 23 methods).
 var expectedAttrNames = []string{
+	"add_path",
 	"append_file",
 	"component_dir",
 	"copy_file",

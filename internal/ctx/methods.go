@@ -820,6 +820,41 @@ func (c *CtxValue) starEmit(_ *gostarlark.Thread, _ *gostarlark.Builtin, args go
 	return gostarlark.None, nil
 }
 
+// starAddPath implements ctx.add_path(dir) -> None.
+// Prepends dir to the current process PATH so that subsequent ctx.run calls
+// (which snapshot os.Environ()) can find executables installed there.
+// This is intentionally a live mutation of the process environment — it is
+// the correct mechanism for components like mise that install tools whose
+// binaries are not yet on PATH in the current session.
+func (c *CtxValue) starAddPath(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+	var dir gostarlark.String
+	if err := gostarlark.UnpackArgs("add_path", args, kwargs, "dir", &dir); err != nil {
+		return nil, err
+	}
+	d := string(dir)
+	if d == "" {
+		return gostarlark.None, nil
+	}
+	if c.caps.DryRun {
+		c.dryLog("add_path", "dir="+d)
+		return gostarlark.None, nil
+	}
+	current := os.Getenv("PATH")
+	// Avoid duplicates: skip if dir is already the first entry.
+	if !strings.HasPrefix(current, d+string(os.PathListSeparator)) && current != d {
+		var newPath string
+		if current == "" {
+			newPath = d
+		} else {
+			newPath = d + string(os.PathListSeparator) + current
+		}
+		if err := os.Setenv("PATH", newPath); err != nil {
+			return nil, fmt.Errorf("add_path: setenv PATH: %w", err)
+		}
+	}
+	return gostarlark.None, nil
+}
+
 // starRender implements ctx.render(template_str, vars) -> str.
 // Replaces {{VAR}} placeholders.
 func (c *CtxValue) starRender(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
