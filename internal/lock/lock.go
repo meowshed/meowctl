@@ -35,6 +35,11 @@ type ModuleEntry struct {
 	// Files maps each extracted file path (relative to module root) to its
 	// individual SRI hash, enabling per-file integrity verification.
 	Files map[string]string `toml:"files"`
+	// Replaced is true when this module is replaced by a local path via replace().
+	// When true, Source and Integrity are empty; Path holds the local directory.
+	Replaced bool `toml:"replaced,omitempty"`
+	// Path is the local filesystem path when Replaced is true.
+	Path string `toml:"path,omitempty"`
 }
 
 // GitHubEntry records a pinned GitHub file reference resolved from a ref to a commit SHA.

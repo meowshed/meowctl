@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/meowshed/meowctl/internal/modfile"
 	"github.com/spf13/cobra"
 )
 
@@ -70,6 +71,18 @@ func newInitCmd(gf *globalFlags) *cobra.Command {
 			}
 			if err := f.Close(); err != nil {
 				return fmt.Errorf("init: close meowctl.star: %w", err)
+			}
+
+			// Write companion meowctl.mod with the same module identity.
+			modPath := filepath.Join(configDir, "meowctl.mod")
+			mf := &modfile.ModFile{
+				Module: &modfile.ModuleDecl{
+					Name:    "my-dotfiles",
+					Version: "0.1.0",
+				},
+			}
+			if err := modfile.Write(modPath, mf); err != nil {
+				return fmt.Errorf("init: write meowctl.mod: %w", err)
 			}
 
 			fmt.Printf("Initialized meowctl config at %s\n\n", configDir)
