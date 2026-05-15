@@ -58,8 +58,7 @@ type Capabilities struct {
 	// It receives the resolved command name, argument list, and merged environment
 	// (os.Environ() plus any caller-supplied overrides). Returning a non-empty
 	// stdout string and nil error is equivalent to a real subprocess exiting 0.
-	// Intended for integration tests that need to capture ctx.run() calls without
-	// spawning real subprocesses.
+	// Used by tests to intercept subprocess calls without spawning real processes.
 	RunFunc func(ctx context.Context, cmd string, args []string, env []string) (stdout string, err error)
 }
 
@@ -133,6 +132,11 @@ func New(caps *Capabilities) *CtxValue {
 
 	return c
 }
+
+// Caps returns the Capabilities backing this ctx value.
+// Intended for use by predeclared builtins (e.g. pkg, unpkg, query_pm) that
+// need to dispatch to the PMRegistry during hook execution.
+func (c *CtxValue) Caps() *Capabilities { return c.caps }
 
 // String implements starlark.Value.
 func (c *CtxValue) String() string { return "<ctx>" }
