@@ -22,6 +22,8 @@ type Capabilities struct {
 	Home string
 	// DryRun indicates the --dry-run flag is set.
 	DryRun bool
+	// Verbose enables debug-level output: commands, output, path changes.
+	Verbose bool
 	// ComponentDir is the absolute path to the component's source directory.
 	ComponentDir string
 	// StateDir is the per-component persistent state directory.
