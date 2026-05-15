@@ -48,7 +48,11 @@ type registryIndex struct {
 // RegistryLoader loads Starlark modules from the meowctl module registry.
 // It handles the @name// URL scheme.
 //
-// URL format: @name//path/to/file.star
+// URL format: @name//path/to/file[.star]
+//
+// The .star extension is optional; it is appended automatically if the path
+// has no extension. @stdlib//components/apt and @stdlib//components/apt.star
+// are equivalent.
 //
 // On first access, the registry index is fetched and MVS is run to select
 // a version. The resolved version and tarball SRI are written to the lock
@@ -71,7 +75,7 @@ type RegistryLoader struct {
 	// directory instead of fetching from the registry. The path within the
 	// module URL (the part after //) is appended to the local root.
 	// Example: {"stdlib": "/path/to/meowctl-stdlib"} makes
-	// @stdlib//components/apt.star → /path/to/meowctl-stdlib/components/apt.star
+	// @stdlib//components/apt → /path/to/meowctl-stdlib/components/apt.star
 	Replaces map[string]string
 }
 
@@ -97,6 +101,11 @@ func parseRegistryURL(raw string) (registryURL, error) {
 		return registryURL{}, fmt.Errorf("registry loader: invalid URL %q: empty path after //", raw)
 	}
 	modName := s[:idx]
+	// Normalise: if the path has no extension, append .star so callers can
+	// omit it (e.g. @stdlib//components/apt resolves to components/apt.star).
+	if !strings.Contains(filepath.Base(filePath), ".") {
+		filePath += ".star"
+	}
 	return registryURL{module: modName, path: filePath}, nil
 }
 
