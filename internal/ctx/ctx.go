@@ -58,6 +58,10 @@ type Capabilities struct {
 	// It receives the resolved command name, argument list, and merged environment
 	// (os.Environ() plus any caller-supplied overrides). Returning a non-empty
 	// stdout string and nil error is equivalent to a real subprocess exiting 0.
+	// Returning a non-nil error maps to exit code 1 with empty stdout; the error
+	// message is surfaced as the Starlark run result's stderr field. Partial stdout
+	// alongside a non-zero exit is not supported — return an error for failure cases.
+	// The context passed is always context.Background(); cancellation is not supported.
 	// Used by tests to intercept subprocess calls without spawning real processes.
 	RunFunc func(ctx context.Context, cmd string, args []string, env []string) (stdout string, err error)
 }
