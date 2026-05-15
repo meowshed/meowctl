@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	meowctx "github.com/meowshed/meowctl/internal/ctx"
 	gostarlark "go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
+
+	starjson "go.starlark.net/lib/json"
 )
 
 // PlatformInfo holds the platform data used by platform() and select() builtins.
@@ -35,11 +38,14 @@ func makePredeclared(platform PlatformInfo) gostarlark.StringDict {
 	return gostarlark.StringDict{
 		"component": gostarlark.NewBuiltin("component", builtinComponent),
 		"pkg":       gostarlark.NewBuiltin("pkg", builtinPkg),
+		"unpkg":     gostarlark.NewBuiltin("unpkg", builtinUnpkg),
+		"query_pm":  gostarlark.NewBuiltin("query_pm", builtinQueryPM),
 		"dep":       gostarlark.NewBuiltin("dep", builtinDep),
 		"module":    gostarlark.NewBuiltin("module", builtinModule),
 		"replace":   gostarlark.NewBuiltin("replace", builtinReplace),
 		"select":    makeBuiltinSelect(platform),
 		"platform":  makeBuiltinPlatform(pStruct),
+		"json":      starjson.Module,
 	}
 }
 
@@ -103,6 +109,10 @@ func builtinComponent(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 }
 
 // builtinPkg implements pkg(manager, name, version="", **kwargs).
+// When called during module-level evaluation (acc is present on thread), the
+// declaration is accumulated for deferred dispatch after the hook returns.
+// When called during hook execution (acc is nil, ctx is present on thread),
+// the package is dispatched immediately via ctx's PMRegistry using the current phase.
 func builtinPkg(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
 	// Extract manager and name from positional args or kwargs; allow arbitrary extra kwargs.
 	managerStr, nameStr, versionStr, extra, err := parsePkgArgs(args, kwargs)
@@ -110,15 +120,32 @@ func builtinPkg(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlar
 		return nil, err
 	}
 	acc := accFromThread(thread)
-	if acc == nil {
-		return nil, fmt.Errorf("pkg: no accumulator on thread")
+	if acc != nil {
+		// Module-level call: accumulate for deferred dispatch.
+		acc.Packages = append(acc.Packages, PkgDecl{
+			Manager: managerStr,
+			Name:    nameStr,
+			Version: versionStr,
+			Kwargs:  extra,
+		})
+		return gostarlark.None, nil
 	}
-	acc.Packages = append(acc.Packages, PkgDecl{
-		Manager: managerStr,
-		Name:    nameStr,
-		Version: versionStr,
-		Kwargs:  extra,
-	})
+	// Hook-level call: dispatch immediately via ctx's PMRegistry.
+	ctxVal := ctxFromThread(thread)
+	if ctxVal == nil {
+		return nil, fmt.Errorf("pkg: no accumulator or ctx on thread; pkg() must be called during module evaluation or hook execution")
+	}
+	caps := ctxVal.Caps()
+	if caps.PMRegistry == nil {
+		return nil, fmt.Errorf("pkg: no PM registry available; ensure PM components are loaded before calling pkg() in a hook")
+	}
+	phase := caps.Phase
+	if phase == "" {
+		phase = "install"
+	}
+	if err := caps.PMRegistry.Dispatch(phase, managerStr, nameStr, versionStr, extra, ctxVal); err != nil {
+		return nil, err
+	}
 	return gostarlark.None, nil
 }
 
@@ -169,6 +196,74 @@ func parsePkgArgs(args gostarlark.Tuple, kwargs []gostarlark.Tuple) (string, str
 		return "", "", "", nil, fmt.Errorf("pkg: missing argument for name")
 	}
 	return manager, name, version, extra, nil
+}
+
+// ctxFromThread retrieves the CtxValue from thread-local storage.
+// Returns nil if no ctx was set (e.g. during module-level evaluation).
+func ctxFromThread(thread *gostarlark.Thread) *meowctx.CtxValue {
+	v := thread.Local("ctx")
+	if v == nil {
+		return nil
+	}
+	c, ok := v.(*meowctx.CtxValue)
+	if !ok {
+		return nil
+	}
+	return c
+}
+
+// builtinUnpkg implements unpkg(manager, name, version="", **kwargs).
+// Dispatches an immediate uninstall call to the named PM's uninstall_pkg handler.
+// Must be called during hook execution (ctx with PMRegistry must be on thread).
+func builtinUnpkg(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+	managerStr, nameStr, versionStr, extra, err := parsePkgArgs(args, kwargs)
+	if err != nil {
+		return nil, err
+	}
+	ctxVal := ctxFromThread(thread)
+	if ctxVal == nil {
+		return nil, fmt.Errorf("unpkg: no ctx on thread; unpkg() must be called during hook execution")
+	}
+	caps := ctxVal.Caps()
+	if caps.PMRegistry == nil {
+		return nil, fmt.Errorf("unpkg: no PM registry available")
+	}
+	if err := caps.PMRegistry.Dispatch("uninstall", managerStr, nameStr, versionStr, extra, ctxVal); err != nil {
+		return nil, err
+	}
+	return gostarlark.None, nil
+}
+
+// builtinQueryPM implements query_pm(manager) -> list[str].
+// Calls the named PM's interrogate(ctx) function and returns its result.
+// Must be called during hook execution (ctx with PMRegistry must be on thread).
+func builtinQueryPM(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+	var manager gostarlark.String
+	if err := gostarlark.UnpackArgs("query_pm", args, kwargs, "manager", &manager); err != nil {
+		return nil, err
+	}
+	ctxVal := ctxFromThread(thread)
+	if ctxVal == nil {
+		return nil, fmt.Errorf("query_pm: no ctx on thread; query_pm() must be called during hook execution")
+	}
+	caps := ctxVal.Caps()
+	if caps.PMRegistry == nil {
+		return nil, fmt.Errorf("query_pm: no PM registry available")
+	}
+	h := caps.PMRegistry.Handler(string(manager))
+	if h == nil {
+		return nil, fmt.Errorf("query_pm: no handler registered for manager %q", string(manager))
+	}
+	queryThread := &gostarlark.Thread{Name: "query_pm/" + string(manager)}
+	result, err := gostarlark.Call(queryThread, h.Interrogate, gostarlark.Tuple{ctxVal}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("query_pm %s: %w", string(manager), err)
+	}
+	list, ok := result.(*gostarlark.List)
+	if !ok {
+		return nil, fmt.Errorf("query_pm %s: interrogate must return a list, got %s", string(manager), result.Type())
+	}
+	return list, nil
 }
 
 // builtinDep implements dep(url).
