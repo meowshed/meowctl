@@ -14,15 +14,68 @@
 package lifecycle_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/meowshed/meowctl/internal/ctx"
 	"github.com/meowshed/meowctl/internal/pkg"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
 	gostarlark "go.starlark.net/starlark"
 )
+
+// stubRunFunc is a RunFunc that returns plausible empty output per command,
+// allowing interrogate hooks to succeed without spawning real subprocesses.
+// Each command gets a response shaped to match what the real binary would return
+// for an empty/fresh install state.
+func stubRunFunc(_ context.Context, cmd string, args []string, _ []string) (string, error) {
+	// Dispatch on the command name and first argument to return the right shape.
+	switch cmd {
+	case "mise":
+		if len(args) > 0 && args[0] == "ls" {
+			// mise ls --installed --json → empty JSON object (no tools installed)
+			return "{}", nil
+		}
+	case "npm":
+		// npm list -g --depth=0 --parseable → just the global prefix, no packages
+		return "/usr/local/lib\n", nil
+	case "gem":
+		// gem list --local --no-versions → empty (no gems beyond stdlib header)
+		return "", nil
+	case "cargo":
+		// cargo install --list → empty (no crates installed)
+		return "", nil
+	case "go":
+		if len(args) > 0 && args[0] == "env" {
+			// go env GOPATH → a plausible GOPATH
+			return "/root/go\n", nil
+		}
+	case "uv":
+		// uv tool list → empty (no tools installed); no header on empty output
+		return "", nil
+	case "pipx":
+		// pipx list --json → empty venvs object
+		return `{"venvs": {}}`, nil
+	case "dpkg-query":
+		// dpkg-query -f '${Package}\n' -W → empty
+		return "", nil
+	case "dnf":
+		// dnf --quiet repoquery --installed --qf '%{name}\n' → empty
+		return "", nil
+	case "pacman":
+		// pacman -Qq → empty
+		return "", nil
+	case "apk":
+		// apk list --installed → empty
+		return "", nil
+	case "mas":
+		// mas list → empty
+		return "", nil
+	}
+	return "", nil
+}
 
 // TestStdlib_PMFilesStructuralCheck validates that every .star file under
 // $STDLIB_PATH/components/ parses cleanly and, if it declares pm_name, exports
@@ -71,8 +124,15 @@ func TestStdlib_PMFilesStructuralCheck(t *testing.T) {
 			if h == nil {
 				return
 			}
+
+			// Build a ctx with RunFunc injected so interrogate hooks that call
+			// ctx.run() (e.g. `mise ls --installed --json`) succeed without real subprocesses.
+			ctxVal := ctx.New(&ctx.Capabilities{
+				RunFunc: stubRunFunc,
+			})
+
 			thread := &gostarlark.Thread{Name: "interrogate/" + name}
-			res, callErr := gostarlark.Call(thread, h.Interrogate, gostarlark.Tuple{gostarlark.None}, nil)
+			res, callErr := gostarlark.Call(thread, h.Interrogate, gostarlark.Tuple{ctxVal}, nil)
 			if callErr != nil {
 				t.Fatalf("interrogate(%q): %v", name, callErr)
 			}
