@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/meowshed/meowctl/internal/ctx"
@@ -17,6 +18,15 @@ import (
 	"github.com/spf13/cobra"
 	gostarlark "go.starlark.net/starlark"
 )
+
+// goosToPlatformOS maps runtime.GOOS values to the meowctl platform OS identifiers.
+// "darwin" → "macos"; all others pass through unchanged.
+func goosToPlatformOS(goos string) string {
+	if goos == "darwin" {
+		return "macos"
+	}
+	return goos
+}
 
 // runConfig holds runtime parameters shared across lifecycle commands.
 type runConfig struct {
@@ -157,13 +167,19 @@ func (h *starlarkHookCaller) resolveComponentDir(componentID, componentFile stri
 }
 
 // dispatchPackages iterates pkg declarations and calls the appropriate PM handler.
-// Only install and uninstall phases trigger dispatch; other phases are no-ops.
+// Only install, uninstall, and update phases trigger dispatch; other phases are no-ops.
 func dispatchPackages(phase string, packages []starlarkpkg.PkgDecl, reg *pkg.PMRegistry, ctxVal gostarlark.Value) error {
 	if reg == nil || len(packages) == 0 {
 		return nil
 	}
 	for _, p := range packages {
-		if err := reg.Dispatch(phase, p.Manager, p.Name, p.Version, p.Kwargs, ctxVal); err != nil {
+		var err error
+		if phase == "update" {
+			err = reg.DispatchUpdate(p.Manager, p.Name, p.Kwargs, ctxVal)
+		} else {
+			err = reg.Dispatch(phase, p.Manager, p.Name, p.Version, p.Kwargs, ctxVal)
+		}
+		if err != nil {
 			return err
 		}
 	}
@@ -187,7 +203,9 @@ func envMap() map[string]string {
 // ordered component IDs (logical names) and a PMRegistry built from pass-1 globals.
 func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.ComponentID, *pkg.PMRegistry, error) {
 	starPath := filepath.Join(configDir, "meowctl.star")
-	eval := &starlarkpkg.Evaluator{}
+	eval := &starlarkpkg.Evaluator{
+		Platform: starlarkpkg.PlatformInfo{OS: goosToPlatformOS(runtime.GOOS)},
+	}
 
 	result, err := eval.ExecFile(starPath, nil, nil, nil)
 	if err != nil {
@@ -235,12 +253,43 @@ func filterDecls(all []starlarkpkg.ComponentDecl, filter []string) ([]starlarkpk
 // buildDepsAndRegistry runs pass 1: for each component, merges after= kwarg with
 // file-global after list (bare-name components only), scans globals for PM registration,
 // and returns a deps map and a populated PMRegistry.
+// Components that declare a platforms list that does not include the current OS are skipped.
 func buildDepsAndRegistry(configDir string, eval *starlarkpkg.Evaluator, decls []starlarkpkg.ComponentDecl) (map[lifecycle.ComponentID][]lifecycle.ComponentID, *pkg.PMRegistry) {
 	deps := make(map[lifecycle.ComponentID][]lifecycle.ComponentID, len(decls))
 	pmReg := pkg.NewPMRegistry()
+	skipped := make(map[lifecycle.ComponentID]bool)
+
 	for _, c := range decls {
 		merged, globals := readComponentGlobals(configDir, eval, c)
-		deps[c.LogicalName()] = merged
+
+		// Check platforms list — skip component if current OS is not listed.
+		if globals != nil {
+			if platformsVal, ok := globals["platforms"]; ok {
+				if platformsList, ok := platformsVal.(*gostarlark.List); ok {
+					match := false
+					for i := 0; i < platformsList.Len(); i++ {
+						if s, ok := platformsList.Index(i).(gostarlark.String); ok && string(s) == eval.Platform.OS {
+							match = true
+							break
+						}
+					}
+					if !match {
+						skipped[c.LogicalName()] = true
+						continue
+					}
+				}
+			}
+		}
+
+		// Filter out after-deps that point to skipped components.
+		filtered := merged[:0:len(merged)]
+		for _, dep := range merged {
+			if !skipped[dep] {
+				filtered = append(filtered, dep)
+			}
+		}
+		deps[c.LogicalName()] = filtered
+
 		if globals != nil {
 			h := pkg.ScanGlobals(c.LogicalName(), globals, func(msg string) {
 				fmt.Fprintln(os.Stderr, "warning:", msg)
@@ -277,7 +326,7 @@ func readComponentGlobals(configDir string, eval *starlarkpkg.Evaluator, c starl
 		fmt.Fprintln(os.Stderr, "warning: reading component globals:", readErr)
 		return merged, nil
 	}
-	return mergeAfterFromGlobals(merged, fileResult.Globals), fileResult.Globals
+	return mergeAfterFromGlobals(merged, fileResult.Globals, eval), fileResult.Globals
 }
 
 // buildDeclIndex returns a map from logical name to declaration index.
@@ -302,26 +351,39 @@ func retainDeclared(ordered []lifecycle.ComponentID, declIdx map[lifecycle.Compo
 
 // mergeAfterFromGlobals reads the "after" global from a component's StringDict
 // and merges it into existing deps, deduplicating entries.
-func mergeAfterFromGlobals(existing []string, globals gostarlark.StringDict) []string {
+// after may be a list of strings or a callable(ctx) -> list[str].
+func mergeAfterFromGlobals(existing []string, globals gostarlark.StringDict, eval *starlarkpkg.Evaluator) []string {
 	afterVal, ok := globals["after"]
 	if !ok {
 		return existing
 	}
-	list, ok := afterVal.(*gostarlark.List)
-	if !ok {
+
+	var afterNames []string
+	switch v := afterVal.(type) {
+	case *gostarlark.List:
+		afterNames = make([]string, 0, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			if s, ok := v.Index(i).(gostarlark.String); ok {
+				afterNames = append(afterNames, string(s))
+			}
+		}
+	case gostarlark.Callable:
+		names, err := eval.CallAfterCallable(v)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "warning: after() callable failed:", err)
+			return existing
+		}
+		afterNames = names
+	default:
 		return existing
 	}
+
 	seen := make(map[string]bool, len(existing))
 	for _, e := range existing {
 		seen[e] = true
 	}
 	result := existing
-	for i := 0; i < list.Len(); i++ {
-		s, ok := list.Index(i).(gostarlark.String)
-		if !ok {
-			continue
-		}
-		name := string(s)
+	for _, name := range afterNames {
 		if !seen[name] {
 			seen[name] = true
 			result = append(result, name)
