@@ -151,11 +151,21 @@ func (l *RegistryLoader) Load(thread *gostarlark.Thread, moduleURL string, prede
 	}
 
 	childThread := &gostarlark.Thread{Name: moduleURL, Load: thread.Load}
-	globals, err := gostarlark.ExecFileOptions(l.FileOpts, childThread, moduleURL, src, predeclared)
+	globals, err := gostarlark.ExecFileOptions(l.fileOpts(), childThread, moduleURL, src, predeclared)
 	if err != nil {
 		return nil, fmt.Errorf("RegistryLoader: eval %q: %w", moduleURL, err)
 	}
 	return globals, nil
+}
+
+// fileOpts returns the FileOptions to use for Starlark evaluation.
+// Falls back to a zero-value FileOptions if the field is nil, so callers
+// that construct RegistryLoader without setting FileOpts do not panic.
+func (l *RegistryLoader) fileOpts() *syntax.FileOptions {
+	if l.FileOpts != nil {
+		return l.FileOpts
+	}
+	return &syntax.FileOptions{}
 }
 
 // loadFromLocal serves a @name//path load from a local filesystem root instead
@@ -175,7 +185,7 @@ func (l *RegistryLoader) loadFromLocal(thread *gostarlark.Thread, moduleURL, loc
 	}
 
 	childThread := &gostarlark.Thread{Name: moduleURL, Load: thread.Load}
-	globals, err := gostarlark.ExecFileOptions(l.FileOpts, childThread, abs, src, predeclared)
+	globals, err := gostarlark.ExecFileOptions(l.fileOpts(), childThread, abs, src, predeclared)
 	if err != nil {
 		return nil, fmt.Errorf("RegistryLoader: replace eval %q: %w", moduleURL, err)
 	}
