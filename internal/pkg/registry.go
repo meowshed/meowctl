@@ -21,6 +21,9 @@ type PMHandler struct {
 	UninstallPkg gostarlark.Callable
 	// Interrogate is the interrogate(ctx, name) function.
 	Interrogate gostarlark.Callable
+	// UpdatePkg is the optional update_pkg(ctx, name, **kwargs) function.
+	// If nil, DispatchUpdate falls back to InstallPkg(ctx, name, "latest", **kwargs).
+	UpdatePkg gostarlark.Callable
 }
 
 // PMRegistry maps manager names to their registered handlers.
@@ -90,6 +93,43 @@ func (r *PMRegistry) Dispatch(phase string, manager, name, version string, kwarg
 	return nil
 }
 
+// DispatchUpdate calls the update_pkg handler for manager with the given arguments.
+// If the handler has no update_pkg function, it falls back to
+// install_pkg(ctx, name, "latest", **kwargs).
+// ctx is the Starlark ctx value passed as the first argument to the handler.
+func (r *PMRegistry) DispatchUpdate(manager, name string, kwargs map[string]any, ctx gostarlark.Value) error {
+	h := r.Handler(manager)
+	if h == nil {
+		return fmt.Errorf("pkg: no handler registered for manager %q", manager)
+	}
+
+	// Convert kwargs map to starlark kwargs slice.
+	var starKwargs []gostarlark.Tuple
+	for k, v := range kwargs {
+		sv, ok := toStarlarkValue(v)
+		if !ok {
+			return fmt.Errorf("pkg: kwarg %q has unsupported type %T", k, v)
+		}
+		starKwargs = append(starKwargs, gostarlark.Tuple{gostarlark.String(k), sv})
+	}
+
+	thread := &gostarlark.Thread{Name: "pkg/" + manager}
+	if h.UpdatePkg != nil {
+		// update_pkg(ctx, name, **kwargs) — no version arg.
+		posArgs := gostarlark.Tuple{ctx, gostarlark.String(name)}
+		if _, err := gostarlark.Call(thread, h.UpdatePkg, posArgs, starKwargs); err != nil {
+			return fmt.Errorf("pkg update %s/%s: %w", manager, name, err)
+		}
+		return nil
+	}
+	// Fallback: install_pkg(ctx, name, "latest", **kwargs).
+	posArgs := gostarlark.Tuple{ctx, gostarlark.String(name), gostarlark.String("latest")}
+	if _, err := gostarlark.Call(thread, h.InstallPkg, posArgs, starKwargs); err != nil {
+		return fmt.Errorf("pkg update (fallback) %s/%s: %w", manager, name, err)
+	}
+	return nil
+}
+
 // toStarlarkValue converts a Go value stored in PkgDecl.Kwargs to a Starlark value.
 // Supported: gostarlark.Value (pass-through), string, bool, int, int64, float64.
 func toStarlarkValue(v any) (gostarlark.Value, bool) {
@@ -149,10 +189,13 @@ func ScanGlobals(componentName string, globals gostarlark.StringDict, warn func(
 		return nil
 	}
 
+	updatePkg, _ := globals["update_pkg"].(gostarlark.Callable) // optional
+
 	return &PMHandler{
 		ComponentName: componentName,
 		InstallPkg:    installPkg,
 		UninstallPkg:  uninstallPkg,
 		Interrogate:   interrogate,
+		UpdatePkg:     updatePkg,
 	}
 }
