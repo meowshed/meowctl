@@ -19,7 +19,7 @@ type PMHandler struct {
 	InstallPkg gostarlark.Callable
 	// UninstallPkg is the uninstall_pkg(ctx, name, version, **kwargs) function.
 	UninstallPkg gostarlark.Callable
-	// Interrogate is the interrogate(ctx, name) function.
+	// Interrogate is the interrogate(ctx) function.
 	Interrogate gostarlark.Callable
 	// UpdatePkg is the optional update_pkg(ctx, name, **kwargs) function.
 	// If nil, DispatchUpdate falls back to InstallPkg(ctx, name, "latest", **kwargs).
