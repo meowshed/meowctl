@@ -30,6 +30,7 @@ type CompositeLoader struct {
 	cacheDir    string
 	lockPath    string
 	registryURL string
+	replaces    map[string]string // module name → local path override
 	fileOpts    *syntax.FileOptions
 	client      *http.Client
 
@@ -59,6 +60,11 @@ type CompositeLoaderOptions struct {
 	LockPath string
 	// Client overrides the default HTTP client. Useful for tests.
 	Client *http.Client
+	// Replaces maps registry module names to local filesystem paths.
+	// When set, @name// loads are served from the local path instead of the registry.
+	// This is equivalent to a per-invocation replace() directive.
+	// Example: {"stdlib": "/path/to/meowctl-stdlib"}
+	Replaces map[string]string
 }
 
 // NewCompositeLoader creates a CompositeLoader. root is the dotfiles root directory,
@@ -76,6 +82,7 @@ func NewCompositeLoader(root string, fileOpts *syntax.FileOptions, opts Composit
 		cacheDir:      opts.CacheDir,
 		lockPath:      opts.LockPath,
 		registryURL:   opts.RegistryURL,
+		replaces:      opts.Replaces,
 		fileOpts:      fileOpts,
 		client:        client,
 		cache:         make(map[string]gostarlark.StringDict),
@@ -123,6 +130,7 @@ func (c *CompositeLoader) Load(thread *gostarlark.Thread, moduleURL string, pred
 				LockPath:    c.lockPath,
 				Client:      c.client,
 				FileOpts:    c.fileOpts,
+				Replaces:    c.replaces,
 			}
 		default:
 			return nil, fmt.Errorf("CompositeLoader: unknown scheme in module URL %q", moduleURL)
@@ -191,8 +199,7 @@ func (c *CompositeLoader) resolveDir(moduleURL string) string {
 		cachePath := filepath.Join(c.cacheDir, "github", u.owner, u.repo, commit, filepath.FromSlash(u.path))
 		return filepath.Dir(cachePath)
 	case len(moduleURL) > 1 && moduleURL[0] == '@' && strings.Contains(moduleURL, "//"):
-		// @name//path/to/file.star → <cacheDir>/modules/<name>/<version>/<path>
-		// Parse: strip "@", split on first "//"
+		// @name//path/to/file.star
 		withoutAt := moduleURL[1:]
 		parts := strings.SplitN(withoutAt, "//", 2)
 		if len(parts) != 2 {
@@ -200,7 +207,12 @@ func (c *CompositeLoader) resolveDir(moduleURL string) string {
 		}
 		name := parts[0]
 		filePath := parts[1]
-		// Try to look up version from lock file.
+		// If a local replace is active, resolve against the local root.
+		if localRoot, ok := c.replaces[name]; ok {
+			abs := filepath.Join(localRoot, filepath.FromSlash(filePath))
+			return filepath.Dir(abs)
+		}
+		// Otherwise resolve against the module cache.
 		version := "latest"
 		if c.lockPath != "" {
 			if v, err := readLockForRegistry(c.lockPath, name); err == nil && v != "" {
