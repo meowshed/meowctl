@@ -14,15 +14,25 @@
 package lifecycle_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/meowshed/meowctl/internal/ctx"
 	"github.com/meowshed/meowctl/internal/pkg"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
 	gostarlark "go.starlark.net/starlark"
 )
+
+// noopRunFunc is a RunFunc that records calls and returns empty output.
+// It allows interrogate hooks that call ctx.run() (e.g. `mise ls --installed --json`)
+// to succeed without spawning real subprocesses.
+func noopRunFunc(_ context.Context, _ string, _ []string, _ []string) (string, error) {
+	// Return an empty JSON array for any command that expects JSON output.
+	return "[]", nil
+}
 
 // TestStdlib_PMFilesStructuralCheck validates that every .star file under
 // $STDLIB_PATH/components/ parses cleanly and, if it declares pm_name, exports
@@ -71,8 +81,15 @@ func TestStdlib_PMFilesStructuralCheck(t *testing.T) {
 			if h == nil {
 				return
 			}
+
+			// Build a ctx with RunFunc injected so interrogate hooks that call
+			// ctx.run() (e.g. `mise ls --installed --json`) succeed without real subprocesses.
+			ctxVal := ctx.New(&ctx.Capabilities{
+				RunFunc: noopRunFunc,
+			})
+
 			thread := &gostarlark.Thread{Name: "interrogate/" + name}
-			res, callErr := gostarlark.Call(thread, h.Interrogate, gostarlark.Tuple{gostarlark.None}, nil)
+			res, callErr := gostarlark.Call(thread, h.Interrogate, gostarlark.Tuple{ctxVal}, nil)
 			if callErr != nil {
 				t.Fatalf("interrogate(%q): %v", name, callErr)
 			}

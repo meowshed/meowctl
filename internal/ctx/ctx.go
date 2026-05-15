@@ -5,6 +5,7 @@
 package ctx
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
@@ -53,6 +54,13 @@ type Capabilities struct {
 	EmitFile string
 	// Log is the function used for ctx.log() output. Defaults to fmt.Println.
 	Log func(msg string)
+	// RunFunc, if non-nil, is called by ctx.run() instead of exec.CommandContext.
+	// It receives the resolved command name, argument list, and merged environment
+	// (os.Environ() plus any caller-supplied overrides). Returning a non-empty
+	// stdout string and nil error is equivalent to a real subprocess exiting 0.
+	// Intended for integration tests that need to capture ctx.run() calls without
+	// spawning real subprocesses.
+	RunFunc func(ctx context.Context, cmd string, args []string, env []string) (stdout string, err error)
 }
 
 // CtxValue is the ctx object passed to lifecycle hook functions. It implements
