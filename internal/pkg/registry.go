@@ -24,6 +24,9 @@ type PMHandler struct {
 	// UpdatePkg is the optional update_pkg(ctx, name, **kwargs) function.
 	// If nil, DispatchUpdate falls back to InstallPkg(ctx, name, "latest", **kwargs).
 	UpdatePkg gostarlark.Callable
+	// AddRepo is the optional add_repo(ctx, **kwargs) function.
+	// Called when a repo() declaration targets this manager.
+	AddRepo gostarlark.Callable
 }
 
 // PMRegistry maps manager names to their registered handlers.
@@ -135,6 +138,38 @@ func (r *PMRegistry) DispatchUpdate(manager, name string, kwargs map[string]any,
 	return nil
 }
 
+// DispatchAddRepo calls the add_repo handler for manager with the given kwargs.
+// If the handler has no add_repo function, the call is a no-op (returns nil).
+// ctx is the Starlark ctx value passed as the first argument to the handler.
+func (r *PMRegistry) DispatchAddRepo(manager string, kwargs map[string]any, ctx gostarlark.Value) error {
+	h := r.Handler(manager)
+	if h == nil {
+		return fmt.Errorf("repo: no handler registered for manager %q", manager)
+	}
+	if h.AddRepo == nil {
+		// add_repo is optional; no-op when absent.
+		return nil
+	}
+
+	// Convert kwargs map to starlark kwargs slice.
+	var starKwargs []gostarlark.Tuple
+	for k, v := range kwargs {
+		sv, ok := toStarlarkValue(v)
+		if !ok {
+			return fmt.Errorf("repo: kwarg %q has unsupported type %T", k, v)
+		}
+		starKwargs = append(starKwargs, gostarlark.Tuple{gostarlark.String(k), sv})
+	}
+
+	thread := &gostarlark.Thread{Name: "repo/" + manager}
+	thread.SetLocal("ctx", ctx)
+	// add_repo(ctx, **kwargs) — no positional args beyond ctx.
+	if _, err := gostarlark.Call(thread, h.AddRepo, gostarlark.Tuple{ctx}, starKwargs); err != nil {
+		return fmt.Errorf("repo add %s: %w", manager, err)
+	}
+	return nil
+}
+
 // toStarlarkValue converts a Go value stored in PkgDecl.Kwargs to a Starlark value.
 // Supported: gostarlark.Value (pass-through), string, bool, int, int64, float64.
 func toStarlarkValue(v any) (gostarlark.Value, bool) {
@@ -195,6 +230,7 @@ func ScanGlobals(componentName string, globals gostarlark.StringDict, warn func(
 	}
 
 	updatePkg, _ := globals["update_pkg"].(gostarlark.Callable) // optional
+	addRepo, _ := globals["add_repo"].(gostarlark.Callable)     // optional
 
 	return &PMHandler{
 		ComponentName: componentName,
@@ -202,5 +238,6 @@ func ScanGlobals(componentName string, globals gostarlark.StringDict, warn func(
 		UninstallPkg:  uninstallPkg,
 		Interrogate:   interrogate,
 		UpdatePkg:     updatePkg,
+		AddRepo:       addRepo,
 	}
 }

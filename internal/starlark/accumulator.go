@@ -17,6 +17,7 @@ type ReplaceDecl struct {
 type Accumulator struct {
 	Components  []ComponentDecl
 	Packages    []PkgDecl
+	Repos       []RepoDecl
 	Deps        []DepDecl
 	Module      *ModuleDecl
 	SelectCases []SelectCase
@@ -35,6 +36,12 @@ type PkgDecl struct {
 	Manager string
 	Name    string
 	Version string
+	Kwargs  map[string]any
+}
+
+// RepoDecl records a repo() declaration.
+type RepoDecl struct {
+	Manager string
 	Kwargs  map[string]any
 }
 
