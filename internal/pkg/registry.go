@@ -86,6 +86,10 @@ func (r *PMRegistry) Dispatch(phase string, manager, name, version string, kwarg
 	}
 
 	thread := &gostarlark.Thread{Name: "pkg/" + manager}
+	// Set ctx on the thread so that nested pkg() calls inside install_pkg/uninstall_pkg
+	// (e.g. github_release's install_pkg calling pkg(manager="mise", ...)) can
+	// dispatch immediately via the hook path rather than failing with "no accumulator".
+	thread.SetLocal("ctx", ctx)
 	_, err := gostarlark.Call(thread, fn, posArgs, starKwargs)
 	if err != nil {
 		return fmt.Errorf("pkg %s/%s: %w", manager, name, err)
@@ -114,6 +118,7 @@ func (r *PMRegistry) DispatchUpdate(manager, name string, kwargs map[string]any,
 	}
 
 	thread := &gostarlark.Thread{Name: "pkg/" + manager}
+	thread.SetLocal("ctx", ctx)
 	if h.UpdatePkg != nil {
 		// update_pkg(ctx, name, **kwargs) — no version arg.
 		posArgs := gostarlark.Tuple{ctx, gostarlark.String(name)}
