@@ -9,6 +9,7 @@
 //	    STDLIB_PATH: /path/to/meowctl-stdlib
 //
 // Gates on: all 19 PM .star files parse cleanly, declare required globals
+// (brew, fish, flatpak, luarocks, snap, vscode added in batch 2).
 // (pm_name, install_pkg, uninstall_pkg, interrogate), and interrogate returns
 // a non-nil list.
 package lifecycle_test
