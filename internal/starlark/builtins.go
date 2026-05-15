@@ -37,6 +37,7 @@ func makePredeclared(platform PlatformInfo) gostarlark.StringDict {
 		"pkg":       gostarlark.NewBuiltin("pkg", builtinPkg),
 		"dep":       gostarlark.NewBuiltin("dep", builtinDep),
 		"module":    gostarlark.NewBuiltin("module", builtinModule),
+		"replace":   gostarlark.NewBuiltin("replace", builtinReplace),
 		"select":    makeBuiltinSelect(platform),
 		"platform":  makeBuiltinPlatform(pStruct),
 	}
@@ -198,6 +199,20 @@ func builtinModule(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostar
 		return nil, fmt.Errorf("module: already declared")
 	}
 	acc.Module = &ModuleDecl{Name: string(name), Version: string(version)}
+	return gostarlark.None, nil
+}
+
+// builtinReplace implements replace(module, path).
+func builtinReplace(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+	var module, path gostarlark.String
+	if err := gostarlark.UnpackArgs("replace", args, kwargs, "module", &module, "path", &path); err != nil {
+		return nil, err
+	}
+	acc := accFromThread(thread)
+	if acc == nil {
+		return nil, fmt.Errorf("replace: no accumulator on thread")
+	}
+	acc.Replaces = append(acc.Replaces, ReplaceDecl{Module: string(module), Path: string(path)})
 	return gostarlark.None, nil
 }
 
