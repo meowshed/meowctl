@@ -67,6 +67,12 @@ func (c ComponentDecl) LogicalName() string {
 	return logicalName(c.Name)
 }
 
+// LogicalNameOf returns the logical component name for a raw component name string.
+// Equivalent to ComponentDecl.LogicalName() but usable without a decl instance.
+func LogicalNameOf(name string) string {
+	return logicalName(name)
+}
+
 // logicalName extracts the last non-empty path segment from a raw component name.
 func logicalName(name string) string {
 	// Strip any trailing slashes before splitting.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/meowshed/meowctl/internal/ctx"
 	"github.com/meowshed/meowctl/internal/lifecycle"
+	"github.com/meowshed/meowctl/internal/modfile"
 	"github.com/meowshed/meowctl/internal/pkg"
 	"github.com/meowshed/meowctl/internal/rollback"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
@@ -26,6 +27,25 @@ func goosToPlatformOS(goos string) string {
 		return "macos"
 	}
 	return goos
+}
+
+// readModfileReplaces reads replace() directives from <configDir>/meowctl.mod and
+// returns a map from module name to local filesystem path. Returns an empty map
+// if the file is absent or cannot be parsed.
+func readModfileReplaces(configDir string) map[string]string {
+	modPath := filepath.Join(configDir, "meowctl.mod")
+	mf, err := modfile.Parse(modPath)
+	if err != nil {
+		return nil
+	}
+	if len(mf.Replace) == 0 {
+		return nil
+	}
+	result := make(map[string]string, len(mf.Replace))
+	for _, r := range mf.Replace {
+		result[r.Module] = r.Path
+	}
+	return result
 }
 
 // runConfig holds runtime parameters shared across lifecycle commands.
@@ -49,16 +69,30 @@ func addInstallFlags(cmd *cobra.Command, cfg *runConfig) {
 	cmd.Flags().BoolVar(&cfg.IgnoreLock, "ignore-lock", false, "Ignore lock file when resolving modules")
 }
 
-// buildRunner constructs a Runner for the given config and component order.
-func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.Stack, sentinel *state.Manager, w tui.Writer, pmReg *pkg.PMRegistry) *lifecycle.Runner {
+// buildHookCaller constructs a starlarkHookCaller with a CompositeLoader wired
+// with replace directives read from <configDir>/meowctl.mod.
+func buildHookCaller(cfg runConfig) *starlarkHookCaller {
 	eval := &starlarkpkg.Evaluator{}
-	caller := &starlarkHookCaller{
-		configDir:  cfg.ConfigDir,
-		eval:       eval,
-		dryRun:     cfg.DryRun,
-		stack:      stack,
-		pmRegistry: pmReg,
+	var cl *loader.CompositeLoader
+	if home, err := os.UserHomeDir(); err == nil {
+		cl = loader.NewCompositeLoader(cfg.ConfigDir, nil, loader.CompositeLoaderOptions{
+			CacheDir: filepath.Join(home, ".cache", "meowctl"),
+			LockPath: filepath.Join(cfg.ConfigDir, "meowctl.lock"),
+			Replaces: readModfileReplaces(cfg.ConfigDir),
+		})
 	}
+	return &starlarkHookCaller{
+		configDir: cfg.ConfigDir,
+		eval:      eval,
+		dryRun:    cfg.DryRun,
+		loader:    cl,
+	}
+}
+
+// buildRunner constructs a Runner for the given config and component order.
+func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.Stack, sentinel *state.Manager, w tui.Writer, pmReg *pkg.PMRegistry, caller *starlarkHookCaller) *lifecycle.Runner {
+	caller.stack = stack
+	caller.pmRegistry = pmReg
 	return &lifecycle.Runner{
 		Order:      order,
 		Caller:     caller,
@@ -198,10 +232,14 @@ func envMap() map[string]string {
 	return env
 }
 
-// loadComponentsWithDeps evaluates <configDir>/meowctl.star, performs pass 1 across
-// bare-name component files to collect after deps from globals, merges with after=
-// kwargs from component() declarations, topo-sorts the result, and returns the
-// ordered component IDs (logical names) and a PMRegistry built from pass-1 globals.
+// loadComponentsWithDeps evaluates <configDir>/meowctl.star, then iteratively
+// discovers transitive after= dependencies by reading each component's file-level
+// globals (including URL-named @registry// components loaded via CompositeLoader).
+// Unknown deps encountered during expansion are auto-discovered and added as
+// synthetic ComponentDecl entries so callers don't need to pre-declare every
+// transitive dependency in meowctl.star.
+// Replace directives are read from <configDir>/meowctl.mod automatically.
+// Returns the topo-sorted component IDs (logical names) and a PMRegistry.
 func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.ComponentID, *pkg.PMRegistry, error) {
 	starPath := filepath.Join(configDir, "meowctl.star")
 	eval := &starlarkpkg.Evaluator{
@@ -213,18 +251,33 @@ func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.Comp
 		return nil, nil, exitErrorf(ExitConfig, "load meowctl.star: %v", err)
 	}
 
-	decls, err := filterDecls(result.Declarations.Components, filter)
+	// Build a CompositeLoader for resolving URL-named components (e.g. @stdlib//...).
+	// Replace directives come from meowctl.mod.
+	var cl *loader.CompositeLoader
+	if home, err := os.UserHomeDir(); err == nil {
+		cl = loader.NewCompositeLoader(configDir, nil, loader.CompositeLoaderOptions{
+			CacheDir: filepath.Join(home, ".cache", "meowctl"),
+			LockPath: filepath.Join(configDir, "meowctl.lock"),
+			Replaces: readModfileReplaces(configDir),
+		})
+	}
+
+	// Seed from meowctl.star declarations; filter to requested components first.
+	seed, err := filterDecls(result.Declarations.Components, filter)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Expand decls to include all transitive after= dependencies so that PM
-	// components are scanned and their handlers registered even when only a
-	// dependent component (e.g. test-brew) is explicitly requested.
-	decls = expandWithDeps(decls, result.Declarations.Components)
+	// Iteratively expand transitive deps. Unknown deps (not in meowctl.star) are
+	// auto-discovered by reading their component file globals, creating synthetic
+	// ComponentDecl entries. This allows test-*.star to declare
+	// after = ["@stdlib//components/apt"] without pre-declaring apt in meowctl.star.
+	// globalsCache holds the already-read globals for each component (logical name),
+	// passed to buildDepsAndRegistry to avoid re-reading files.
+	allDecls, globalsCache := expandWithFileDeps(configDir, eval, cl, seed, result.Declarations.Components)
 
-	deps, pmReg := buildDepsAndRegistry(configDir, eval, decls)
-	declIdx := buildDeclIndex(decls)
+	deps, pmReg := buildDepsAndRegistry(eval, allDecls, globalsCache)
+	declIdx := buildDeclIndex(allDecls)
 
 	ordered, sortErr := lifecycle.TopoSort(deps, declIdx)
 	if sortErr != nil {
@@ -234,42 +287,78 @@ func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.Comp
 	return retainDeclared(ordered, declIdx), pmReg, nil
 }
 
-// filterDecls returns the subset of decls matching the filter (by logical name).
-// If filter is non-empty and no match is found, returns ExitUsage error.
-// expandWithDeps returns the union of seed and all transitive after= dependencies
-// reachable from seed within the all declarations list. The returned slice preserves
-// the original order from all (dependency-first). This ensures that PM components
-// referenced by after= in test-* components are included and their PM handlers
-// registered even when only the leaf component was explicitly requested.
-func expandWithDeps(seed []starlarkpkg.ComponentDecl, all []starlarkpkg.ComponentDecl) []starlarkpkg.ComponentDecl {
-	// Build index: logical name → decl
-	byName := make(map[string]starlarkpkg.ComponentDecl, len(all))
-	for _, c := range all {
+// expandWithFileDeps iteratively discovers all transitive after= dependencies
+// starting from seed, reading each component's file-level globals to find deps
+// that may not be declared in meowctl.star. URL-named components are loaded via cl.
+// Returns the full set of ComponentDecl entries (seed + all transitive deps) in
+// a dependency-first order suitable for topo-sort, and a globals cache keyed by
+// logical name so callers avoid re-reading files.
+func expandWithFileDeps(configDir string, eval *starlarkpkg.Evaluator, cl *loader.CompositeLoader, seed []starlarkpkg.ComponentDecl, declared []starlarkpkg.ComponentDecl) ([]starlarkpkg.ComponentDecl, map[string]gostarlark.StringDict) {
+	// Build index of all known declarations by logical name.
+	byName := make(map[string]starlarkpkg.ComponentDecl, len(declared)+len(seed))
+	for _, c := range declared {
+		byName[c.LogicalName()] = c
+	}
+	for _, c := range seed {
 		byName[c.LogicalName()] = c
 	}
 
-	included := make(map[string]bool, len(seed))
-	var walk func(name string)
-	walk = func(name string) {
-		if included[name] {
+	included := make(map[string]bool)
+	globalsCache := make(map[string]gostarlark.StringDict)
+	var result []starlarkpkg.ComponentDecl
+
+	var walk func(c starlarkpkg.ComponentDecl)
+	walk = func(c starlarkpkg.ComponentDecl) {
+		ln := c.LogicalName()
+		if included[ln] {
 			return
 		}
-		included[name] = true
-		if c, ok := byName[name]; ok {
-			for _, dep := range c.After {
-				walk(dep)
+
+		// Read file-level after= to discover additional deps before marking included,
+		// so that deps are appended before this component (dependency-first).
+		fileDeps, globals := readComponentGlobals(configDir, eval, c, cl)
+		globalsCache[ln] = globals
+
+		// Walk all after deps (from declaration kwargs + file globals).
+		allDeps := mergeUniq(c.After, fileDeps)
+		for _, dep := range allDeps {
+			depLN := starlarkpkg.LogicalNameOf(dep)
+			if !included[depLN] {
+				if dc, ok := byName[depLN]; ok {
+					walk(dc)
+				} else {
+					// Auto-discover: create a synthetic decl for this dep.
+					synthetic := starlarkpkg.ComponentDecl{Name: dep}
+					byName[depLN] = synthetic
+					walk(synthetic)
+				}
 			}
 		}
-	}
-	for _, c := range seed {
-		walk(c.LogicalName())
+
+		included[ln] = true
+		result = append(result, c)
 	}
 
-	// Return decls in original all-order (preserves topo-friendly ordering).
-	out := make([]starlarkpkg.ComponentDecl, 0, len(included))
-	for _, c := range all {
-		if included[c.LogicalName()] {
-			out = append(out, c)
+	for _, c := range seed {
+		walk(c)
+	}
+	return result, globalsCache
+}
+
+// mergeUniq returns a deduplicated union of a and b, preserving order.
+func mergeUniq(a, b []string) []string {
+	seen := make(map[string]bool, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, s := range a {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	for _, s := range b {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
 		}
 	}
 	return out
@@ -295,17 +384,22 @@ func filterDecls(all []starlarkpkg.ComponentDecl, filter []string) ([]starlarkpk
 	return out, nil
 }
 
-// buildDepsAndRegistry runs pass 1: for each component, merges after= kwarg with
-// file-global after list (bare-name components only), scans globals for PM registration,
-// and returns a deps map and a populated PMRegistry.
+// buildDepsAndRegistry builds the deps map and PMRegistry from already-read globals.
+// globalsCache maps logical component name to its StringDict (nil if file was absent or errored).
 // Components that declare a platforms list that does not include the current OS are skipped.
-func buildDepsAndRegistry(configDir string, eval *starlarkpkg.Evaluator, decls []starlarkpkg.ComponentDecl) (map[lifecycle.ComponentID][]lifecycle.ComponentID, *pkg.PMRegistry) {
+func buildDepsAndRegistry(eval *starlarkpkg.Evaluator, decls []starlarkpkg.ComponentDecl, globalsCache map[string]gostarlark.StringDict) (map[lifecycle.ComponentID][]lifecycle.ComponentID, *pkg.PMRegistry) {
 	deps := make(map[lifecycle.ComponentID][]lifecycle.ComponentID, len(decls))
 	pmReg := pkg.NewPMRegistry()
 	skipped := make(map[lifecycle.ComponentID]bool)
 
 	for _, c := range decls {
-		merged, globals := readComponentGlobals(configDir, eval, c)
+		ln := c.LogicalName()
+		globals := globalsCache[ln]
+
+		// Reconstruct merged after list from decl kwargs + file globals.
+		merged := make([]string, len(c.After))
+		copy(merged, c.After)
+		merged = mergeAfterFromGlobals(merged, globals, eval)
 
 		// Check platforms list — skip component if current OS is not listed.
 		if globals != nil {
@@ -319,7 +413,7 @@ func buildDepsAndRegistry(configDir string, eval *starlarkpkg.Evaluator, decls [
 						}
 					}
 					if !match {
-						skipped[c.LogicalName()] = true
+						skipped[ln] = true
 						continue
 					}
 				}
@@ -329,19 +423,18 @@ func buildDepsAndRegistry(configDir string, eval *starlarkpkg.Evaluator, decls [
 		// Filter out after-deps that point to skipped components.
 		filtered := merged[:0:len(merged)]
 		for _, dep := range merged {
-			if !skipped[dep] {
-				filtered = append(filtered, dep)
+			depLN := starlarkpkg.LogicalNameOf(dep)
+			if !skipped[depLN] {
+				filtered = append(filtered, depLN)
 			}
 		}
-		deps[c.LogicalName()] = filtered
+		deps[ln] = filtered
 
 		if globals != nil {
-			h := pkg.ScanGlobals(c.LogicalName(), globals, func(msg string) {
+			h := pkg.ScanGlobals(ln, globals, func(msg string) {
 				fmt.Fprintln(os.Stderr, "warning:", msg)
 			})
 			if h != nil {
-				// Register by pm_name (the manager identifier, e.g. "npm"),
-				// not by the component's logical name (e.g. "node").
 				if pmNameVal, ok := globals["pm_name"]; ok {
 					if pmNameStr, ok := pmNameVal.(gostarlark.String); ok {
 						pmReg.Register(string(pmNameStr), h)
@@ -354,13 +447,30 @@ func buildDepsAndRegistry(configDir string, eval *starlarkpkg.Evaluator, decls [
 }
 
 // readComponentGlobals returns the merged after list and the raw globals dict for a single
-// component declaration. globals is nil if the component file is a URL-named component
-// or if reading the file failed (non-fatal; deps gracefully degrade).
-func readComponentGlobals(configDir string, eval *starlarkpkg.Evaluator, c starlarkpkg.ComponentDecl) ([]string, gostarlark.StringDict) {
+// component declaration. For URL-named components (containing "//"), cl is used to load
+// and evaluate the remote/replaced module. For bare-name local components, the file is
+// read from <configDir>/components/<name>.star. globals is nil on failure (non-fatal).
+func readComponentGlobals(configDir string, eval *starlarkpkg.Evaluator, c starlarkpkg.ComponentDecl, cl *loader.CompositeLoader) ([]string, gostarlark.StringDict) {
 	merged := make([]string, len(c.After))
 	copy(merged, c.After)
 	if strings.Contains(c.Name, "//") {
-		return merged, nil
+		// URL-named component: load via CompositeLoader to get globals (pm_name, after, platforms).
+		if cl == nil {
+			return merged, nil
+		}
+		predeclared := eval.StdPredeclared()
+		thread := &gostarlark.Thread{
+			Name: c.Name,
+			Load: func(t *gostarlark.Thread, module string) (gostarlark.StringDict, error) {
+				return cl.Load(t, module, predeclared)
+			},
+		}
+		globals, err := cl.Load(thread, c.Name, predeclared)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "warning: reading URL component globals:", err)
+			return merged, nil
+		}
+		return mergeAfterFromGlobals(merged, globals, eval), globals
 	}
 	componentFile := filepath.Join(configDir, "components", c.Name+".star")
 	if _, statErr := os.Lstat(componentFile); statErr != nil {
@@ -532,8 +642,11 @@ func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, 
 	w := tui.New(os.Stdout)
 	defer func() { _ = w.Close() }()
 
+	// Build hook caller with loader; replace directives come from meowctl.mod.
+	caller := buildHookCaller(cfg)
+
 	statePath := filepath.Join(cfg.ConfigDir, "state.toml")
 	sentinel := state.NewManager(statePath)
-	runner := buildRunner(cfg, order, stack, sentinel, w, pmReg)
+	runner := buildRunner(cfg, order, stack, sentinel, w, pmReg, caller)
 	return runner.RunPhaseSet(name, phases)
 }
