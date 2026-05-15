@@ -131,6 +131,7 @@ func New(caps *Capabilities) *CtxValue {
 	c.methods["plist_set"] = gostarlark.NewBuiltin("plist_set", c.starPlistSet)
 	c.methods["prompt"] = gostarlark.NewBuiltin("prompt", c.starPrompt)
 	c.methods["emit"] = gostarlark.NewBuiltin("emit", c.starEmit)
+	c.methods["add_path"] = gostarlark.NewBuiltin("add_path", c.starAddPath)
 	c.methods["render"] = gostarlark.NewBuiltin("render", c.starRender)
 	c.methods["render_file"] = gostarlark.NewBuiltin("render_file", c.starRenderFile)
 
