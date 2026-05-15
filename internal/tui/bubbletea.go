@@ -26,6 +26,7 @@ const (
 	rowPending rowState = iota
 	rowRunning
 	rowOK
+	rowSkipped
 	rowFailed
 )
 
@@ -42,8 +43,9 @@ type componentStartMsg struct{ name string }
 
 // componentDoneMsg is sent to the Bubble Tea model when a component finishes.
 type componentDoneMsg struct {
-	name string
-	err  error
+	name    string
+	err     error
+	skipped bool
 }
 
 // logMsg carries a free-form log line to append below the component rows.
@@ -99,6 +101,8 @@ func (m btModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if msg.err != nil {
 					m.rows[i].state = rowFailed
 					m.rows[i].err = msg.err
+				} else if msg.skipped {
+					m.rows[i].state = rowSkipped
 				} else {
 					m.rows[i].state = rowOK
 				}
@@ -140,6 +144,8 @@ func (m btModel) View() tea.View {
 			sb.WriteString("  " + row.spinner.View() + " " + row.name + "\n")
 		case rowOK:
 			sb.WriteString("  " + styleOK.Render("✓") + " " + row.name + "\n")
+		case rowSkipped:
+			sb.WriteString("  " + stylePending.Render("–") + " " + row.name + " (already installed)\n")
 		case rowFailed:
 			sb.WriteString("  " + styleFail.Render("✗") + " " + row.name + ": " + row.err.Error() + "\n")
 		}
@@ -185,6 +191,11 @@ func newBubbleTeaWriter(out io.Writer) *BubbleTeaWriter {
 // ComponentStart marks a component as in-progress.
 func (w *BubbleTeaWriter) ComponentStart(name string) {
 	w.program.Send(componentStartMsg{name: name})
+}
+
+// ComponentSkipped marks a component as skipped (already installed).
+func (w *BubbleTeaWriter) ComponentSkipped(name string) {
+	w.program.Send(componentDoneMsg{name: name, err: nil, skipped: true})
 }
 
 // ComponentDone marks a component as completed.

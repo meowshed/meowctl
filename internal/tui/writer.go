@@ -12,6 +12,8 @@ import (
 type Writer interface {
 	// ComponentStart marks a component as in-progress.
 	ComponentStart(name string)
+	// ComponentSkipped marks a component as skipped (already completed).
+	ComponentSkipped(name string)
 	// ComponentDone marks a component as completed. A non-nil err indicates
 	// failure.
 	ComponentDone(name string, err error)

@@ -65,6 +65,7 @@ func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.S
 		Stack:      stack,
 		Sentinel:   sentinel,
 		NoRollback: cfg.NoRollback,
+		Force:      cfg.Force,
 		Writer:     w,
 	}
 }
@@ -217,6 +218,11 @@ func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.Comp
 		return nil, nil, err
 	}
 
+	// Expand decls to include all transitive after= dependencies so that PM
+	// components are scanned and their handlers registered even when only a
+	// dependent component (e.g. test-brew) is explicitly requested.
+	decls = expandWithDeps(decls, result.Declarations.Components)
+
 	deps, pmReg := buildDepsAndRegistry(configDir, eval, decls)
 	declIdx := buildDeclIndex(decls)
 
@@ -230,6 +236,45 @@ func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.Comp
 
 // filterDecls returns the subset of decls matching the filter (by logical name).
 // If filter is non-empty and no match is found, returns ExitUsage error.
+// expandWithDeps returns the union of seed and all transitive after= dependencies
+// reachable from seed within the all declarations list. The returned slice preserves
+// the original order from all (dependency-first). This ensures that PM components
+// referenced by after= in test-* components are included and their PM handlers
+// registered even when only the leaf component was explicitly requested.
+func expandWithDeps(seed []starlarkpkg.ComponentDecl, all []starlarkpkg.ComponentDecl) []starlarkpkg.ComponentDecl {
+	// Build index: logical name → decl
+	byName := make(map[string]starlarkpkg.ComponentDecl, len(all))
+	for _, c := range all {
+		byName[c.LogicalName()] = c
+	}
+
+	included := make(map[string]bool, len(seed))
+	var walk func(name string)
+	walk = func(name string) {
+		if included[name] {
+			return
+		}
+		included[name] = true
+		if c, ok := byName[name]; ok {
+			for _, dep := range c.After {
+				walk(dep)
+			}
+		}
+	}
+	for _, c := range seed {
+		walk(c.LogicalName())
+	}
+
+	// Return decls in original all-order (preserves topo-friendly ordering).
+	out := make([]starlarkpkg.ComponentDecl, 0, len(included))
+	for _, c := range all {
+		if included[c.LogicalName()] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func filterDecls(all []starlarkpkg.ComponentDecl, filter []string) ([]starlarkpkg.ComponentDecl, error) {
 	if len(filter) == 0 {
 		return all, nil
