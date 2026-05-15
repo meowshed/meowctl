@@ -506,7 +506,36 @@ func (c *CtxValue) starRun(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 		c.dryLog("run", "cmd="+string(cmd))
 		return starlarkRunResult("", "", 0), nil
 	}
-	// Build argument list.
+	cmdArgs, err := runArgsList(runArgs)
+	if err != nil {
+		return nil, err
+	}
+	if c.caps.Verbose {
+		c.verboseLog("run", append([]string{"cmd=" + string(cmd)}, cmdArgs...)...)
+	}
+	mergedEnv, err := mergeRunEnv(runEnv)
+	if err != nil {
+		return nil, err
+	}
+	if c.caps.RunFunc != nil {
+		stdout, err := c.caps.RunFunc(context.Background(), string(cmd), cmdArgs, mergedEnv)
+		if err != nil {
+			return starlarkRunResult("", err.Error(), 1), nil
+		}
+		return starlarkRunResult(stdout, "", 0), nil
+	}
+	stdout, stderr, exitCode, err := c.execRun(string(cmd), cmdArgs, mergedEnv, cwd)
+	if err != nil {
+		return nil, err
+	}
+	if c.caps.Verbose {
+		c.verboseRunOutput(stdout, stderr, exitCode)
+	}
+	return starlarkRunResult(stdout, stderr, exitCode), nil
+}
+
+// runArgsList converts a Starlark list to a []string of command arguments.
+func runArgsList(runArgs *gostarlark.List) ([]string, error) {
 	cmdArgs := make([]string, runArgs.Len())
 	for i := range cmdArgs {
 		s, ok := runArgs.Index(i).(gostarlark.String)
@@ -515,10 +544,11 @@ func (c *CtxValue) starRun(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 		}
 		cmdArgs[i] = string(s)
 	}
-	if c.caps.Verbose {
-		c.verboseLog("run", append([]string{"cmd=" + string(cmd)}, cmdArgs...)...)
-	}
-	// Build merged environment (process env + caller overrides).
+	return cmdArgs, nil
+}
+
+// mergeRunEnv builds the merged environment (process env + caller overrides).
+func mergeRunEnv(runEnv *gostarlark.Dict) ([]string, error) {
 	mergedEnv := os.Environ()
 	for _, kv := range runEnv.Items() {
 		k, ok1 := kv[0].(gostarlark.String)
@@ -528,16 +558,12 @@ func (c *CtxValue) starRun(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 		}
 		mergedEnv = append(mergedEnv, string(k)+"="+string(v))
 	}
-	// If a RunFunc override is provided (e.g. integration tests), delegate to it.
-	if c.caps.RunFunc != nil {
-		stdout, err := c.caps.RunFunc(context.Background(), string(cmd), cmdArgs, mergedEnv)
-		if err != nil {
-			return starlarkRunResult("", err.Error(), 1), nil
-		}
-		return starlarkRunResult(stdout, "", 0), nil
-	}
-	c2 := exec.CommandContext(context.Background(), string(cmd), cmdArgs...) // #nosec G204 -- cmd/args from validated Starlark config; no ctx available in hooks
-	// Merge provided env over current env.
+	return mergedEnv, nil
+}
+
+// execRun runs a command and returns stdout, stderr, exit code, and any non-exit error.
+func (c *CtxValue) execRun(cmd string, cmdArgs, mergedEnv []string, cwd gostarlark.Value) (string, string, int, error) {
+	c2 := exec.CommandContext(context.Background(), cmd, cmdArgs...) // #nosec G204 -- cmd/args from validated Starlark config; no ctx available in hooks
 	c2.Env = mergedEnv
 	if cwdStr, ok := cwd.(gostarlark.String); ok {
 		c2.Dir = string(cwdStr)
@@ -551,25 +577,27 @@ func (c *CtxValue) starRun(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 		if exitErr, ok := runErr.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		} else {
-			return nil, fmt.Errorf("run: %w", runErr)
+			return "", "", 0, fmt.Errorf("run: %w", runErr)
 		}
 	}
-	if c.caps.Verbose {
-		if out := strings.TrimRight(stdoutBuf.String(), "\n"); out != "" {
-			for _, line := range strings.Split(out, "\n") {
-				c.logMsg(fmt.Sprintf("[verbose] stdout             component=%-20s %s", c.caps.Component, line))
-			}
-		}
-		if out := strings.TrimRight(stderrBuf.String(), "\n"); out != "" {
-			for _, line := range strings.Split(out, "\n") {
-				c.logMsg(fmt.Sprintf("[verbose] stderr             component=%-20s %s", c.caps.Component, line))
-			}
-		}
-		if exitCode != 0 {
-			c.verboseLog("exit_code", fmt.Sprintf("code=%d", exitCode))
+	return stdoutBuf.String(), stderrBuf.String(), exitCode, nil
+}
+
+// verboseRunOutput logs stdout, stderr, and exit code after a run.
+func (c *CtxValue) verboseRunOutput(stdout, stderr string, exitCode int) {
+	if out := strings.TrimRight(stdout, "\n"); out != "" {
+		for _, line := range strings.Split(out, "\n") {
+			c.logMsg(fmt.Sprintf("[verbose] stdout             component=%-20s %s", c.caps.Component, line))
 		}
 	}
-	return starlarkRunResult(stdoutBuf.String(), stderrBuf.String(), exitCode), nil
+	if out := strings.TrimRight(stderr, "\n"); out != "" {
+		for _, line := range strings.Split(out, "\n") {
+			c.logMsg(fmt.Sprintf("[verbose] stderr             component=%-20s %s", c.caps.Component, line))
+		}
+	}
+	if exitCode != 0 {
+		c.verboseLog("exit_code", fmt.Sprintf("code=%d", exitCode))
+	}
 }
 
 func starlarkRunResult(stdout, stderr string, exitCode int) gostarlark.Value {
