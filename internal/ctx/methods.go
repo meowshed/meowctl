@@ -508,17 +508,27 @@ func (c *CtxValue) starRun(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 		}
 		cmdArgs[i] = string(s)
 	}
-	c2 := exec.CommandContext(context.Background(), string(cmd), cmdArgs...) // #nosec G204 -- cmd/args from validated Starlark config; no ctx available in hooks
-	// Merge provided env over current env.
-	c2.Env = os.Environ()
+	// Build merged environment (process env + caller overrides).
+	mergedEnv := os.Environ()
 	for _, kv := range runEnv.Items() {
 		k, ok1 := kv[0].(gostarlark.String)
 		v, ok2 := kv[1].(gostarlark.String)
 		if !ok1 || !ok2 {
 			return nil, fmt.Errorf("run: env keys and values must be strings")
 		}
-		c2.Env = append(c2.Env, string(k)+"="+string(v))
+		mergedEnv = append(mergedEnv, string(k)+"="+string(v))
 	}
+	// If a RunFunc override is provided (e.g. integration tests), delegate to it.
+	if c.caps.RunFunc != nil {
+		stdout, err := c.caps.RunFunc(context.Background(), string(cmd), cmdArgs, mergedEnv)
+		if err != nil {
+			return starlarkRunResult("", err.Error(), 1), nil
+		}
+		return starlarkRunResult(stdout, "", 0), nil
+	}
+	c2 := exec.CommandContext(context.Background(), string(cmd), cmdArgs...) // #nosec G204 -- cmd/args from validated Starlark config; no ctx available in hooks
+	// Merge provided env over current env.
+	c2.Env = mergedEnv
 	if cwdStr, ok := cwd.(gostarlark.String); ok {
 		c2.Dir = string(cwdStr)
 	}
