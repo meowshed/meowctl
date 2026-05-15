@@ -80,6 +80,8 @@ type Runner struct {
 	NoRollback bool
 	// Force skips the already-completed check and re-runs every component.
 	Force bool
+	// Verbose enables detailed output: phase transitions, commands, output.
+	Verbose bool
 	// Writer receives progress and log events. When nil a PlainWriter to
 	// os.Stdout is used.
 	Writer tui.Writer
@@ -150,6 +152,9 @@ func (r *Runner) RunPhaseSet(phaseSetName string, phases []Phase) error {
 // otherwise be stale in the sentinel.
 func (r *Runner) RunPhase(phase Phase) error {
 	hookName := string(phase)
+	if r.Verbose {
+		r.writer().Log("==> phase: %s\n", hookName)
+	}
 	var failures []ComponentFailure
 
 	for _, id := range r.Order {
