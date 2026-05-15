@@ -143,28 +143,46 @@ func shellFromEnv() string {
 }
 
 type starlarkHookCaller struct {
-	configDir  string
-	eval       *starlarkpkg.Evaluator
-	dryRun     bool
-	verbose    bool
-	stack      *rollback.Stack
-	pmRegistry *pkg.PMRegistry
-	loader     *loader.CompositeLoader // may be nil for bare-name only configs
+	configDir     string
+	eval          *starlarkpkg.Evaluator
+	dryRun        bool
+	verbose       bool
+	stack         *rollback.Stack
+	pmRegistry    *pkg.PMRegistry
+	loader        *loader.CompositeLoader // may be nil for bare-name only configs
+	urlComponents map[string]string       // logical name → original URL for URL-named components
 }
 
 // CallHook evaluates the component's Starlark file and calls the named hook.
 func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
 	// Resolve component file: <configDir>/components/<componentID>.star
 	componentFile := filepath.Join(h.configDir, "components", componentID+".star")
+	localExists := true
 	if _, err := os.Lstat(componentFile); os.IsNotExist(err) {
-		// No component file — skip silently (component may have no hooks).
+		localExists = false
+	}
+
+	// If no local file, check whether this component is URL-named (e.g. @stdlib//components/mise).
+	// If so, load it via the CompositeLoader instead of returning nil.
+	if !localExists {
+		if h.loader != nil {
+			if origURL, ok := h.urlComponents[componentID]; ok {
+				return h.callHookFromURL(componentID, origURL, hookName)
+			}
+		}
+		// No component file and no URL mapping — skip silently (component may have no hooks).
 		return nil
 	}
 
+	return h.callHookFromFile(componentID, componentFile, hookName)
+}
+
+// callHookFromFile evaluates a local .star file and dispatches its hook.
+func (h *starlarkHookCaller) callHookFromFile(componentID, componentFile, hookName string) error {
 	caps := &ctx.Capabilities{
 		DryRun:        h.dryRun,
 		Verbose:       h.verbose,
-		ComponentDir:  h.resolveComponentDir(componentID, componentFile),
+		ComponentDir:  filepath.Dir(componentFile),
 		Phase:         hookName,
 		Component:     componentID,
 		RollbackStack: h.stack,
@@ -185,26 +203,63 @@ func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
 	if err := h.eval.CallHook(result.Globals, hookName, componentFile, ctxVal); err != nil {
 		return fmt.Errorf("component %s hook %s: %w", componentID, hookName, err)
 	}
-
-	// Dispatch pkg() declarations to registered PM handlers.
 	if err := dispatchPackages(hookName, result.Declarations.Packages, h.pmRegistry, ctxVal); err != nil {
 		return fmt.Errorf("component %s pkg dispatch: %w", componentID, err)
 	}
-
 	return nil
 }
 
-// resolveComponentDir returns the filesystem directory for a component's source file.
-// For URL-named components (containing "//"), it tries CompositeLoader.ComponentDir first.
-// For bare-name local components, or when the loader is nil, it falls back to
-// filepath.Dir(componentFile).
-func (h *starlarkHookCaller) resolveComponentDir(componentID, componentFile string) string {
-	if h.loader != nil && strings.Contains(componentID, "//") {
-		if dir, err := h.loader.ComponentDir(componentID); err == nil {
-			return dir
-		}
+// callHookFromURL loads a URL-named component via the CompositeLoader and dispatches its hook.
+func (h *starlarkHookCaller) callHookFromURL(componentID, moduleURL, hookName string) error {
+	var componentDir string
+	if dir, err := h.loader.ComponentDir(moduleURL); err == nil {
+		componentDir = dir
 	}
-	return filepath.Dir(componentFile)
+
+	caps := &ctx.Capabilities{
+		DryRun:        h.dryRun,
+		Verbose:       h.verbose,
+		ComponentDir:  componentDir,
+		Phase:         hookName,
+		Component:     componentID,
+		RollbackStack: h.stack,
+		PMRegistry:    h.pmRegistry,
+		Env:           envMap(),
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		caps.Home = home
+		caps.StateDir = filepath.Join(home, ".local", "share", "meowctl", componentID)
+		caps.EmitFile = phaseEmitFile(home, hookName, shellFromEnv())
+	}
+
+	ctxVal := ctx.New(caps)
+
+	// Wire an Accumulator so that top-level pkg() declarations in the module are
+	// captured during loading. Without this, pkg() will error when acc is absent.
+	acc := &starlarkpkg.Accumulator{}
+
+	predeclared := h.eval.StdPredeclared()
+	predeclared["ctx"] = ctxVal
+	thread := &gostarlark.Thread{
+		Name: moduleURL,
+		Load: func(t *gostarlark.Thread, module string) (gostarlark.StringDict, error) {
+			return h.loader.Load(t, module, predeclared)
+		},
+	}
+	thread.SetLocal("acc", acc)
+	globals, err := h.loader.Load(thread, moduleURL, predeclared)
+	if err != nil {
+		return fmt.Errorf("component %s: load URL: %w", componentID, err)
+	}
+	if err := h.eval.CallHook(globals, hookName, moduleURL, ctxVal); err != nil {
+		return fmt.Errorf("component %s hook %s: %w", componentID, hookName, err)
+	}
+
+	// Use pkg() declarations collected during module loading for dispatch.
+	if err := dispatchPackages(hookName, acc.Packages, h.pmRegistry, ctxVal); err != nil {
+		return fmt.Errorf("component %s pkg dispatch: %w", componentID, err)
+	}
+	return nil
 }
 
 // dispatchPackages iterates pkg declarations and calls the appropriate PM handler.
@@ -246,7 +301,7 @@ func envMap() map[string]string {
 // transitive dependency in meowctl.star.
 // Replace directives are read from <configDir>/meowctl.mod automatically.
 // Returns the topo-sorted component IDs (logical names) and a PMRegistry.
-func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.ComponentID, *pkg.PMRegistry, error) {
+func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.ComponentID, *pkg.PMRegistry, map[string]string, error) {
 	starPath := filepath.Join(configDir, "meowctl.star")
 	eval := &starlarkpkg.Evaluator{
 		Platform: starlarkpkg.PlatformInfo{OS: goosToPlatformOS(runtime.GOOS)},
@@ -254,7 +309,7 @@ func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.Comp
 
 	result, err := eval.ExecFile(starPath, nil, nil, nil)
 	if err != nil {
-		return nil, nil, exitErrorf(ExitConfig, "load meowctl.star: %v", err)
+		return nil, nil, nil, exitErrorf(ExitConfig, "load meowctl.star: %v", err)
 	}
 
 	// Build a CompositeLoader for resolving URL-named components (e.g. @stdlib//...).
@@ -271,7 +326,7 @@ func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.Comp
 	// Seed from meowctl.star declarations; filter to requested components first.
 	seed, err := filterDecls(result.Declarations.Components, filter)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Iteratively expand transitive deps. Unknown deps (not in meowctl.star) are
@@ -287,10 +342,19 @@ func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.Comp
 
 	ordered, sortErr := lifecycle.TopoSort(deps, declIdx)
 	if sortErr != nil {
-		return nil, nil, exitErrorf(ExitConfig, "component dependency cycle: %v", sortErr)
+		return nil, nil, nil, exitErrorf(ExitConfig, "component dependency cycle: %v", sortErr)
 	}
 
-	return retainDeclared(ordered, declIdx), pmReg, nil
+	// Build logical-name → original-URL map for URL-named components so that
+	// CallHook can load them via CompositeLoader when no local file exists.
+	urlMap := make(map[string]string)
+	for _, c := range allDecls {
+		if strings.Contains(c.Name, "//") {
+			urlMap[c.LogicalName()] = c.Name
+		}
+	}
+
+	return retainDeclared(ordered, declIdx), pmReg, urlMap, nil
 }
 
 // expandWithFileDeps iteratively discovers all transitive after= dependencies
@@ -629,7 +693,7 @@ func newVerifyCmd(gf *globalFlags) *cobra.Command {
 
 // runLifecyclePhaseSet executes a named phase set, loading components from meowctl.star.
 func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, filter []string) error {
-	order, pmReg, err := loadComponentsWithDeps(cfg.ConfigDir, filter)
+	order, pmReg, urlMap, err := loadComponentsWithDeps(cfg.ConfigDir, filter)
 	if err != nil {
 		return err
 	}
@@ -650,6 +714,7 @@ func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, 
 
 	// Build hook caller with loader; replace directives come from meowctl.mod.
 	caller := buildHookCaller(cfg)
+	caller.urlComponents = urlMap
 
 	statePath := filepath.Join(cfg.ConfigDir, "state.toml")
 	sentinel := state.NewManager(statePath)
