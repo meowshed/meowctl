@@ -42,6 +42,7 @@ var expectedAttrNames = []string{
 	"shell",
 	"state_dir",
 	"symlink",
+	"which",
 	"write_file",
 }
 
