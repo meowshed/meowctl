@@ -29,6 +29,36 @@ func goosToPlatformOS(goos string) string {
 	return goos
 }
 
+// linuxDistroInfo reads /etc/os-release and returns (distro, distroLike).
+// distro is the normalised ID value (e.g. "ubuntu", "arch", "alpine").
+// distroLike is the first token of ID_LIKE (e.g. "debian", "fedora").
+// Both are empty strings on non-Linux or when the file is unreadable.
+func linuxDistroInfo() (distro, distroLike string) {
+	data, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		return "", ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		v = strings.Trim(v, `"'`)
+		switch k {
+		case "ID":
+			distro = strings.ToLower(v)
+		case "ID_LIKE":
+			// ID_LIKE may be space-separated; take the first token.
+			parts := strings.Fields(v)
+			if len(parts) > 0 {
+				distroLike = strings.ToLower(parts[0])
+			}
+		}
+	}
+	return distro, distroLike
+}
+
 // readModfileReplaces reads replace() directives from <configDir>/meowctl.mod and
 // returns a map from module name to local filesystem path. Returns an empty map
 // if the file is absent or cannot be parsed.
@@ -74,7 +104,17 @@ func addInstallFlags(cmd *cobra.Command, cfg *runConfig) {
 // buildHookCaller constructs a starlarkHookCaller with a CompositeLoader wired
 // with replace directives read from <configDir>/meowctl.mod.
 func buildHookCaller(cfg runConfig) *starlarkHookCaller {
-	eval := &starlarkpkg.Evaluator{}
+	distro, distroLike := "", ""
+	if runtime.GOOS == "linux" {
+		distro, distroLike = linuxDistroInfo()
+	}
+	eval := &starlarkpkg.Evaluator{
+		Platform: starlarkpkg.PlatformInfo{
+			OS:         goosToPlatformOS(runtime.GOOS),
+			Distro:     distro,
+			DistroLike: distroLike,
+		},
+	}
 	var cl *loader.CompositeLoader
 	if home, err := os.UserHomeDir(); err == nil {
 		cl = loader.NewCompositeLoader(cfg.ConfigDir, nil, loader.CompositeLoaderOptions{
@@ -303,8 +343,16 @@ func envMap() map[string]string {
 // Returns the topo-sorted component IDs (logical names) and a PMRegistry.
 func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.ComponentID, *pkg.PMRegistry, map[string]string, error) {
 	starPath := filepath.Join(configDir, "meowctl.star")
+	distro, distroLike := "", ""
+	if runtime.GOOS == "linux" {
+		distro, distroLike = linuxDistroInfo()
+	}
 	eval := &starlarkpkg.Evaluator{
-		Platform: starlarkpkg.PlatformInfo{OS: goosToPlatformOS(runtime.GOOS)},
+		Platform: starlarkpkg.PlatformInfo{
+			OS:         goosToPlatformOS(runtime.GOOS),
+			Distro:     distro,
+			DistroLike: distroLike,
+		},
 	}
 
 	result, err := eval.ExecFile(starPath, nil, nil, nil)
