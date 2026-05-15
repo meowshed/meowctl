@@ -133,6 +133,23 @@ func (m *Manager) RecordRunEnd(completed bool, rb RolledBack) error {
 	return m.Save(s)
 }
 
+// IsCompleted reports whether the given phase+component pair has been recorded
+// as completed. Returns false on any read error (fail-open: re-run the component).
+func (m *Manager) IsCompleted(phase, component string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, err := m.Load()
+	if err != nil {
+		return false
+	}
+	for _, cc := range s.CompletedComponents {
+		if cc.Phase == phase && cc.Component == component {
+			return true
+		}
+	}
+	return false
+}
+
 // RecordComponent appends a completed component entry, de-duplicating by
 // phase+component (last write wins).
 func (m *Manager) RecordComponent(phase, component string) error {
