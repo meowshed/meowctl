@@ -243,6 +243,9 @@ func (h *starlarkHookCaller) callHookFromFile(componentID, componentFile, hookNa
 	if err := h.eval.CallHook(result.Globals, hookName, componentFile, ctxVal); err != nil {
 		return fmt.Errorf("component %s hook %s: %w", componentID, hookName, err)
 	}
+	if err := dispatchRepos(hookName, result.Declarations.Repos, h.pmRegistry, ctxVal); err != nil {
+		return fmt.Errorf("component %s repo dispatch: %w", componentID, err)
+	}
 	if err := dispatchPackages(hookName, result.Declarations.Packages, h.pmRegistry, ctxVal); err != nil {
 		return fmt.Errorf("component %s pkg dispatch: %w", componentID, err)
 	}
@@ -295,6 +298,10 @@ func (h *starlarkHookCaller) callHookFromURL(componentID, moduleURL, hookName st
 		return fmt.Errorf("component %s hook %s: %w", componentID, hookName, err)
 	}
 
+	// Use repo() declarations collected during module loading for dispatch (before pkgs).
+	if err := dispatchRepos(hookName, acc.Repos, h.pmRegistry, ctxVal); err != nil {
+		return fmt.Errorf("component %s repo dispatch: %w", componentID, err)
+	}
 	// Use pkg() declarations collected during module loading for dispatch.
 	if err := dispatchPackages(hookName, acc.Packages, h.pmRegistry, ctxVal); err != nil {
 		return fmt.Errorf("component %s pkg dispatch: %w", componentID, err)
@@ -316,6 +323,20 @@ func dispatchPackages(phase string, packages []starlarkpkg.PkgDecl, reg *pkg.PMR
 			err = reg.Dispatch(phase, p.Manager, p.Name, p.Version, p.Kwargs, ctxVal)
 		}
 		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// dispatchRepos iterates repo declarations and calls the appropriate PM add_repo handler.
+// Only the install phase triggers repo dispatch; other phases are no-ops.
+func dispatchRepos(phase string, repos []starlarkpkg.RepoDecl, reg *pkg.PMRegistry, ctxVal gostarlark.Value) error {
+	if reg == nil || len(repos) == 0 || phase != "install" {
+		return nil
+	}
+	for _, r := range repos {
+		if err := reg.DispatchAddRepo(r.Manager, r.Kwargs, ctxVal); err != nil {
 			return err
 		}
 	}
