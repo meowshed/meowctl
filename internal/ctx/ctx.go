@@ -136,6 +136,7 @@ func New(caps *Capabilities) *CtxValue {
 	c.methods["add_path"] = gostarlark.NewBuiltin("add_path", c.starAddPath)
 	c.methods["render"] = gostarlark.NewBuiltin("render", c.starRender)
 	c.methods["render_file"] = gostarlark.NewBuiltin("render_file", c.starRenderFile)
+	c.methods["which"] = gostarlark.NewBuiltin("which", c.starWhich)
 
 	return c
 }

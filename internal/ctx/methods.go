@@ -984,3 +984,18 @@ func newUUID() string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
+
+// starWhich implements ctx.which(name) -> bool.
+// Returns True if the named executable is found in PATH (respecting any
+// paths added via ctx.add_path), False otherwise.
+func (c *CtxValue) starWhich(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+	var name gostarlark.String
+	if err := gostarlark.UnpackArgs("which", args, kwargs, "name", &name); err != nil {
+		return nil, err
+	}
+	_, err := exec.LookPath(string(name))
+	if err != nil {
+		return gostarlark.False, nil
+	}
+	return gostarlark.True, nil
+}
