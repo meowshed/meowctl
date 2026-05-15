@@ -125,13 +125,37 @@ func TestStdlib_PMFilesStructuralCheck(t *testing.T) {
 				return
 			}
 
-			// Build a ctx with RunFunc injected so interrogate hooks that call
-			// ctx.run() (e.g. `mise ls --installed --json`) succeed without real subprocesses.
+			// Build a PMRegistry with a stub mise handler so that PM components
+			// that delegate to mise via query_pm("mise") (e.g. github_release.star)
+			// can resolve the handler without spawning real processes.
+			// The stub interrogate returns an empty list, valid for a fresh install state.
+			stubMiseInterrogate := gostarlark.NewBuiltin("interrogate", func(
+				_ *gostarlark.Thread, _ *gostarlark.Builtin,
+				_ gostarlark.Tuple, _ []gostarlark.Tuple,
+			) (gostarlark.Value, error) {
+				return gostarlark.NewList(nil), nil
+			})
+			registry := pkg.NewPMRegistry()
+			registry.Register("mise", &pkg.PMHandler{
+				ComponentName: "mise.star",
+				InstallPkg: gostarlark.NewBuiltin("install_pkg", func(_ *gostarlark.Thread, _ *gostarlark.Builtin, _ gostarlark.Tuple, _ []gostarlark.Tuple) (gostarlark.Value, error) {
+					return gostarlark.None, nil
+				}),
+				UninstallPkg: gostarlark.NewBuiltin("uninstall_pkg", func(_ *gostarlark.Thread, _ *gostarlark.Builtin, _ gostarlark.Tuple, _ []gostarlark.Tuple) (gostarlark.Value, error) {
+					return gostarlark.None, nil
+				}),
+				Interrogate: stubMiseInterrogate,
+			})
+
+			// Build a ctx with RunFunc and PMRegistry injected so interrogate hooks
+			// that call ctx.run() or query_pm() succeed without real subprocesses.
 			ctxVal := ctx.New(&ctx.Capabilities{
-				RunFunc: stubRunFunc,
+				RunFunc:    stubRunFunc,
+				PMRegistry: registry,
 			})
 
 			thread := &gostarlark.Thread{Name: "interrogate/" + name}
+			thread.SetLocal("ctx", ctxVal)
 			res, callErr := gostarlark.Call(thread, h.Interrogate, gostarlark.Tuple{ctxVal}, nil)
 			if callErr != nil {
 				t.Fatalf("interrogate(%q): %v", name, callErr)
