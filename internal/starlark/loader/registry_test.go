@@ -500,3 +500,85 @@ func TestRegistryLoader_CompatNoWarn(t *testing.T) {
 		t.Errorf("expected no compat warning for absent compat field, got: %q", stderrBuf.String())
 	}
 }
+
+// TestRegistryLoader_NoExtensionNormalised verifies that a URL path without a
+// file extension resolves to the same file as the same path with .star appended.
+// @mymod//lib and @mymod//lib.star must be equivalent.
+func TestRegistryLoader_NoExtensionNormalised(t *testing.T) {
+	modContent := []byte(`norm = True`)
+	tarball := buildTarGz(t, map[string][]byte{"lib.star": modContent})
+
+	tarballServer := testServer(t, map[string][]byte{
+		"/mymod-v1.0.0.tar.gz": tarball,
+	})
+	defer tarballServer.Close()
+
+	indexBody := registryIndexTOML(t, map[string]map[string]interface{}{
+		"mymod": {
+			"versions": []string{"v1.0.0"},
+			"source":   tarballServer.URL + "/mymod-{version}.tar.gz",
+		},
+	})
+	indexServer := testServer(t, map[string][]byte{"/": indexBody})
+	defer indexServer.Close()
+
+	cacheDir := t.TempDir()
+	lockPath := filepath.Join(t.TempDir(), "meowctl.lock")
+	cl := newTestRegistryLoader(t, indexServer, cacheDir, lockPath)
+	thread := &gostarlark.Thread{Name: "test"}
+
+	// Load without .star extension.
+	globals, err := cl.Load(thread, "@mymod//lib", gostarlark.StringDict{})
+	if err != nil {
+		t.Fatalf("Load without .star extension: %v", err)
+	}
+	if _, ok := globals["norm"]; !ok {
+		t.Error("expected 'norm' in globals")
+	}
+}
+
+// TestRegistryLoader_ReplaceLocal verifies that a Replaces entry serves files
+// from the local filesystem root, both with and without the .star extension.
+func TestRegistryLoader_ReplaceLocal(t *testing.T) {
+	localRoot := t.TempDir()
+	compDir := filepath.Join(localRoot, "components")
+	if err := os.MkdirAll(compDir, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(compDir, "apt.star"), []byte(`pm_name = "apt"`), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	cacheDir := t.TempDir()
+	lockPath := filepath.Join(t.TempDir(), "meowctl.lock")
+	cl := loader.NewRegistryLoaderForTest(
+		t.TempDir(),
+		&syntax.FileOptions{},
+		loader.CompositeLoaderOptions{
+			CacheDir: cacheDir,
+			LockPath: lockPath,
+			Client:   &http.Client{},
+			Replaces: map[string]string{"stdlib": localRoot},
+		},
+		"", "", "",
+	)
+	thread := &gostarlark.Thread{Name: "test"}
+
+	// With explicit .star extension.
+	globals, err := cl.Load(thread, "@stdlib//components/apt.star", gostarlark.StringDict{})
+	if err != nil {
+		t.Fatalf("Load with .star: %v", err)
+	}
+	if _, ok := globals["pm_name"]; !ok {
+		t.Error("expected 'pm_name' in globals (with .star)")
+	}
+
+	// Without .star extension — must resolve identically.
+	globals2, err := cl.Load(thread, "@stdlib//components/apt", gostarlark.StringDict{})
+	if err != nil {
+		t.Fatalf("Load without .star: %v", err)
+	}
+	if _, ok := globals2["pm_name"]; !ok {
+		t.Error("expected 'pm_name' in globals (without .star)")
+	}
+}
