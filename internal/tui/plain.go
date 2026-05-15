@@ -27,6 +27,11 @@ func (w *PlainWriter) ComponentStart(name string) {
 	_, _ = fmt.Fprintf(w.out, "  -> %s\n", name)
 }
 
+// ComponentSkipped emits a "skipped" line for the named component.
+func (w *PlainWriter) ComponentSkipped(name string) {
+	_, _ = fmt.Fprintf(w.out, "  -- %s (already installed)\n", name)
+}
+
 // ComponentDone emits a success or failure line for the named component.
 func (w *PlainWriter) ComponentDone(name string, err error) {
 	if err != nil {

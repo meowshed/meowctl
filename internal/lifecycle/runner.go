@@ -78,6 +78,8 @@ type Runner struct {
 	Sentinel *state.Manager
 	// NoRollback disables automatic rollback on phase failure.
 	NoRollback bool
+	// Force skips the already-completed check and re-runs every component.
+	Force bool
 	// Writer receives progress and log events. When nil a PlainWriter to
 	// os.Stdout is used.
 	Writer tui.Writer
@@ -151,6 +153,12 @@ func (r *Runner) RunPhase(phase Phase) error {
 	var failures []ComponentFailure
 
 	for _, id := range r.Order {
+		// Skip components that have already been completed for this phase,
+		// unless --force is set.
+		if !r.Force && r.Sentinel != nil && r.Sentinel.IsCompleted(hookName, id) {
+			r.writer().ComponentSkipped(id)
+			continue
+		}
 		// Component files are named by convention: <id>/<phase>.star or just <id>.star
 		// For now pass the phase name as the hook name; the HookCaller resolves the file.
 		r.writer().ComponentStart(id)
