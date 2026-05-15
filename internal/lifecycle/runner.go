@@ -58,6 +58,9 @@ type PhaseError struct {
 
 // Error implements the error interface.
 func (e *PhaseError) Error() string {
+	if len(e.Failures) == 1 {
+		return fmt.Sprintf("phase %s: %s: %v", e.Phase, e.Failures[0].Component, e.Failures[0].Err)
+	}
 	msgs := make([]string, len(e.Failures))
 	for i, f := range e.Failures {
 		msgs[i] = fmt.Sprintf("%s: %v", f.Component, f.Err)
@@ -145,17 +148,14 @@ func (r *Runner) RunPhaseSet(phaseSetName string, phases []Phase) error {
 }
 
 // RunPhase executes one phase for all components in order.
-// Fail-slow: all components are attempted even if earlier ones fail, so that
-// the caller receives a complete error picture rather than stopping at the
-// first failure. Sentinel state is only recorded when the entire phase
-// succeeds — if any component fails, rollback may undo work that would
-// otherwise be stale in the sentinel.
+// Fail-fast: if any component fails, execution stops immediately and the error
+// is returned. Rollback of the current phase-set is triggered by RunPhaseSet.
+// Sentinel state is only recorded when the entire phase succeeds.
 func (r *Runner) RunPhase(phase Phase) error {
 	hookName := string(phase)
 	if r.Verbose {
 		r.writer().Log("==> phase: %s\n", hookName)
 	}
-	var failures []ComponentFailure
 
 	for _, id := range r.Order {
 		// Skip components that have already been completed for this phase,
@@ -164,18 +164,12 @@ func (r *Runner) RunPhase(phase Phase) error {
 			r.writer().ComponentSkipped(id)
 			continue
 		}
-		// Component files are named by convention: <id>/<phase>.star or just <id>.star
-		// For now pass the phase name as the hook name; the HookCaller resolves the file.
 		r.writer().ComponentStart(id)
 		hookErr := r.Caller.CallHook(id, hookName)
 		r.writer().ComponentDone(id, hookErr)
 		if hookErr != nil {
-			failures = append(failures, ComponentFailure{Component: id, Err: hookErr})
+			return &PhaseError{Phase: phase, Failures: []ComponentFailure{{Component: id, Err: hookErr}}}
 		}
-	}
-
-	if len(failures) > 0 {
-		return &PhaseError{Phase: phase, Failures: failures}
 	}
 
 	// Record completed components only after the phase is fully clean.
