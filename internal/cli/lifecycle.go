@@ -55,12 +55,14 @@ type runConfig struct {
 	NoRollback bool
 	Force      bool
 	IgnoreLock bool
+	Verbose    bool
 }
 
-// addLifecycleFlags attaches --dry-run and --no-rollback flags to cmd.
+// addLifecycleFlags attaches --dry-run, --no-rollback, and --verbose flags to cmd.
 func addLifecycleFlags(cmd *cobra.Command, cfg *runConfig) {
 	cmd.Flags().BoolVarP(&cfg.DryRun, "dry-run", "n", false, "Print what would be done without executing")
 	cmd.Flags().BoolVar(&cfg.NoRollback, "no-rollback", false, "Skip automatic rollback on failure")
+	cmd.Flags().BoolVarP(&cfg.Verbose, "verbose", "v", false, "Enable verbose output (commands, output, phase transitions)")
 }
 
 // addInstallFlags attaches --force and --ignore-lock flags to install/update commands.
@@ -85,6 +87,7 @@ func buildHookCaller(cfg runConfig) *starlarkHookCaller {
 		configDir: cfg.ConfigDir,
 		eval:      eval,
 		dryRun:    cfg.DryRun,
+		verbose:   cfg.Verbose,
 		loader:    cl,
 	}
 }
@@ -100,6 +103,7 @@ func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.S
 		Sentinel:   sentinel,
 		NoRollback: cfg.NoRollback,
 		Force:      cfg.Force,
+		Verbose:    cfg.Verbose,
 		Writer:     w,
 	}
 }
@@ -142,6 +146,7 @@ type starlarkHookCaller struct {
 	configDir  string
 	eval       *starlarkpkg.Evaluator
 	dryRun     bool
+	verbose    bool
 	stack      *rollback.Stack
 	pmRegistry *pkg.PMRegistry
 	loader     *loader.CompositeLoader // may be nil for bare-name only configs
@@ -158,6 +163,7 @@ func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
 
 	caps := &ctx.Capabilities{
 		DryRun:        h.dryRun,
+		Verbose:       h.verbose,
 		ComponentDir:  h.resolveComponentDir(componentID, componentFile),
 		Phase:         hookName,
 		Component:     componentID,

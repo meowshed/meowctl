@@ -42,6 +42,13 @@ func (c *CtxValue) dryLog(op string, args ...string) {
 	c.logMsg(fmt.Sprintf("[dry-run] %-16s component=%-20s %s", op, c.caps.Component, strings.Join(args, " ")))
 }
 
+// verboseLog emits a verbose line for the given op and args when --verbose is set.
+func (c *CtxValue) verboseLog(op string, args ...string) {
+	if c.caps.Verbose {
+		c.logMsg(fmt.Sprintf("[verbose] %-16s component=%-20s %s", op, c.caps.Component, strings.Join(args, " ")))
+	}
+}
+
 // starLog implements ctx.log(msg).
 // Always executes, even in dry-run mode.
 func (c *CtxValue) starLog(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
@@ -508,6 +515,9 @@ func (c *CtxValue) starRun(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 		}
 		cmdArgs[i] = string(s)
 	}
+	if c.caps.Verbose {
+		c.verboseLog("run", append([]string{"cmd=" + string(cmd)}, cmdArgs...)...)
+	}
 	// Build merged environment (process env + caller overrides).
 	mergedEnv := os.Environ()
 	for _, kv := range runEnv.Items() {
@@ -542,6 +552,21 @@ func (c *CtxValue) starRun(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 			exitCode = exitErr.ExitCode()
 		} else {
 			return nil, fmt.Errorf("run: %w", runErr)
+		}
+	}
+	if c.caps.Verbose {
+		if out := strings.TrimRight(stdoutBuf.String(), "\n"); out != "" {
+			for _, line := range strings.Split(out, "\n") {
+				c.logMsg(fmt.Sprintf("[verbose] stdout             component=%-20s %s", c.caps.Component, line))
+			}
+		}
+		if out := strings.TrimRight(stderrBuf.String(), "\n"); out != "" {
+			for _, line := range strings.Split(out, "\n") {
+				c.logMsg(fmt.Sprintf("[verbose] stderr             component=%-20s %s", c.caps.Component, line))
+			}
+		}
+		if exitCode != 0 {
+			c.verboseLog("exit_code", fmt.Sprintf("code=%d", exitCode))
 		}
 	}
 	return starlarkRunResult(stdoutBuf.String(), stderrBuf.String(), exitCode), nil
@@ -851,6 +876,7 @@ func (c *CtxValue) starAddPath(_ *gostarlark.Thread, _ *gostarlark.Builtin, args
 		if err := os.Setenv("PATH", newPath); err != nil {
 			return nil, fmt.Errorf("add_path: setenv PATH: %w", err)
 		}
+		c.verboseLog("add_path", "dir="+d)
 	}
 	return gostarlark.None, nil
 }
