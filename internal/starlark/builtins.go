@@ -6,6 +6,8 @@ import (
 
 	gostarlark "go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
+
+	starjson "go.starlark.net/lib/json"
 )
 
 // PlatformInfo holds the platform data used by platform() and select() builtins.
@@ -40,6 +42,7 @@ func makePredeclared(platform PlatformInfo) gostarlark.StringDict {
 		"replace":   gostarlark.NewBuiltin("replace", builtinReplace),
 		"select":    makeBuiltinSelect(platform),
 		"platform":  makeBuiltinPlatform(pStruct),
+		"json":      starjson.Module,
 	}
 }
 
