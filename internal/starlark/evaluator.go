@@ -93,6 +93,12 @@ func (e *Evaluator) ExecFile(filename string, src any, predeclared gostarlark.St
 	return &EvalResult{Globals: globals, Declarations: acc}, nil
 }
 
+// StdPredeclared returns the predeclared builtins dict for this evaluator's platform.
+// Used by callers that need to construct a thread manually (e.g. URL-named component loading).
+func (e *Evaluator) StdPredeclared() gostarlark.StringDict {
+	return makePredeclared(e.Platform)
+}
+
 // ReadComponentGlobals evaluates a Starlark file to read its top-level globals
 // without a ctx value. This is used during pass 1 of component loading to extract
 // metadata (after, pm_name) before hooks are executed.

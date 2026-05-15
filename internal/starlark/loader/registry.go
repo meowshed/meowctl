@@ -66,6 +66,13 @@ type RegistryLoader struct {
 	Client *http.Client
 	// FileOpts are the Starlark parse options propagated to child evaluations.
 	FileOpts *syntax.FileOptions
+	// Replaces maps registry module names to local filesystem paths.
+	// When a module name is present here, Load serves files from the local
+	// directory instead of fetching from the registry. The path within the
+	// module URL (the part after //) is appended to the local root.
+	// Example: {"stdlib": "/path/to/meowctl-stdlib"} makes
+	// @stdlib//components/apt.star → /path/to/meowctl-stdlib/components/apt.star
+	Replaces map[string]string
 }
 
 // registryURL is the parsed form of a @name// module URL.
@@ -116,6 +123,11 @@ func (l *RegistryLoader) Load(thread *gostarlark.Thread, moduleURL string, prede
 		return nil, err
 	}
 
+	// If a local replace is configured for this module, serve from the local path.
+	if localRoot, ok := l.Replaces[u.module]; ok {
+		return l.loadFromLocal(thread, moduleURL, localRoot, u.path, predeclared)
+	}
+
 	version, err := l.resolveVersion(u.module)
 	if err != nil {
 		return nil, fmt.Errorf("RegistryLoader: resolve %q: %w", moduleURL, err)
@@ -133,6 +145,30 @@ func (l *RegistryLoader) Load(thread *gostarlark.Thread, moduleURL string, prede
 	globals, err := gostarlark.ExecFileOptions(l.FileOpts, childThread, moduleURL, src, predeclared)
 	if err != nil {
 		return nil, fmt.Errorf("RegistryLoader: eval %q: %w", moduleURL, err)
+	}
+	return globals, nil
+}
+
+// loadFromLocal serves a @name//path load from a local filesystem root instead
+// of the registry. Used when a replace override is active for the module.
+func (l *RegistryLoader) loadFromLocal(thread *gostarlark.Thread, moduleURL, localRoot, filePath string, predeclared gostarlark.StringDict) (gostarlark.StringDict, error) {
+	abs := filepath.Join(localRoot, filepath.FromSlash(filePath))
+
+	// Reject path traversal.
+	cleanRoot := filepath.Clean(localRoot) + string(os.PathSeparator)
+	if !strings.HasPrefix(filepath.Clean(abs)+string(os.PathSeparator), cleanRoot) {
+		return nil, fmt.Errorf("RegistryLoader: replace path %q escapes local root %q", filePath, localRoot)
+	}
+
+	src, err := os.ReadFile(abs) // #nosec G304 -- path validated against localRoot above
+	if err != nil {
+		return nil, fmt.Errorf("RegistryLoader: replace load %q: %w", moduleURL, err)
+	}
+
+	childThread := &gostarlark.Thread{Name: moduleURL, Load: thread.Load}
+	globals, err := gostarlark.ExecFileOptions(l.FileOpts, childThread, abs, src, predeclared)
+	if err != nil {
+		return nil, fmt.Errorf("RegistryLoader: replace eval %q: %w", moduleURL, err)
 	}
 	return globals, nil
 }
