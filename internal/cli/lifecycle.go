@@ -557,6 +557,26 @@ func buildDepsAndRegistry(eval *starlarkpkg.Evaluator, decls []starlarkpkg.Compo
 					}
 				}
 			}
+			// Check distros list — skip component if declared and neither distro nor
+			// distro_like matches any entry. Only evaluated after platforms passes.
+			if distrosVal, ok := globals["distros"]; ok {
+				if distrosList, ok := distrosVal.(*gostarlark.List); ok {
+					match := false
+					for i := 0; i < distrosList.Len(); i++ {
+						if s, ok := distrosList.Index(i).(gostarlark.String); ok {
+							d := string(s)
+							if d == eval.Platform.Distro || d == eval.Platform.DistroLike {
+								match = true
+								break
+							}
+						}
+					}
+					if !match {
+						skipped[ln] = true
+						continue
+					}
+				}
+			}
 		}
 
 		// Filter out after-deps that point to skipped components.
