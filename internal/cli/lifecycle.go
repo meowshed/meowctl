@@ -523,9 +523,51 @@ func filterDecls(all []starlarkpkg.ComponentDecl, filter []string) ([]starlarkpk
 	return out, nil
 }
 
+// platformMatches returns true if the globals dict does not declare a "platforms" list,
+// or if the list contains the current OS.
+func platformMatches(globals gostarlark.StringDict, os string) bool {
+	platformsVal, ok := globals["platforms"]
+	if !ok {
+		return true
+	}
+	platformsList, ok := platformsVal.(*gostarlark.List)
+	if !ok {
+		return true
+	}
+	for i := 0; i < platformsList.Len(); i++ {
+		if s, ok := platformsList.Index(i).(gostarlark.String); ok && string(s) == os {
+			return true
+		}
+	}
+	return false
+}
+
+// distroMatches returns true if the globals dict does not declare a "distros" list,
+// or if the list contains the current distro or distro_like value.
+func distroMatches(globals gostarlark.StringDict, distro, distroLike string) bool {
+	distrosVal, ok := globals["distros"]
+	if !ok {
+		return true
+	}
+	distrosList, ok := distrosVal.(*gostarlark.List)
+	if !ok {
+		return true
+	}
+	for i := 0; i < distrosList.Len(); i++ {
+		if s, ok := distrosList.Index(i).(gostarlark.String); ok {
+			d := string(s)
+			if d == distro || d == distroLike {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // buildDepsAndRegistry builds the deps map and PMRegistry from already-read globals.
 // globalsCache maps logical component name to its StringDict (nil if file was absent or errored).
 // Components that declare a platforms list that does not include the current OS are skipped.
+// Components that declare a distros list that does not include the current distro are skipped.
 func buildDepsAndRegistry(eval *starlarkpkg.Evaluator, decls []starlarkpkg.ComponentDecl, globalsCache map[string]gostarlark.StringDict) (map[lifecycle.ComponentID][]lifecycle.ComponentID, *pkg.PMRegistry) {
 	deps := make(map[lifecycle.ComponentID][]lifecycle.ComponentID, len(decls))
 	pmReg := pkg.NewPMRegistry()
@@ -540,42 +582,15 @@ func buildDepsAndRegistry(eval *starlarkpkg.Evaluator, decls []starlarkpkg.Compo
 		copy(merged, c.After)
 		merged = mergeAfterFromGlobals(merged, globals, eval)
 
-		// Check platforms list — skip component if current OS is not listed.
+		// Skip component if platforms or distros filter does not match current platform.
 		if globals != nil {
-			if platformsVal, ok := globals["platforms"]; ok {
-				if platformsList, ok := platformsVal.(*gostarlark.List); ok {
-					match := false
-					for i := 0; i < platformsList.Len(); i++ {
-						if s, ok := platformsList.Index(i).(gostarlark.String); ok && string(s) == eval.Platform.OS {
-							match = true
-							break
-						}
-					}
-					if !match {
-						skipped[ln] = true
-						continue
-					}
-				}
+			if !platformMatches(globals, eval.Platform.OS) {
+				skipped[ln] = true
+				continue
 			}
-			// Check distros list — skip component if declared and neither distro nor
-			// distro_like matches any entry. Only evaluated after platforms passes.
-			if distrosVal, ok := globals["distros"]; ok {
-				if distrosList, ok := distrosVal.(*gostarlark.List); ok {
-					match := false
-					for i := 0; i < distrosList.Len(); i++ {
-						if s, ok := distrosList.Index(i).(gostarlark.String); ok {
-							d := string(s)
-							if d == eval.Platform.Distro || d == eval.Platform.DistroLike {
-								match = true
-								break
-							}
-						}
-					}
-					if !match {
-						skipped[ln] = true
-						continue
-					}
-				}
+			if !distroMatches(globals, eval.Platform.Distro, eval.Platform.DistroLike) {
+				skipped[ln] = true
+				continue
 			}
 		}
 
