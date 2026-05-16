@@ -683,7 +683,12 @@ func parseModuleMeow(path string) ([]mvs.Module, error) {
 		deps = append(deps, mvs.Module{Name: name, Version: version})
 		return gostarlark.None, nil
 	})
-	predeclared := gostarlark.StringDict{"dep": depFn}
+	// module() declares the module's own identity. We ignore its arguments —
+	// only dep() declarations affect MVS resolution.
+	moduleFn := gostarlark.NewBuiltin("module", func(_ *gostarlark.Thread, _ *gostarlark.Builtin, _ gostarlark.Tuple, _ []gostarlark.Tuple) (gostarlark.Value, error) {
+		return gostarlark.None, nil
+	})
+	predeclared := gostarlark.StringDict{"dep": depFn, "module": moduleFn}
 
 	thread := &gostarlark.Thread{Name: "MODULE.meow"}
 	opts := &syntax.FileOptions{}

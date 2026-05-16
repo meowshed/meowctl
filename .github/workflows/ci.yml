@@ -45,6 +45,17 @@ jobs:
           path: coverage.out
           retention-days: 7
 
+  integration:
+    name: Integration Test (live registry)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          cache: true
+      - name: Run integration tests
+        run: CGO_ENABLED=0 go test -tags integration -count=1 -timeout 120s ./internal/cli/...
+
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
