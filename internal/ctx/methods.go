@@ -841,10 +841,11 @@ func (c *CtxValue) starPrompt(_ *gostarlark.Thread, _ *gostarlark.Builtin, args 
 }
 
 // starEmit implements ctx.emit(line).
-// During runtime hook execution (RuntimeHook=true) the line is written to
-// stdout so the calling shell can eval it. During install-time execution the
-// line is appended to the EmitFile rc file (if set). If EmitFile is empty and
-// RuntimeHook is false, emit is a no-op outside shell/login phases.
+// Writes line to stdout so the calling shell can eval it.
+// Only meaningful inside shell or login hook phases (meowctl hook shell/login).
+// Outside those phases RuntimeHook is false and emit is a no-op, ensuring
+// components that define shell(ctx) can be safely included in any phase set
+// without producing spurious output.
 func (c *CtxValue) starEmit(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
 	var line gostarlark.String
 	if err := gostarlark.UnpackArgs("emit", args, kwargs, "line", &line); err != nil {
@@ -854,22 +855,11 @@ func (c *CtxValue) starEmit(_ *gostarlark.Thread, _ *gostarlark.Builtin, args go
 		c.dryLog("emit", "line="+string(line))
 		return gostarlark.None, nil
 	}
-	if c.caps.RuntimeHook {
-		fmt.Println(string(line))
+	if !c.caps.RuntimeHook {
+		// Not running inside meowctl hook — silently ignore.
 		return gostarlark.None, nil
 	}
-	if c.caps.EmitFile == "" {
-		// Not in a shell/login phase — emit is a no-op.
-		return gostarlark.None, nil
-	}
-	f, err := os.OpenFile(c.caps.EmitFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600) // #nosec G304
-	if err != nil {
-		return nil, fmt.Errorf("emit: open %s: %w", c.caps.EmitFile, err)
-	}
-	defer func() { _ = f.Close() }()
-	if _, err := fmt.Fprintln(f, string(line)); err != nil {
-		return nil, fmt.Errorf("emit: write %s: %w", c.caps.EmitFile, err)
-	}
+	fmt.Println(string(line))
 	return gostarlark.None, nil
 }
 
