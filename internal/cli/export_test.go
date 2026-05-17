@@ -7,6 +7,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ExportComputeToInstall exposes computeToInstall for tests.
+var ExportComputeToInstall = computeToInstall
+
+// ExportComputeToUninstall exposes computeToUninstall for tests.
+var ExportComputeToUninstall = computeToUninstall
+
+// ExportComputeNewInstalled exposes computeNewInstalled for tests.
+var ExportComputeNewInstalled = computeNewInstalled
+
+// ExportReadInstalledLock exposes readInstalledLock for tests.
+var ExportReadInstalledLock = readInstalledLock
+
+// ExportWriteInstalledLock exposes writeInstalledLock for tests.
+var ExportWriteInstalledLock = writeInstalledLock
+
 // ExportDefaultConfigDir exposes defaultConfigDir for tests.
 var ExportDefaultConfigDir = defaultConfigDir
 

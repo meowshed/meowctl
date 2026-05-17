@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/meowshed/meowctl/internal/modfile"
 	"github.com/spf13/cobra"
@@ -139,18 +140,7 @@ func splitLines(s string) []string {
 	if s == "" {
 		return nil
 	}
-	lines := make([]string, 0)
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
+	return strings.Split(strings.TrimSuffix(s, "\n"), "\n")
 }
 
 func newSetupCmd() *cobra.Command {

@@ -110,22 +110,13 @@ func computeToInstall(allOrder []lifecycle.ComponentID, installedSet, scopeSet m
 }
 
 // computeToUninstall returns the components to uninstall: installed \ declared, for full reconcile.
-func computeToUninstall(allOrder []lifecycle.ComponentID, declaredSet, installedSet map[string]bool, installedComponents []string) []lifecycle.ComponentID {
+// allOrder contains only declared components (and their synthetic deps, which are also in declaredSet),
+// so any installed component absent from declaredSet cannot be found by walking allOrder — we
+// must walk installedComponents directly.
+func computeToUninstall(_ []lifecycle.ComponentID, declaredSet, _ map[string]bool, installedComponents []string) []lifecycle.ComponentID {
 	var toUninstall []lifecycle.ComponentID
-	// Walk declared order in reverse for uninstall ordering.
-	for i := len(allOrder) - 1; i >= 0; i-- {
-		id := allOrder[i]
-		if installedSet[id] && !declaredSet[id] {
-			toUninstall = append(toUninstall, id)
-		}
-	}
-	// Also catch installed components not present in declared order at all.
-	uninstallSeen := make(map[string]bool, len(toUninstall))
-	for _, id := range toUninstall {
-		uninstallSeen[id] = true
-	}
 	for _, name := range installedComponents {
-		if !declaredSet[name] && !uninstallSeen[name] {
+		if !declaredSet[name] {
 			toUninstall = append(toUninstall, name)
 		}
 	}
@@ -168,8 +159,8 @@ func computeNewInstalled(scoped bool, allOrder []lifecycle.ComponentID, installe
 	if scoped {
 		return mergeInstalledAfterApply(installedSet, toInstall)
 	}
-	newInstalled := make([]string, len(allOrder))
-	copy(newInstalled, allOrder)
+	newInstalled := make([]string, 0, len(allOrder))
+	newInstalled = append(newInstalled, allOrder...)
 	return newInstalled
 }
 

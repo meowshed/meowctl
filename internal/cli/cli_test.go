@@ -235,6 +235,132 @@ func TestLockShowCmd_MissingFile(t *testing.T) {
 	}
 }
 
+// TestComputeToInstall_FullSet installs all declared components when none are installed.
+func TestComputeToInstall_FullSet(t *testing.T) {
+	order := []string{"brew", "shell", "git"}
+	installed := map[string]bool{}
+	scope := map[string]bool{}
+	result := cli.ExportComputeToInstall(order, installed, scope, false)
+	if len(result) != 3 {
+		t.Fatalf("want 3 to install, got %d: %v", len(result), result)
+	}
+}
+
+// TestComputeToInstall_NothingNew returns empty when all declared are already installed.
+func TestComputeToInstall_NothingNew(t *testing.T) {
+	order := []string{"brew", "shell"}
+	installed := map[string]bool{"brew": true, "shell": true}
+	scope := map[string]bool{}
+	result := cli.ExportComputeToInstall(order, installed, scope, false)
+	if len(result) != 0 {
+		t.Fatalf("want nothing to install, got %v", result)
+	}
+}
+
+// TestComputeToInstall_Scoped installs only components in the scope set.
+func TestComputeToInstall_Scoped(t *testing.T) {
+	order := []string{"brew", "shell", "git"}
+	installed := map[string]bool{}
+	scope := map[string]bool{"git": true}
+	result := cli.ExportComputeToInstall(order, installed, scope, true)
+	if len(result) != 1 || result[0] != "git" {
+		t.Fatalf("want [git], got %v", result)
+	}
+}
+
+// TestComputeToUninstall_RemovedFromInstalled returns components installed but not declared.
+func TestComputeToUninstall_RemovedFromInstalled(t *testing.T) {
+	// "old-tool" is installed but not declared — should be uninstalled.
+	order := []string{"brew", "shell"}
+	declared := map[string]bool{"brew": true, "shell": true}
+	installed := map[string]bool{"brew": true, "shell": true, "old-tool": true}
+	installedList := []string{"brew", "shell", "old-tool"}
+	result := cli.ExportComputeToUninstall(order, declared, installed, installedList)
+	if len(result) != 1 || result[0] != "old-tool" {
+		t.Fatalf("want [old-tool], got %v", result)
+	}
+}
+
+// TestComputeToUninstall_NothingToRemove returns empty when installed == declared.
+func TestComputeToUninstall_NothingToRemove(t *testing.T) {
+	order := []string{"brew", "shell"}
+	declared := map[string]bool{"brew": true, "shell": true}
+	installed := map[string]bool{"brew": true, "shell": true}
+	installedList := []string{"brew", "shell"}
+	result := cli.ExportComputeToUninstall(order, declared, installed, installedList)
+	if len(result) != 0 {
+		t.Fatalf("want nothing to uninstall, got %v", result)
+	}
+}
+
+// TestComputeNewInstalled_FullApply returns allOrder as the new installed list.
+func TestComputeNewInstalled_FullApply(t *testing.T) {
+	allOrder := []string{"brew", "shell", "git"}
+	installed := map[string]bool{"brew": true}
+	toInstall := []string{"shell", "git"}
+	result := cli.ExportComputeNewInstalled(false, allOrder, installed, toInstall)
+	if len(result) != 3 {
+		t.Fatalf("want 3 installed, got %d: %v", len(result), result)
+	}
+}
+
+// TestComputeNewInstalled_ScopedApply merges newly installed into existing installed set.
+func TestComputeNewInstalled_ScopedApply(t *testing.T) {
+	allOrder := []string{"brew", "shell", "git"}
+	installed := map[string]bool{"brew": true}
+	toInstall := []string{"shell"}
+	result := cli.ExportComputeNewInstalled(true, allOrder, installed, toInstall)
+	// brew + shell; git not included (not in toInstall and not scoped)
+	resultSet := make(map[string]bool, len(result))
+	for _, r := range result {
+		resultSet[r] = true
+	}
+	if !resultSet["brew"] || !resultSet["shell"] {
+		t.Fatalf("want brew and shell in result, got %v", result)
+	}
+	if resultSet["git"] {
+		t.Fatalf("git should not be in result, got %v", result)
+	}
+}
+
+// TestInstalledLock_RoundTrip verifies write then read produces the same components.
+func TestInstalledLock_RoundTrip(t *testing.T) {
+	tmp := t.TempDir()
+	components := []string{"git", "brew", "shell"}
+	if err := cli.ExportWriteInstalledLock(tmp, components); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	il, err := cli.ExportReadInstalledLock(tmp)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	// writeInstalledLock sorts; verify all names present
+	if len(il.Components) != 3 {
+		t.Fatalf("want 3 components, got %d: %v", len(il.Components), il.Components)
+	}
+	got := make(map[string]bool, len(il.Components))
+	for _, c := range il.Components {
+		got[c] = true
+	}
+	for _, want := range components {
+		if !got[want] {
+			t.Fatalf("missing component %q in lock: %v", want, il.Components)
+		}
+	}
+}
+
+// TestInstalledLock_MissingFile returns empty lock without error.
+func TestInstalledLock_MissingFile(t *testing.T) {
+	tmp := t.TempDir()
+	il, err := cli.ExportReadInstalledLock(tmp)
+	if err != nil {
+		t.Fatalf("unexpected error for missing file: %v", err)
+	}
+	if len(il.Components) != 0 {
+		t.Fatalf("want empty components, got %v", il.Components)
+	}
+}
+
 // TestLoadComponents_Uninstall_SyntheticDepsExcluded verifies that synthetic
 // (auto-discovered) transitive deps are included in the install-path order but
 // excluded from the uninstall-path order. This prevents PM components like brew

@@ -63,7 +63,7 @@ func RemoveComponent(path, name string) error {
 	}
 
 	// Pattern: component("<name>") with optional whitespace, whole line.
-	pat := regexp.MustCompile(`(?m)^[ \t]*component\(` + regexp.QuoteMeta(`"`+name+`"`) + `\)[ \t]*\n?`)
+	pat := regexp.MustCompile(`(?m)^[ \t]*component\("` + regexp.QuoteMeta(name) + `"\)[ \t]*\n?`)
 	if !pat.Match(data) {
 		return fmt.Errorf("rewrite: component %q not found in %s", name, path)
 	}
