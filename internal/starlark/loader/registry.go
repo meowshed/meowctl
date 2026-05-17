@@ -33,6 +33,11 @@ type indexEntry struct {
 	Versions []string `toml:"versions"`
 	// Source is a URL template for the tarball. {name} and {version} are replaced.
 	Source string `toml:"source"`
+	// Integrity maps version strings to their sha384 SRI hashes.
+	// When present for a version, the loader verifies the downloaded tarball
+	// against this hash before extracting. Missing entries are silently skipped
+	// (backwards-compatible with modules that predate per-version integrity).
+	Integrity map[string]string `toml:"integrity"`
 }
 
 // registryIndex is the top-level structure of index.toml.
@@ -238,33 +243,47 @@ func (l *RegistryLoader) resolveVersion(name string) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("resolved module %q not found in registry index", mod.Name)
 		}
-		source := buildSourceURL(modEntry.Source, mod.Name, mod.Version)
-		cacheDir := l.moduleCacheDir(mod.Name, mod.Version)
-
-		// Use the SRI sidecar written by Required() if the cache is already populated,
-		// avoiding a redundant tarball download for modules fetched during MVS traversal.
-		integ, sriErr := readSRISidecar(cacheDir)
-		if sriErr != nil {
-			// Cache missing or sidecar absent — download the tarball to get the SRI.
-			tarball, fetchErr := l.fetchTarball(source)
-			if fetchErr != nil {
-				return "", fmt.Errorf("fetch tarball for %s@%s: %w", mod.Name, mod.Version, fetchErr)
-			}
-			integ = computeSRI(tarball)
-			if _, statErr := os.Stat(cacheDir); statErr != nil {
-				if extractErr := l.extractTarball(tarball, cacheDir); extractErr != nil {
-					return "", fmt.Errorf("extract tarball for %s@%s: %w", mod.Name, mod.Version, extractErr)
-				}
-			}
-			// Write the sidecar so future runs skip the re-download.
-			_ = writeSRISidecar(cacheDir, integ)
-		}
-		if writeErr := l.writeLockEntry(mod.Name, mod.Version, source, integ); writeErr != nil {
-			// Non-fatal: modules are cached; next run will re-resolve.
-			fmt.Fprintf(os.Stderr, "meowctl: warning: could not write lock entry for %s@%s: %v\n", mod.Name, mod.Version, writeErr)
+		if err := l.cacheAndLockModule(mod.Name, mod.Version, modEntry); err != nil {
+			return "", err
 		}
 	}
 	return buildList[0].Version, nil
+}
+
+// cacheAndLockModule downloads (if necessary), integrity-checks, extracts, and
+// locks a single module version. It is called for every entry in the MVS build
+// list during resolveVersion.
+func (l *RegistryLoader) cacheAndLockModule(name, version string, entry indexEntry) error {
+	source := buildSourceURL(entry.Source, name, version)
+	cacheDir := l.moduleCacheDir(name, version)
+
+	// Use the SRI sidecar written by Required() if the cache is already populated,
+	// avoiding a redundant tarball download for modules fetched during MVS traversal.
+	integ, sriErr := readSRISidecar(cacheDir)
+	if sriErr != nil {
+		// Cache missing or sidecar absent — download the tarball to get the SRI.
+		tarball, fetchErr := l.fetchTarball(source)
+		if fetchErr != nil {
+			return fmt.Errorf("fetch tarball for %s@%s: %w", name, version, fetchErr)
+		}
+		// If the index carries a per-version integrity hash, verify before extracting.
+		if verifyErr := checkIndexIntegrity(entry, version, tarball); verifyErr != nil {
+			return fmt.Errorf("resolve: SRI mismatch for %s@%s (index integrity): %w", name, version, verifyErr)
+		}
+		integ = computeSRI(tarball)
+		if _, statErr := os.Stat(cacheDir); statErr != nil {
+			if extractErr := l.extractTarball(tarball, cacheDir); extractErr != nil {
+				return fmt.Errorf("extract tarball for %s@%s: %w", name, version, extractErr)
+			}
+		}
+		// Write the sidecar so future runs skip the re-download.
+		_ = writeSRISidecar(cacheDir, integ)
+	}
+	if writeErr := l.writeLockEntry(name, version, source, integ); writeErr != nil {
+		// Non-fatal: modules are cached; next run will re-resolve.
+		fmt.Fprintf(os.Stderr, "meowctl: warning: could not write lock entry for %s@%s: %v\n", name, version, writeErr)
+	}
+	return nil
 }
 
 // runMVS resolves the full build list for name using Minimal Version Selection.
@@ -450,6 +469,17 @@ func readSRISidecar(cacheDir string) (string, error) {
 	return string(data), nil
 }
 
+// checkIndexIntegrity verifies tarball against the index's per-version SRI hash
+// for the given entry and version. It is a no-op when no hash is recorded for
+// the version (backwards-compatible with modules that predate per-version integrity).
+func checkIndexIntegrity(entry indexEntry, version string, tarball []byte) error {
+	expected, ok := entry.Integrity[version]
+	if !ok || expected == "" {
+		return nil
+	}
+	return checkSRI(expected, tarball)
+}
+
 // writeLockEntry persists a ModuleEntry to the lock file.
 func (l *RegistryLoader) writeLockEntry(name, version, source, integrity string) error {
 	lf, err := lock.Read(l.LockPath)
@@ -569,6 +599,10 @@ func (l *RegistryLoader) resolveDepVersion(modName, reqVersion string, entry ind
 		tarball, fetchErr := l.fetchTarball(source)
 		if fetchErr != nil {
 			return "", "", "", fmt.Errorf("sync: fetch %s@%s: %w", modName, version, fetchErr)
+		}
+		// If the index carries a per-version integrity hash, verify before extracting.
+		if verifyErr := checkIndexIntegrity(entry, version, tarball); verifyErr != nil {
+			return "", "", "", fmt.Errorf("sync: SRI mismatch for %s@%s (index integrity): %w", modName, version, verifyErr)
 		}
 		integ = computeSRI(tarball)
 		if _, statErr := os.Stat(cacheDir); statErr != nil {
