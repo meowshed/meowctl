@@ -585,21 +585,6 @@ func TestParseGitHubSource_Invalid(t *testing.T) {
 
 // --- SyncModules GitHub source dep tests ---
 
-// newTestRegistryLoaderWithGitHubAPI creates a RegistryLoader with overridden
-// GitHub API base and registry index URL for testing.
-func newTestRegistryLoaderWithGitHubAPI(
-	t *testing.T,
-	cacheDir, lockPath string,
-	githubAPIBase string,
-) *loader.RegistryLoader {
-	t.Helper()
-	return &loader.RegistryLoader{
-		CacheDir:      filepath.Join(cacheDir, "modules"),
-		LockPath:      lockPath,
-		GitHubAPIBase: githubAPIBase,
-	}
-}
-
 // TestSyncModules_GitHubSourceDep verifies that a dep with source="github:owner/repo@ref"
 // resolves the commit SHA via the GitHub API, downloads the tarball, and writes
 // the lock entry with CommitSHA set.
