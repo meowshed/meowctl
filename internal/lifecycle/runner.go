@@ -11,27 +11,39 @@ import (
 	"github.com/meowshed/meowctl/internal/tui"
 )
 
-// Phase identifies one of the 9 meowctl lifecycle phases.
+// Phase identifies one of the meowctl lifecycle phases.
 type Phase string
 
-// Phase constants define the 9 lifecycle phases in execution order.
+// Phase constants define the 12 command-scoped lifecycle phases.
 const (
-	PhaseBootstrap Phase = "bootstrap"
-	PhaseInit      Phase = "init"
-	PhaseInstall   Phase = "install"
-	PhaseUpdate    Phase = "update"
-	PhaseSetup     Phase = "setup"
-	PhaseLogin     Phase = "login"
-	PhaseShell     Phase = "shell"
-	PhaseUninstall Phase = "uninstall"
-	PhaseVerify    Phase = "verify"
+	// install phases
+	PhaseInstallCheck     Phase = "install_check"
+	PhaseInstall          Phase = "install"
+	PhaseInstallConfigure Phase = "install_configure"
+
+	// upgrade phases
+	PhaseUpgradeCheck     Phase = "upgrade_check"
+	PhaseUpgrade          Phase = "upgrade"
+	PhaseUpgradeConfigure Phase = "upgrade_configure"
+
+	// uninstall phases
+	PhaseUninstallCheck   Phase = "uninstall_check"
+	PhaseUninstall        Phase = "uninstall"
+	PhaseUninstallCleanup Phase = "uninstall_cleanup"
+
+	// hook phases (runtime — emit to stdout)
+	PhaseShell Phase = "shell"
+	PhaseLogin Phase = "login"
+
+	// verify phase
+	PhaseVerify Phase = "verify"
 )
 
 // Phase sets define the ordered phases for each top-level command.
 var (
-	PhaseSetInstall   = []Phase{PhaseBootstrap, PhaseInit, PhaseInstall, PhaseSetup, PhaseLogin, PhaseShell}
-	PhaseSetUpdate    = []Phase{PhaseUpdate, PhaseSetup, PhaseLogin, PhaseShell}
-	PhaseSetUninstall = []Phase{PhaseUninstall}
+	PhaseSetInstall   = []Phase{PhaseInstallCheck, PhaseInstall, PhaseInstallConfigure}
+	PhaseSetUpgrade   = []Phase{PhaseUpgradeCheck, PhaseUpgrade, PhaseUpgradeConfigure}
+	PhaseSetUninstall = []Phase{PhaseUninstallCheck, PhaseUninstall, PhaseUninstallCleanup}
 	PhaseSetVerify    = []Phase{PhaseVerify}
 )
 

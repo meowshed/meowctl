@@ -46,14 +46,10 @@ type Capabilities struct {
 	// pass-1 component evaluation. May be nil if no PM components were loaded.
 	PMRegistry *pkg.PMRegistry
 	// RuntimeHook is true when ctx is running inside meowctl hook <phase>
-	// rather than during install-time lifecycle execution. When true, ctx.emit
-	// writes to stdout so the shell can eval the output.
+	// (set by runtimeHookCaller for phases in validHookPhases: shell, login).
+	// When true, ctx.emit writes to stdout so the shell can eval the output.
+	// When false, ctx.emit is a no-op.
 	RuntimeHook bool
-	// EmitFile is the absolute path of the shell init file that ctx.emit
-	// appends to during install-time execution. Empty string disables file
-	// writing (emit becomes a no-op outside shell/login phases or under
-	// dry-run). Ignored when RuntimeHook is true.
-	EmitFile string
 	// Log is the function used for ctx.log() output. Defaults to fmt.Println.
 	Log func(msg string)
 	// RunFunc, if non-nil, is called by ctx.run() instead of exec.CommandContext.
