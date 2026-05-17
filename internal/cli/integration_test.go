@@ -20,6 +20,7 @@ import (
 
 	"github.com/meowshed/meowctl/internal/cli"
 	"github.com/meowshed/meowctl/internal/lifecycle"
+	"github.com/meowshed/meowctl/internal/lock"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
 )
 
@@ -222,11 +223,20 @@ component("@meowctl-stdlib//components/git")
 	}
 
 	// Locate the extracted tarball in the default cache.
+	// Read the resolved version from the lock file — avoids hardcoding the version.
+	lf, err := lock.Read(filepath.Join(configDir, "meowctl.lock"))
+	if err != nil {
+		t.Fatalf("read lock file: %v", err)
+	}
+	stdlibEntry, ok := lf.Modules["meowctl-stdlib"]
+	if !ok {
+		t.Fatal("meowctl-stdlib not found in lock file after resolution")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatalf("UserHomeDir: %v", err)
 	}
-	bundleDir := filepath.Join(home, ".cache", "meowctl", "modules", "meowctl-stdlib", "0.1.0", "bundles")
+	bundleDir := filepath.Join(home, ".cache", "meowctl", "modules", "meowctl-stdlib", stdlibEntry.Version, "bundles")
 	if _, err := os.Stat(bundleDir); err != nil {
 		t.Fatalf("bundle dir not found in cache (%s): %v", bundleDir, err)
 	}
