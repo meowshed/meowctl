@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -62,7 +63,7 @@ func runBootstrap(configDir, repoURL string, force bool) error {
 
 	// Run dep sync (resolve deps.mod → deps.lock); skip if deps.lock already present.
 	lockPath := filepath.Join(configDir, configLockFile)
-	if _, err := os.Lstat(lockPath); os.IsNotExist(err) {
+	if _, err := os.Lstat(lockPath); errors.Is(err, os.ErrNotExist) {
 		fmt.Println("meowctl: running dep sync")
 		if err := runSync(configDir); err != nil {
 			return fmt.Errorf("init: dep sync: %w", err)

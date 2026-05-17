@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -76,7 +77,7 @@ func writeInstalledLock(configDir string, components []string) error {
 func readPkgsLock(configDir, filename string) (lock.LockFile, error) {
 	path := filepath.Join(configDir, filename)
 	var lf lock.LockFile
-	if _, err := os.Lstat(path); os.IsNotExist(err) {
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
 		return lf, nil
 	}
 	if _, err := toml.DecodeFile(path, &lf); err != nil { // #nosec G304

@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -181,5 +182,59 @@ func TestAppendPkgsLock_UpdatesExistingEntry(t *testing.T) {
 	lf, _ := readPkgsLock(tmp, configPkgsLockFile)
 	if lf.Packages["brew"]["git"].Requested != "2.40.0" {
 		t.Errorf("expected updated Requested=2.40.0, got %q", lf.Packages["brew"]["git"].Requested)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// checkModuleDeclared
+// ---------------------------------------------------------------------------
+
+func TestCheckModuleDeclared_BareNameAlwaysOK(t *testing.T) {
+	tmp := t.TempDir()
+	// Bare names (no "@") need no module declaration.
+	if err := checkModuleDeclared(tmp, "mycomp"); err != nil {
+		t.Fatalf("bare component name should not require module declaration, got: %v", err)
+	}
+}
+
+func TestCheckModuleDeclared_DeclaredInShared(t *testing.T) {
+	tmp := t.TempDir()
+	writeModfileRaw(t, filepath.Join(tmp, configModFile), `dep(name = "myplugin", version = "0.1.0")`)
+
+	if err := checkModuleDeclared(tmp, "@myplugin//comp/foo"); err != nil {
+		t.Fatalf("module declared in deps.mod should pass, got: %v", err)
+	}
+}
+
+func TestCheckModuleDeclared_DeclaredInLocal(t *testing.T) {
+	tmp := t.TempDir()
+	writeModfileRaw(t, filepath.Join(tmp, configLocalModFile), `dep(name = "myplugin", version = "0.1.0")`)
+
+	if err := checkModuleDeclared(tmp, "@myplugin//comp/foo"); err != nil {
+		t.Fatalf("module declared in deps.local.mod should pass, got: %v", err)
+	}
+}
+
+func TestCheckModuleDeclared_UndeclaredModule_Error(t *testing.T) {
+	tmp := t.TempDir()
+	writeModfileRaw(t, filepath.Join(tmp, configModFile), `dep(name = "other", version = "0.1.0")`)
+
+	err := checkModuleDeclared(tmp, "@myplugin//comp/foo")
+	if err == nil {
+		t.Fatal("expected error for undeclared module, got nil")
+	}
+	if !strings.Contains(err.Error(), "myplugin") {
+		t.Errorf("expected module name in error, got: %v", err)
+	}
+}
+
+// writeModfileRaw writes raw Starlark content to path, creating parent dirs as needed.
+func writeModfileRaw(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("writeModfileRaw: mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(content+"\n"), 0o600); err != nil { // #nosec G306
+		t.Fatalf("writeModfileRaw: write: %v", err)
 	}
 }
