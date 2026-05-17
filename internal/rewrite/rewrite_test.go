@@ -38,6 +38,9 @@ dep(name = "owner-repo", version = "v1.0.0")
 	if !contains(got, `version = "v1.2.3"`) {
 		t.Errorf("expected updated version in:\n%s", got)
 	}
+	if contains(got, `version = "v1.0.0"`) {
+		t.Errorf("old version still present in:\n%s", got)
+	}
 }
 
 func TestSetDepVersion_NotFound(t *testing.T) {

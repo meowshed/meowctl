@@ -16,6 +16,9 @@ import (
 // The substitution targets the first dep() line whose name matches moduleName
 // and replaces its version value with newVersion.
 //
+// NOTE: dep() declarations must use canonical kwarg order — name before version —
+// as emitted by [Write]. Manually authored files with reversed kwarg order are not matched.
+//
 // Returns an error if no matching dep declaration is found.
 func SetDepVersion(path, moduleName, newVersion string) error {
 	data, err := os.ReadFile(path) // #nosec G304 -- caller-controlled path; modfile is trusted config
