@@ -161,6 +161,9 @@ type starlarkHookCaller struct {
 	pmRegistry    *pkg.PMRegistry
 	loader        *loader.CompositeLoader // may be nil for bare-name only configs
 	urlComponents map[string]string       // logical name → original URL for URL-named components
+	// pkgsPins records packages dispatched during install/upgrade per component.
+	// Key is the component logical name; value is the list of PkgDecls dispatched.
+	pkgsPins map[string][]starlarkpkg.PkgDecl
 }
 
 // CallHook evaluates the component's Starlark file and calls the named hook.
@@ -219,6 +222,12 @@ func (h *starlarkHookCaller) callHookFromFile(componentID, componentFile, hookNa
 	if err := dispatchPackages(hookName, result.Declarations.Packages, h.pmRegistry, ctxVal); err != nil {
 		return fmt.Errorf("component %s pkg dispatch: %w", componentID, err)
 	}
+	if (hookName == "install" || hookName == "upgrade") && len(result.Declarations.Packages) > 0 {
+		if h.pkgsPins == nil {
+			h.pkgsPins = make(map[string][]starlarkpkg.PkgDecl)
+		}
+		h.pkgsPins[componentID] = append(h.pkgsPins[componentID], result.Declarations.Packages...)
+	}
 	return callExtensionHook(h.configDir, componentID, hookName, caps, h.eval)
 }
 
@@ -274,6 +283,12 @@ func (h *starlarkHookCaller) callHookFromURL(componentID, moduleURL, hookName st
 	// Use pkg() declarations collected during module loading for dispatch.
 	if err := dispatchPackages(hookName, acc.Packages, h.pmRegistry, ctxVal); err != nil {
 		return fmt.Errorf("component %s pkg dispatch: %w", componentID, err)
+	}
+	if (hookName == "install" || hookName == "upgrade") && len(acc.Packages) > 0 {
+		if h.pkgsPins == nil {
+			h.pkgsPins = make(map[string][]starlarkpkg.PkgDecl)
+		}
+		h.pkgsPins[componentID] = append(h.pkgsPins[componentID], acc.Packages...)
 	}
 	return callExtensionHook(h.configDir, componentID, hookName, caps, h.eval)
 }
@@ -765,12 +780,39 @@ func newUpgradeCmd(gf *globalFlags) *cobra.Command {
 				return err
 			}
 			cfg.ConfigDir = configDir
-			return runLifecyclePhaseSet("upgrade", lifecycle.PhaseSetUpgrade, cfg, args)
+			return runUpgradeWithPkgsLock(cfg, args)
 		},
 	}
 	addLifecycleFlags(cmd, &cfg)
 	addInstallFlags(cmd, &cfg)
 	return cmd
+}
+
+// runUpgradeWithPkgsLock runs the upgrade phase set and writes updated package versions
+// to pkgs.lock (shared components) and pkgs.local.lock (local components).
+func runUpgradeWithPkgsLock(cfg runConfig, filter []string) error {
+	order, pmReg, urlMap, err := loadComponentsWithDeps(cfg.ConfigDir, filter, true)
+	if err != nil {
+		return err
+	}
+	caller, err := runLifecyclePhaseSetOrderedWithCaller("upgrade", lifecycle.PhaseSetUpgrade, cfg, order, pmReg, urlMap)
+	if err != nil {
+		return err
+	}
+	if caller != nil && len(caller.pkgsPins) > 0 {
+		_, localNames, loadErr := loadDeclaredNames(cfg.ConfigDir)
+		if loadErr != nil {
+			return loadErr
+		}
+		localSet := make(map[string]bool, len(localNames))
+		for _, n := range localNames {
+			localSet[n] = true
+		}
+		if err := appendPkgsLock(cfg.ConfigDir, caller.pkgsPins, localSet); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func newVerifyCmd(gf *globalFlags) *cobra.Command {
@@ -807,13 +849,20 @@ func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, 
 // component order, PMRegistry, and URL map. Used by apply to avoid redundant
 // config reloads when install and uninstall phases share context.
 func runLifecyclePhaseSetOrdered(name string, phases []lifecycle.Phase, cfg runConfig, order []lifecycle.ComponentID, pmReg *pkg.PMRegistry, urlMap map[string]string) error {
+	_, err := runLifecyclePhaseSetOrderedWithCaller(name, phases, cfg, order, pmReg, urlMap)
+	return err
+}
+
+// runLifecyclePhaseSetOrderedWithCaller is like runLifecyclePhaseSetOrdered but
+// also returns the hook caller so callers can access pkgsPins after the run.
+func runLifecyclePhaseSetOrderedWithCaller(name string, phases []lifecycle.Phase, cfg runConfig, order []lifecycle.ComponentID, pmReg *pkg.PMRegistry, urlMap map[string]string) (*starlarkHookCaller, error) {
 	journalPath := filepath.Join(cfg.ConfigDir, "rollback.jsonl")
 	var stack *rollback.Stack
 	if !cfg.DryRun {
 		var openErr error
 		stack, openErr = rollback.Open(journalPath)
 		if openErr != nil {
-			return fmt.Errorf("cannot open rollback journal: %w", openErr)
+			return nil, fmt.Errorf("cannot open rollback journal: %w", openErr)
 		}
 		defer func() { _ = stack.Close() }()
 	}
@@ -828,5 +877,5 @@ func runLifecyclePhaseSetOrdered(name string, phases []lifecycle.Phase, cfg runC
 	statePath := filepath.Join(cfg.ConfigDir, "state.toml")
 	sentinel := state.NewManager(statePath)
 	runner := buildRunner(cfg, order, stack, sentinel, w, pmReg, caller)
-	return runner.RunPhaseSet(name, phases)
+	return caller, runner.RunPhaseSet(name, phases)
 }

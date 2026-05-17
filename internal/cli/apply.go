@@ -10,6 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/meowshed/meowctl/internal/lifecycle"
+	"github.com/meowshed/meowctl/internal/lock"
 	"github.com/meowshed/meowctl/internal/pkg"
 	"github.com/meowshed/meowctl/internal/rewrite"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
@@ -66,6 +67,96 @@ func writeInstalledLock(configDir string, components []string) error {
 	if err := os.Rename(tmpPath, path); err != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("write installed.lock: rename: %w", err)
+	}
+	return nil
+}
+
+// readPkgsLock reads <configDir>/<filename> as a lock.LockFile.
+// Returns an empty LockFile (not an error) if the file is absent.
+func readPkgsLock(configDir, filename string) (lock.LockFile, error) {
+	path := filepath.Join(configDir, filename)
+	var lf lock.LockFile
+	if _, err := os.Lstat(path); os.IsNotExist(err) {
+		return lf, nil
+	}
+	if _, err := toml.DecodeFile(path, &lf); err != nil { // #nosec G304
+		return lf, fmt.Errorf("read %s: %w", filename, err)
+	}
+	return lf, nil
+}
+
+// writePkgsLockFile atomically writes a lock.LockFile to <configDir>/<filename>.
+func writePkgsLockFile(configDir, filename string, lf lock.LockFile) error {
+	path := filepath.Join(configDir, filename)
+	tmpPath := path + ".tmp"
+	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) // #nosec G304
+	if err != nil {
+		return fmt.Errorf("write %s: create tmp: %w", filename, err)
+	}
+	if err := toml.NewEncoder(f).Encode(lf); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("write %s: encode: %w", filename, err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("write %s: close: %w", filename, err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("write %s: rename: %w", filename, err)
+	}
+	return nil
+}
+
+// appendPkgsLock merges pkgsPins into pkgs.lock (shared) and pkgs.local.lock (local).
+// localSet contains the logical names of components declared in local.star.
+func appendPkgsLock(configDir string, pkgsPins map[string][]starlarkpkg.PkgDecl, localSet map[string]bool) error {
+	sharedLF, err := readPkgsLock(configDir, configPkgsLockFile)
+	if err != nil {
+		return err
+	}
+	localLF, err := readPkgsLock(configDir, configPkgsLocalLockFile)
+	if err != nil {
+		return err
+	}
+
+	sharedDirty, localDirty := false, false
+	for compName, decls := range pkgsPins {
+		isLocal := localSet[compName]
+		for _, d := range decls {
+			entry := lock.PackageEntry{Requested: d.Version, Installed: d.Version}
+			if isLocal {
+				if localLF.Packages == nil {
+					localLF.Packages = make(map[string]lock.ManagerPackages)
+				}
+				if localLF.Packages[d.Manager] == nil {
+					localLF.Packages[d.Manager] = make(lock.ManagerPackages)
+				}
+				localLF.Packages[d.Manager][d.Name] = entry
+				localDirty = true
+			} else {
+				if sharedLF.Packages == nil {
+					sharedLF.Packages = make(map[string]lock.ManagerPackages)
+				}
+				if sharedLF.Packages[d.Manager] == nil {
+					sharedLF.Packages[d.Manager] = make(lock.ManagerPackages)
+				}
+				sharedLF.Packages[d.Manager][d.Name] = entry
+				sharedDirty = true
+			}
+		}
+	}
+
+	if sharedDirty {
+		if err := writePkgsLockFile(configDir, configPkgsLockFile, sharedLF); err != nil {
+			return err
+		}
+	}
+	if localDirty {
+		if err := writePkgsLockFile(configDir, configPkgsLocalLockFile, localLF); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -141,18 +232,22 @@ func mergeInstalledAfterApply(installedSet map[string]bool, toInstall []lifecycl
 }
 
 // execApplyPhases runs the install and uninstall phase sets for the given component lists.
-func execApplyPhases(cfg runConfig, toInstall, toUninstall []lifecycle.ComponentID, pmReg *pkg.PMRegistry, urlMap map[string]string) error {
+// It returns the install caller (for pkgsPins access) which may be nil if no installs ran.
+func execApplyPhases(cfg runConfig, toInstall, toUninstall []lifecycle.ComponentID, pmReg *pkg.PMRegistry, urlMap map[string]string) (*starlarkHookCaller, error) {
+	var installCaller *starlarkHookCaller
 	if len(toInstall) > 0 {
-		if err := runLifecyclePhaseSetOrdered("install", lifecycle.PhaseSetInstall, cfg, toInstall, pmReg, urlMap); err != nil {
-			return err
+		var err error
+		installCaller, err = runLifecyclePhaseSetOrderedWithCaller("install", lifecycle.PhaseSetInstall, cfg, toInstall, pmReg, urlMap)
+		if err != nil {
+			return nil, err
 		}
 	}
 	if len(toUninstall) > 0 {
 		if err := runLifecyclePhaseSetOrdered("uninstall", lifecycle.PhaseSetUninstall, cfg, toUninstall, pmReg, urlMap); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return installCaller, nil
 }
 
 // computeNewInstalled returns the component list to write to installed.lock after apply.
@@ -208,12 +303,31 @@ func runApply(cfg runConfig, scopeFilter []string) error {
 		return printApplyDryRun(toInstall, toUninstall)
 	}
 
-	if err := execApplyPhases(cfg, toInstall, toUninstall, pmReg, urlMap); err != nil {
+	installCaller, err := execApplyPhases(cfg, toInstall, toUninstall, pmReg, urlMap)
+	if err != nil {
 		return err
 	}
 
 	newInstalled := computeNewInstalled(scoped, allOrder, installedSet, toInstall)
-	return writeInstalledLock(cfg.ConfigDir, newInstalled)
+	if err := writeInstalledLock(cfg.ConfigDir, newInstalled); err != nil {
+		return err
+	}
+
+	// Write pkgs.lock / pkgs.local.lock with pinned package versions for installed components.
+	if installCaller != nil && len(installCaller.pkgsPins) > 0 {
+		_, localNames, err := loadDeclaredNames(cfg.ConfigDir)
+		if err != nil {
+			return err
+		}
+		localSet := make(map[string]bool, len(localNames))
+		for _, n := range localNames {
+			localSet[n] = true
+		}
+		if err := appendPkgsLock(cfg.ConfigDir, installCaller.pkgsPins, localSet); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // printApplyDryRun prints the install/uninstall plan and returns nil.
