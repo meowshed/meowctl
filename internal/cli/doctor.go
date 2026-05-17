@@ -37,22 +37,21 @@ type doctorCheck struct {
 func runDoctor(configDir string, jsonOut bool) error {
 	var checks []doctorCheck
 
-	// Check 1: meowctl.star exists.
-	starPath := filepath.Join(configDir, "meowctl.star")
+	// Check 1: init.star exists.
+	starPath := filepath.Join(configDir, configEntryFile)
 	if _, _, _, err := loadComponentsWithDeps(configDir, nil, true); err != nil {
-		checks = append(checks, doctorCheck{"meowctl.star", "error", err.Error()})
+		checks = append(checks, doctorCheck{"init.star", "error", err.Error()})
 	} else {
-		checks = append(checks, doctorCheck{"meowctl.star", "ok", starPath})
+		checks = append(checks, doctorCheck{"init.star", "ok", starPath})
 	}
 
-	// Check 2: lock file readable.
-	lockPath := filepath.Join(configDir, "meowctl.lock")
+	// Check 2: deps.lock readable.
+	lockPath := filepath.Join(configDir, configLockFile)
 	if lf, err := lock.Read(lockPath); err != nil {
 		checks = append(checks, doctorCheck{"lock-file", "warn", fmt.Sprintf("not found or unreadable: %v", err)})
 	} else {
 		checks = append(checks, doctorCheck{"lock-file", "ok", fmt.Sprintf("%d module(s)", len(lf.Modules))})
 	}
-
 	// Check 3: sentinel state readable.
 	statePath := filepath.Join(configDir, "state.toml")
 	sm := state.NewManager(statePath)
