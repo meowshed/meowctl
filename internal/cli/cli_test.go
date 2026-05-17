@@ -238,3 +238,50 @@ func TestLockShowCmd_MissingFile(t *testing.T) {
 		t.Fatalf("lock show on missing file should not error, got: %v", err)
 	}
 }
+
+// TestLoadComponents_Uninstall_SyntheticDepsExcluded verifies that synthetic
+// (auto-discovered) transitive deps are included in the install-path order but
+// excluded from the uninstall-path order. This prevents PM components like brew
+// or mise from running their own uninstall hooks when only a dependent tool is
+// being uninstalled.
+func TestLoadComponents_Uninstall_SyntheticDepsExcluded(t *testing.T) {
+	tmp := t.TempDir()
+	// "tool" declares an after= dep on "pm", but "pm" is NOT declared in meowctl.star.
+	// "pm" is therefore synthetic — auto-discovered by expandWithFileDeps.
+	star := `
+module(name="test", version="0.1.0")
+component("tool", after=["pm"])
+`
+	if err := os.WriteFile(filepath.Join(tmp, "meowctl.star"), []byte(star), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Install path: synthetic dep "pm" must appear before "tool".
+	installIDs, err := cli.ExportLoadComponents(tmp, nil)
+	if err != nil {
+		t.Fatalf("install path: unexpected error: %v", err)
+	}
+	foundPM := false
+	for _, id := range installIDs {
+		if id == "pm" {
+			foundPM = true
+		}
+	}
+	if !foundPM {
+		t.Fatalf("install path: expected synthetic dep 'pm' in order, got %v", installIDs)
+	}
+
+	// Uninstall path: synthetic dep "pm" must NOT appear — only declared "tool".
+	uninstallIDs, err := cli.ExportLoadComponentsForUninstall(tmp, nil)
+	if err != nil {
+		t.Fatalf("uninstall path: unexpected error: %v", err)
+	}
+	for _, id := range uninstallIDs {
+		if id == "pm" {
+			t.Fatalf("uninstall path: synthetic dep 'pm' must not appear in order, got %v", uninstallIDs)
+		}
+	}
+	if len(uninstallIDs) != 1 || uninstallIDs[0] != "tool" {
+		t.Fatalf("uninstall path: expected only ['tool'], got %v", uninstallIDs)
+	}
+}

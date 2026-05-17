@@ -327,11 +327,11 @@ func envMap() map[string]string {
 // Replace directives are read from <configDir>/meowctl.mod automatically.
 // Returns the topo-sorted component IDs (logical names) and a PMRegistry.
 //
-// runDepsHooks controls whether synthetic (auto-discovered) dependency components
+// runSyntheticHooks controls whether synthetic (auto-discovered) dependency components
 // run their own lifecycle hooks. Pass true for install/upgrade (deps should install
 // themselves first), false for uninstall (only the declared components are uninstalled,
 // not their shared PM dependencies like brew or mise).
-func loadComponentsWithDeps(configDir string, filter []string, runDepsHooks bool) ([]lifecycle.ComponentID, *pkg.PMRegistry, map[string]string, error) {
+func loadComponentsWithDeps(configDir string, filter []string, runSyntheticHooks bool) ([]lifecycle.ComponentID, *pkg.PMRegistry, map[string]string, error) {
 	starPath := filepath.Join(configDir, "meowctl.star")
 	distro, distroLike := "", ""
 	if runtime.GOOS == "linux" {
@@ -382,7 +382,7 @@ func loadComponentsWithDeps(configDir string, filter []string, runDepsHooks bool
 	// the topo sort for ordering purposes, but should not run their own uninstall
 	// hooks — otherwise uninstalling a single tool would tear down the whole PM.
 	declBase := allDecls
-	if !runDepsHooks {
+	if !runSyntheticHooks {
 		declBase = seed
 	}
 	declIdx := buildDeclIndex(declBase)
@@ -795,8 +795,8 @@ func newVerifyCmd(gf *globalFlags) *cobra.Command {
 func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, filter []string) error {
 	// For uninstall, synthetic deps (PMs like brew/mise) should not run their
 	// own uninstall hooks — they are only needed for ordering.
-	runDepsHooks := name != "uninstall"
-	order, pmReg, urlMap, err := loadComponentsWithDeps(cfg.ConfigDir, filter, runDepsHooks)
+	runSyntheticHooks := name != "uninstall"
+	order, pmReg, urlMap, err := loadComponentsWithDeps(cfg.ConfigDir, filter, runSyntheticHooks)
 	if err != nil {
 		return err
 	}
