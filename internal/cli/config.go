@@ -9,11 +9,17 @@ import (
 // Config file name constants. All file references MUST use these constants;
 // no raw filename string literals are permitted elsewhere.
 const (
-	configEntryFile     = "init.star"
-	configLocalFile     = "local.star"
-	configModFile       = "deps.mod"
-	configLockFile      = "deps.lock"
-	configInstalledFile = "installed.lock"
+	configEntryFile         = "init.star"
+	configLocalFile         = "local.star"
+	configModFile           = "deps.mod"
+	configLockFile          = "deps.lock"
+	configLocalModFile      = "deps.local.mod"
+	configLocalLockFile     = "deps.local.lock"
+	configStateFile         = "state.toml"
+	configInstalledFile     = "installed.lock"
+	configPkgsLockFile      = "pkgs.lock"
+	configPkgsLocalLockFile = "pkgs.local.lock"
+	configHookErrorFile     = ".hook-error"
 )
 
 // defaultConfigDir returns the default meowctl config directory.

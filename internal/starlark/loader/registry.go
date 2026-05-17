@@ -87,6 +87,10 @@ type RegistryLoader struct {
 	// Used in tests to point at a local httptest.Server.
 	// Zero value uses the default production URL.
 	GitHubAPIBase string
+	// GitHubTarballBase overrides the GitHub tarball download base URL
+	// (https://github.com). Used in tests to point at a local httptest.Server.
+	// Zero value uses the default production URL.
+	GitHubTarballBase string
 }
 
 // registryURL is the parsed form of a @name// module URL.
@@ -633,7 +637,19 @@ func (l *RegistryLoader) syncOneDep(dep ModfileDep, replaceIndex map[string]Modf
 
 // syncGitHubDep resolves a GitHub source dep: parses the source string, resolves
 // the ref to a commit SHA, downloads and extracts the tarball, and writes the lock entry.
+// It also reads MODULE.meow from the extracted tarball to resolve transitive deps.
 func (l *RegistryLoader) syncGitHubDep(modName, sourceStr string, modules map[string]lock.ModuleEntry, result *SyncResult) error {
+	return l.syncGitHubDepVisited(modName, sourceStr, modules, result, make(map[string]struct{}))
+}
+
+// syncGitHubDepVisited is the internal implementation of syncGitHubDep that
+// tracks visited module names to prevent infinite recursion on circular MODULE.meow deps.
+func (l *RegistryLoader) syncGitHubDepVisited(modName, sourceStr string, modules map[string]lock.ModuleEntry, result *SyncResult, visited map[string]struct{}) error {
+	if _, seen := visited[modName]; seen {
+		return nil
+	}
+	visited[modName] = struct{}{}
+
 	gs, err := parseGitHubSource(sourceStr)
 	if err != nil {
 		return fmt.Errorf("sync: dep %q: %w", modName, err)
@@ -644,7 +660,7 @@ func (l *RegistryLoader) syncGitHubDep(modName, sourceStr string, modules map[st
 		return fmt.Errorf("sync: dep %q: resolve commit: %w", modName, err)
 	}
 
-	tarballURL := githubTarballURL(gs.owner, gs.repo, commit)
+	tarballURL := githubTarballURLWithBase(l.GitHubTarballBase, gs.owner, gs.repo, commit)
 	cacheDir := l.moduleCacheDir(modName, commit)
 
 	integ, sriErr := readSRISidecar(cacheDir)
@@ -668,6 +684,22 @@ func (l *RegistryLoader) syncGitHubDep(modName, sourceStr string, modules map[st
 		CommitSHA: commit,
 	}
 	result.Resolved[modName] = commit
+
+	// Walk MODULE.meow in the extracted tarball to resolve transitive GitHub deps.
+	transitiveDeps, parseErr := parseModuleMeowGitHub(filepath.Join(cacheDir, "MODULE.meow"))
+	if parseErr != nil {
+		// Non-fatal: a malformed MODULE.meow in a transitive dep should warn, not fail.
+		fmt.Fprintf(os.Stderr, "meowctl: warning: MODULE.meow in %s@%s: %v\n", modName, commit, parseErr)
+		return nil
+	}
+	for _, td := range transitiveDeps {
+		if _, alreadyResolved := modules[td.name]; alreadyResolved {
+			continue
+		}
+		if syncErr := l.syncGitHubDepVisited(td.name, td.source, modules, result, visited); syncErr != nil {
+			return syncErr
+		}
+	}
 	return nil
 }
 
@@ -775,10 +807,13 @@ func parseGitHubSource(s string) (githubSource, error) {
 	return githubSource{owner: owner, repo: repo, ref: ref}, nil
 }
 
-// githubTarballURL returns the GitHub archive URL for the given owner/repo/ref.
-// GitHub serves .tar.gz archives for any ref (tag, branch, or commit SHA) at this URL.
-func githubTarballURL(owner, repo, ref string) string {
-	return fmt.Sprintf("https://github.com/%s/%s/archive/%s.tar.gz", owner, repo, ref)
+// githubTarballURLWithBase returns the GitHub archive URL using the provided base.
+// If base is empty it falls back to https://github.com.
+func githubTarballURLWithBase(base, owner, repo, ref string) string {
+	if base == "" {
+		base = "https://github.com"
+	}
+	return fmt.Sprintf("%s/%s/%s/archive/%s.tar.gz", base, owner, repo, ref)
 }
 
 // resolveGitHubCommit resolves a ref (tag/branch/SHA) to a full commit SHA
@@ -852,12 +887,59 @@ func (r *registryReqs) Max(v1, v2 string) string {
 	return mvs.Max(v1, v2)
 }
 
+// githubDepEntry holds a transitive GitHub dep parsed from MODULE.meow.
+type githubDepEntry struct {
+	name   string
+	source string
+}
+
+// parseModuleMeowGitHub evaluates a MODULE.meow file inside a GitHub dep tarball
+// and returns any dep() declarations that carry a source= kwarg (i.e. transitive
+// GitHub deps). Registry deps (version= only) are ignored here — they follow the
+// normal MVS path and must be in the shared modfile.
+// A missing MODULE.meow is not an error.
+func parseModuleMeowGitHub(path string) ([]githubDepEntry, error) {
+	data, err := os.ReadFile(path) // #nosec G304 -- path constructed from validated cache dir
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read MODULE.meow: %w", err)
+	}
+
+	var deps []githubDepEntry
+	depFn := gostarlark.NewBuiltin("dep", func(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+		var name gostarlark.String
+		var source gostarlark.String
+		// version is allowed but optional here — we only care about source= deps.
+		var version gostarlark.String
+		if err := gostarlark.UnpackArgs("dep", args, kwargs, "name", &name, "version?", &version, "source?", &source); err != nil {
+			return nil, err
+		}
+		if string(source) != "" {
+			deps = append(deps, githubDepEntry{name: string(name), source: string(source)})
+		}
+		return gostarlark.None, nil
+	})
+	moduleFn := gostarlark.NewBuiltin("module", func(_ *gostarlark.Thread, _ *gostarlark.Builtin, _ gostarlark.Tuple, _ []gostarlark.Tuple) (gostarlark.Value, error) {
+		return gostarlark.None, nil
+	})
+	predeclared := gostarlark.StringDict{"dep": depFn, "module": moduleFn}
+
+	thread := &gostarlark.Thread{Name: "MODULE.meow"}
+	opts := &syntax.FileOptions{}
+	if _, err := gostarlark.ExecFileOptions(opts, thread, path, data, predeclared); err != nil {
+		return nil, fmt.Errorf("eval MODULE.meow: %w", err)
+	}
+	return deps, nil
+}
+
 // parseModuleMeow evaluates a MODULE.meow file with only a dep() builtin
 // and returns the declared dependencies. A missing MODULE.meow is not an error
 // (the module has no dependencies).
 func parseModuleMeow(path string) ([]mvs.Module, error) {
 	data, err := os.ReadFile(path) // #nosec G304 -- path is constructed from validated cache dir
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
