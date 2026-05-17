@@ -33,6 +33,7 @@ func newRegistryLoader(configDir string) (*loader.RegistryLoader, error) {
 }
 
 // runSync implements "meowctl dep sync".
+// It syncs both deps.mod → deps.lock and deps.local.mod → deps.local.lock (when present).
 func runSync(configDir string) error {
 	mf, rl, oldLock, err := syncPrepare(configDir)
 	if err != nil {
@@ -46,20 +47,66 @@ func runSync(configDir string) error {
 	}
 
 	changed := changedModules(oldLock.Modules, result.Resolved)
-	if len(changed) == 0 && len(result.ReplacedPaths) == 0 {
+
+	reportSyncResult(oldLock.Modules, result)
+
+	// Sync deps.local.mod → deps.local.lock if the local modfile exists.
+	localChanged, err := runSyncLocal(configDir)
+	if err != nil {
+		return err
+	}
+
+	if len(changed) == 0 && len(result.ReplacedPaths) == 0 && !localChanged {
 		fmt.Println("meowctl: all modules up to date")
 		return nil
 	}
 
-	reportSyncResult(oldLock.Modules, result)
-
-	if len(changed) == 0 {
+	if len(changed) == 0 && !localChanged {
 		return nil
 	}
 
 	fmt.Printf("meowctl: re-running install for %d changed module(s)\n", len(changed))
 	cfg := runConfig{ConfigDir: configDir}
 	return runLifecyclePhaseSet("install", lifecycle.PhaseSetInstall, cfg, nil)
+}
+
+// runSyncLocal syncs deps.local.mod → deps.local.lock when the local modfile exists.
+// Returns true if any local modules changed, false if nothing changed or file absent.
+func runSyncLocal(configDir string) (bool, error) {
+	localModPath := filepath.Join(configDir, configLocalModFile)
+	if _, err := os.Stat(localModPath); os.IsNotExist(err) {
+		return false, nil
+	}
+
+	mf, err := modfile.Parse(localModPath)
+	if err != nil {
+		return false, fmt.Errorf("sync local: %w", err)
+	}
+
+	cd, err := cacheDir()
+	if err != nil {
+		return false, err
+	}
+	localLockPath := filepath.Join(configDir, configLocalLockFile)
+	rl := &loader.RegistryLoader{
+		CacheDir: cd,
+		LockPath: localLockPath,
+	}
+
+	oldLock, err := lock.Read(localLockPath)
+	if err != nil {
+		return false, fmt.Errorf("sync local: read old lock: %w", err)
+	}
+
+	deps, replaces := modfileAdapters(mf)
+	result, err := rl.SyncModules(deps, replaces)
+	if err != nil {
+		return false, fmt.Errorf("sync local: %w", err)
+	}
+
+	changed := changedModules(oldLock.Modules, result.Resolved)
+	reportSyncResult(oldLock.Modules, result)
+	return len(changed) > 0, nil
 }
 
 // syncPrepare loads the modfile, registry loader, and old lock for runSync.
