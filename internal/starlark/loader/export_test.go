@@ -20,3 +20,9 @@ func NewRegistryLoaderForTest(root string, fileOpts *syntax.FileOptions, opts Co
 	cl.registryURL = registryBase
 	return cl
 }
+
+// ParseGitHubSourceForTest exposes parseGitHubSource for external tests.
+func ParseGitHubSourceForTest(s string) (owner, repo, ref string, err error) {
+	gs, err := parseGitHubSource(s)
+	return gs.owner, gs.repo, gs.ref, err
+}
