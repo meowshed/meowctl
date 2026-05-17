@@ -183,7 +183,8 @@ func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
 	return h.callHookFromFile(componentID, componentFile, hookName)
 }
 
-// callHookFromFile evaluates a local .star file and dispatches its hook.
+// callHookFromFile evaluates a local .star file and dispatches its hook,
+// then runs any hooks/<componentID>.star extension hook.
 func (h *starlarkHookCaller) callHookFromFile(componentID, componentFile, hookName string) error {
 	caps := &ctx.Capabilities{
 		DryRun:        h.dryRun,
@@ -214,7 +215,7 @@ func (h *starlarkHookCaller) callHookFromFile(componentID, componentFile, hookNa
 	if err := dispatchPackages(hookName, result.Declarations.Packages, h.pmRegistry, ctxVal); err != nil {
 		return fmt.Errorf("component %s pkg dispatch: %w", componentID, err)
 	}
-	return nil
+	return callExtensionHook(h.configDir, componentID, hookName, caps, h.eval)
 }
 
 // callHookFromURL loads a URL-named component via the CompositeLoader and dispatches its hook.
@@ -270,7 +271,7 @@ func (h *starlarkHookCaller) callHookFromURL(componentID, moduleURL, hookName st
 	if err := dispatchPackages(hookName, acc.Packages, h.pmRegistry, ctxVal); err != nil {
 		return fmt.Errorf("component %s pkg dispatch: %w", componentID, err)
 	}
-	return nil
+	return callExtensionHook(h.configDir, componentID, hookName, caps, h.eval)
 }
 
 // dispatchPackages iterates pkg declarations and calls the appropriate PM handler.

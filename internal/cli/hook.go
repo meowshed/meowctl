@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/meowshed/meowctl/internal/ctx"
 	"github.com/meowshed/meowctl/internal/lifecycle"
 	"github.com/meowshed/meowctl/internal/pkg"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
-	"github.com/meowshed/meowctl/internal/starlark/loader"
 	"github.com/meowshed/meowctl/internal/state"
 	"github.com/meowshed/meowctl/internal/tui"
 	"github.com/spf13/cobra"
@@ -29,7 +27,6 @@ type runtimeHookCaller struct {
 	configDir  string
 	eval       *starlarkpkg.Evaluator
 	pmRegistry *pkg.PMRegistry
-	loader     *loader.CompositeLoader // may be nil
 }
 
 // CallHook executes the component hook and then any hooks/<name>.star extension.
@@ -37,7 +34,8 @@ func (h *runtimeHookCaller) CallHook(componentID, hookName string) error {
 	if err := h.callComponentHook(componentID, hookName); err != nil {
 		return err
 	}
-	return h.callExtensionHook(componentID, hookName)
+	caps := h.buildCaps(componentID, hookName)
+	return callExtensionHook(h.configDir, componentID, hookName, caps, h.eval)
 }
 
 // callComponentHook runs the component's own hook with RuntimeHook=true.
@@ -47,7 +45,8 @@ func (h *runtimeHookCaller) callComponentHook(componentID, hookName string) erro
 		return nil
 	}
 
-	caps := h.buildCaps(componentID, componentFile, hookName)
+	caps := h.buildCaps(componentID, hookName)
+	caps.ComponentDir = filepath.Dir(componentFile)
 	ctxVal := ctx.New(caps)
 	result, err := h.eval.ExecFile(componentFile, nil, nil, ctxVal)
 	if err != nil {
@@ -56,55 +55,21 @@ func (h *runtimeHookCaller) callComponentHook(componentID, hookName string) erro
 	return h.eval.CallHook(result.Globals, hookName, componentFile, ctxVal)
 }
 
-// callExtensionHook runs hooks/<componentID>.star if it exists.
-func (h *runtimeHookCaller) callExtensionHook(componentID, hookName string) error {
-	extFile := filepath.Join(h.configDir, "hooks", componentID+".star")
-	if _, err := os.Lstat(extFile); os.IsNotExist(err) {
-		return nil
-	}
-
-	caps := h.buildCaps(componentID, extFile, hookName)
-	ctxVal := ctx.New(caps)
-	result, err := h.eval.ExecFile(extFile, nil, nil, ctxVal)
-	if err != nil {
-		return fmt.Errorf("extension hook %s: eval: %w", componentID, err)
-	}
-	return h.eval.CallHook(result.Globals, hookName, extFile, ctxVal)
-}
-
-// buildCaps constructs Capabilities for a runtime hook invocation.
-func (h *runtimeHookCaller) buildCaps(componentID, componentFile, hookName string) *ctx.Capabilities {
+// buildCaps constructs base Capabilities for a runtime hook invocation.
+// ComponentDir is not set here; callers override it as appropriate.
+func (h *runtimeHookCaller) buildCaps(componentID, hookName string) *ctx.Capabilities {
 	caps := &ctx.Capabilities{
-		RuntimeHook:  true,
-		ComponentDir: h.resolveComponentDir(componentID, componentFile),
-		Phase:        hookName,
-		Component:    componentID,
-		PMRegistry:   h.pmRegistry,
-		Env:          envMap(),
+		RuntimeHook: true,
+		Phase:       hookName,
+		Component:   componentID,
+		PMRegistry:  h.pmRegistry,
+		Env:         envMap(),
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		caps.Home = home
 		caps.StateDir = filepath.Join(home, ".local", "share", "meowctl", componentID)
 	}
 	return caps
-}
-
-// resolveComponentDir mirrors starlarkHookCaller.resolveComponentDir.
-func (h *runtimeHookCaller) resolveComponentDir(componentID, componentFile string) string {
-	if strings.Contains(componentID, "//") {
-		if h.loader != nil {
-			if dir, err := h.loader.ComponentDir(componentID); err == nil && dir != "" {
-				return dir
-			}
-		}
-		return ""
-	}
-	if h.loader != nil {
-		if dir, err := h.loader.ComponentDir(componentID); err == nil && dir != "" {
-			return dir
-		}
-	}
-	return filepath.Dir(componentFile)
 }
 
 func newHookCmd(gf *globalFlags) *cobra.Command {
@@ -140,9 +105,6 @@ func newHookCmd(gf *globalFlags) *cobra.Command {
 				configDir:  configDir,
 				eval:       &starlarkpkg.Evaluator{},
 				pmRegistry: pmReg,
-				// loader is nil: meowctl hook only executes bare-name local components
-				// from <configDir>/components/. URL-scheme components (github://, @stdlib//)
-				// are loaded during install; their hooks are not re-run at runtime.
 			}
 
 			w := tui.New(os.Stdout)
