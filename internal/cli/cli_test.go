@@ -256,7 +256,6 @@ func TestShellCmd_Unknown(t *testing.T) {
 	}
 }
 
-
 // TestComputeToInstall_FullSet installs all declared components when none are installed.
 func TestComputeToInstall_FullSet(t *testing.T) {
 	order := []string{"brew", "shell", "git"}

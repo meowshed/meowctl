@@ -76,8 +76,44 @@ unless --force is passed.`,
 // runInit scaffolds a meowctl config directory at configDir.
 // If force is true, an existing init.star is removed before scaffolding.
 func runInit(configDir string, force bool) error {
-	// Legacy migration check: if meowctl.star exists but init.star does not,
-	// print clear instructions and exit. Never auto-rename.
+	if err := checkLegacyConfigForInit(configDir); err != nil {
+		return err
+	}
+
+	newEntryPath := filepath.Join(configDir, configEntryFile)
+	if err := guardExistingInitStar(newEntryPath, force); err != nil {
+		return err
+	}
+
+	for _, subdir := range []string{configDir, filepath.Join(configDir, "components"), filepath.Join(configDir, "hooks")} {
+		if err := os.MkdirAll(subdir, 0o700); err != nil {
+			return fmt.Errorf("init: create directory %s: %w", subdir, err)
+		}
+	}
+
+	if err := scaffoldInitStar(configDir); err != nil {
+		return err
+	}
+
+	if err := writeInitStubs(configDir); err != nil {
+		return err
+	}
+
+	// Ensure local files are gitignored.
+	for _, entry := range []string{configLocalFile, configLocalModFile, configLocalLockFile} {
+		if err := ensureGitignore(configDir, entry); err != nil {
+			return fmt.Errorf("init: update .gitignore: %w", err)
+		}
+	}
+
+	fmt.Printf("Dotfiles initialized at %s\n", configDir)
+	fmt.Printf("Edit init.star to declare components, then run 'meowctl apply'.\n")
+	return nil
+}
+
+// checkLegacyConfigForInit returns an error with migration instructions if the legacy meowctl.star
+// is present but init.star is not.
+func checkLegacyConfigForInit(configDir string) error {
 	legacyPath := filepath.Join(configDir, "meowctl.star")
 	newEntryPath := filepath.Join(configDir, configEntryFile)
 	if _, legacyErr := os.Lstat(legacyPath); legacyErr == nil {
@@ -91,8 +127,12 @@ func runInit(configDir string, force bool) error {
 			return exitErrorf(ExitConfig, "legacy config found — see instructions above")
 		}
 	}
+	return nil
+}
 
-	// Guard: init.star already exists.
+// guardExistingInitStar returns an error if init.star already exists and force is false,
+// or removes it when force is true.
+func guardExistingInitStar(newEntryPath string, force bool) error {
 	if _, statErr := os.Lstat(newEntryPath); statErr == nil {
 		if !force {
 			return exitErrorf(ExitConfig, "init.star already exists at %s\n  delete it or run 'meowctl init --force' to overwrite", newEntryPath)
@@ -101,17 +141,11 @@ func runInit(configDir string, force bool) error {
 			return fmt.Errorf("init: remove existing init.star: %w", removeErr)
 		}
 	}
+	return nil
+}
 
-	for _, subdir := range []string{configDir, filepath.Join(configDir, "components"), filepath.Join(configDir, "hooks")} {
-		if err := os.MkdirAll(subdir, 0o700); err != nil {
-			return fmt.Errorf("init: create directory %s: %w", subdir, err)
-		}
-	}
-
-	if err := scaffoldInitStar(configDir); err != nil {
-		return err
-	}
-
+// writeInitStubs writes local.star, deps.mod, and deps.local.mod stubs when they don't exist.
+func writeInitStubs(configDir string) error {
 	// Write local.star stub (gitignored; machine-specific additions).
 	localPath := filepath.Join(configDir, configLocalFile)
 	if _, localStatErr := os.Lstat(localPath); os.IsNotExist(localStatErr) {
@@ -139,16 +173,6 @@ func runInit(configDir string, force bool) error {
 			return fmt.Errorf("init: write deps.local.mod: %w", writeErr)
 		}
 	}
-
-	// Ensure local files are gitignored.
-	for _, entry := range []string{configLocalFile, configLocalModFile, configLocalLockFile} {
-		if err := ensureGitignore(configDir, entry); err != nil {
-			return fmt.Errorf("init: update .gitignore: %w", err)
-		}
-	}
-
-	fmt.Printf("Dotfiles initialized at %s\n", configDir)
-	fmt.Printf("Edit init.star to declare components, then run 'meowctl apply'.\n")
 	return nil
 }
 

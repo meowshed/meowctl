@@ -313,21 +313,24 @@ func runApply(cfg runConfig, scopeFilter []string) error {
 		return err
 	}
 
-	// Write pkgs.lock / pkgs.local.lock with pinned package versions for installed components.
-	if installCaller != nil && len(installCaller.pkgsPins) > 0 {
-		_, localNames, err := loadDeclaredNames(cfg.ConfigDir)
-		if err != nil {
-			return err
-		}
-		localSet := make(map[string]bool, len(localNames))
-		for _, n := range localNames {
-			localSet[n] = true
-		}
-		if err := appendPkgsLock(cfg.ConfigDir, installCaller.pkgsPins, localSet); err != nil {
-			return err
-		}
+	return writePkgsLockAfterApply(cfg.ConfigDir, installCaller)
+}
+
+// writePkgsLockAfterApply writes pkgs.lock / pkgs.local.lock after a successful apply.
+// It is a no-op when installCaller is nil or has no package pins.
+func writePkgsLockAfterApply(configDir string, installCaller *starlarkHookCaller) error {
+	if installCaller == nil || len(installCaller.pkgsPins) == 0 {
+		return nil
 	}
-	return nil
+	_, localNames, err := loadDeclaredNames(configDir)
+	if err != nil {
+		return err
+	}
+	localSet := make(map[string]bool, len(localNames))
+	for _, n := range localNames {
+		localSet[n] = true
+	}
+	return appendPkgsLock(configDir, installCaller.pkgsPins, localSet)
 }
 
 // printApplyDryRun prints the install/uninstall plan and returns nil.
