@@ -6,6 +6,16 @@ import (
 	"path/filepath"
 )
 
+// Config file name constants. All file references MUST use these constants;
+// no raw filename string literals are permitted elsewhere.
+const (
+	configEntryFile     = "init.star"
+	configLocalFile     = "local.star"
+	configModFile       = "deps.mod"
+	configLockFile      = "deps.lock"
+	configInstalledFile = "installed.lock"
+)
+
 // defaultConfigDir returns the default meowctl config directory.
 // It honours XDG_CONFIG_HOME when set, otherwise uses ~/.config/meowctl.
 func defaultConfigDir() (string, error) {
