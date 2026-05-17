@@ -60,8 +60,9 @@ func linuxDistroInfo() (distro, distroLike string) {
 }
 
 // readModfileReplaces reads replace() directives from <configDir>/deps.mod and
-// returns a map from module name to local filesystem path. Returns an empty map
-// if the file is absent or cannot be parsed.
+// returns a map from module name to local filesystem path for path-based overrides.
+// Source-based replace() directives are handled at sync time via SyncModules.
+// Returns an empty map if the file is absent or cannot be parsed.
 func readModfileReplaces(configDir string) map[string]string {
 	modPath := filepath.Join(configDir, configModFile)
 	mf, err := modfile.Parse(modPath)
@@ -73,7 +74,10 @@ func readModfileReplaces(configDir string) map[string]string {
 	}
 	result := make(map[string]string, len(mf.Replace))
 	for _, r := range mf.Replace {
-		result[r.Module] = r.Path
+		if r.Path != "" {
+			result[r.Name] = r.Path
+		}
+		// Source-based replaces are resolved during sync; skip here.
 	}
 	return result
 }

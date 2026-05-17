@@ -85,8 +85,8 @@ func TestIntegration_Accumulator_Packages(t *testing.T) {
 func TestIntegration_Accumulator_Dep(t *testing.T) {
 	result := execFixture(t)
 	acc := result.Declarations
-	if len(acc.Deps) != 1 || acc.Deps[0].URL != "self//lib.star" {
-		t.Errorf("deps: got %+v, want [{URL:self//lib.star}]", acc.Deps)
+	if len(acc.Deps) != 1 || acc.Deps[0].Name != "stdlib" || acc.Deps[0].Version != "0.1.0" {
+		t.Errorf("deps: got %+v, want [{Name:stdlib Version:0.1.0}]", acc.Deps)
 	}
 }
 

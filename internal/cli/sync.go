@@ -157,11 +157,11 @@ func syncPrepare(configDir string) (*modfile.ModFile, *loader.RegistryLoader, *l
 func modfileAdapters(mf *modfile.ModFile) ([]loader.ModfileDep, []loader.ModfileReplace) {
 	deps := make([]loader.ModfileDep, len(mf.Deps))
 	for i, d := range mf.Deps {
-		deps[i] = loader.ModfileDep{URL: d.URL}
+		deps[i] = loader.ModfileDep{Name: d.Name, Version: d.Version, Source: d.Source}
 	}
 	replaces := make([]loader.ModfileReplace, len(mf.Replace))
 	for i, r := range mf.Replace {
-		replaces[i] = loader.ModfileReplace{Module: r.Module, Path: r.Path}
+		replaces[i] = loader.ModfileReplace{Name: r.Name, Path: r.Path, Source: r.Source}
 	}
 	return deps, replaces
 }
@@ -199,7 +199,7 @@ func runGet(configDir, arg string) error {
 
 	// Check if module is replaced — skip with warning.
 	for _, r := range mf.Replace {
-		if r.Module == modName {
+		if r.Name == modName {
 			fmt.Fprintf(os.Stderr, "meowctl: warning: module %q has an active replace() directive — skipping get\n", modName)
 			return nil
 		}
@@ -260,7 +260,7 @@ func runOutdated(configDir string) error {
 	// Build replace set for fast lookup.
 	replaceSet := make(map[string]bool, len(mf.Replace))
 	for _, r := range mf.Replace {
-		replaceSet[r.Module] = true
+		replaceSet[r.Name] = true
 	}
 
 	type outdatedRow struct {
@@ -271,7 +271,7 @@ func runOutdated(configDir string) error {
 	var rows []outdatedRow
 
 	for _, dep := range mf.Deps {
-		modName, _ := splitModuleURLForCLI(dep.URL)
+		modName := dep.Name
 		if replaceSet[modName] {
 			fmt.Fprintf(os.Stderr, "meowctl: warning: module %q has an active replace() directive — skipping\n", modName)
 			continue
@@ -317,17 +317,6 @@ func splitGetArg(arg string) (module, version string) {
 		return arg[:idx], arg[idx+1:]
 	}
 	return arg, ""
-}
-
-// splitModuleURLForCLI splits "github://owner/repo@v1.0.0" into the module
-// name ("github://owner/repo") and version ("v1.0.0"). If no @version is present,
-// version is "". This mirrors splitModuleURL in the loader package
-// but is unexported and local to the CLI layer.
-func splitModuleURLForCLI(url string) (module, version string) {
-	if idx := strings.LastIndex(url, "@"); idx >= 0 {
-		return url[:idx], url[idx+1:]
-	}
-	return url, ""
 }
 
 // changedModules returns the set of module names whose version differs between
