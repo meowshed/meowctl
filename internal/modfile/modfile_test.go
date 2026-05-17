@@ -11,7 +11,7 @@ import (
 func TestParseBytes_ModuleDepReplace(t *testing.T) {
 	src := []byte(`
 module(name = "test-dotfiles", version = "1.2.3")
-dep(url = "github://owner/repo@v1.0.0")
+dep(name = "owner-repo", version = "v1.0.0")
 replace(module = "github://owner/repo", path = "/local/repo")
 `)
 	mf, err := modfile.ParseBytes("test.mod", src)
@@ -30,8 +30,11 @@ replace(module = "github://owner/repo", path = "/local/repo")
 	if len(mf.Deps) != 1 {
 		t.Fatalf("len(Deps) = %d, want 1", len(mf.Deps))
 	}
-	if mf.Deps[0].URL != "github://owner/repo@v1.0.0" {
-		t.Errorf("Dep URL = %q, want %q", mf.Deps[0].URL, "github://owner/repo@v1.0.0")
+	if mf.Deps[0].Name != "owner-repo" {
+		t.Errorf("Dep Name = %q, want %q", mf.Deps[0].Name, "owner-repo")
+	}
+	if mf.Deps[0].Version != "v1.0.0" {
+		t.Errorf("Dep Version = %q, want %q", mf.Deps[0].Version, "v1.0.0")
 	}
 	if len(mf.Replace) != 1 {
 		t.Fatalf("len(Replace) = %d, want 1", len(mf.Replace))
@@ -63,7 +66,7 @@ func TestWrite_RoundTrip(t *testing.T) {
 
 	mf := &modfile.ModFile{
 		Module: &modfile.ModuleDecl{Name: "dotfiles", Version: "0.2.0"},
-		Deps:   []modfile.DepDecl{{URL: "github://foo/bar@v2.0.0"}},
+		Deps:   []modfile.DepDecl{{Name: "foo-bar", Version: "v2.0.0"}},
 	}
 	if err := modfile.Write(path, mf); err != nil {
 		t.Fatalf("Write: %v", err)
@@ -76,7 +79,7 @@ func TestWrite_RoundTrip(t *testing.T) {
 	if parsed.Module.Name != "dotfiles" {
 		t.Errorf("Name = %q", parsed.Module.Name)
 	}
-	if len(parsed.Deps) != 1 || parsed.Deps[0].URL != "github://foo/bar@v2.0.0" {
+	if len(parsed.Deps) != 1 || parsed.Deps[0].Name != "foo-bar" || parsed.Deps[0].Version != "v2.0.0" {
 		t.Errorf("Deps = %v", parsed.Deps)
 	}
 }

@@ -361,17 +361,17 @@ func builtinQueryPM(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gosta
 	return list, nil
 }
 
-// builtinDep implements dep(url).
+// builtinDep implements dep(name, version).
 func builtinDep(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
-	var url gostarlark.String
-	if err := gostarlark.UnpackArgs("dep", args, kwargs, "url", &url); err != nil {
+	var name, version gostarlark.String
+	if err := gostarlark.UnpackArgs("dep", args, kwargs, "name", &name, "version", &version); err != nil {
 		return nil, err
 	}
 	acc := accFromThread(thread)
 	if acc == nil {
 		return nil, fmt.Errorf("dep: no accumulator on thread")
 	}
-	acc.Deps = append(acc.Deps, DepDecl{URL: string(url)})
+	acc.Deps = append(acc.Deps, DepDecl{Name: string(name), Version: string(version)})
 	return gostarlark.None, nil
 }
 

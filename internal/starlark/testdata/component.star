@@ -4,7 +4,7 @@ Exercises all six predeclared builtins (module, component, pkg, dep, select, pla
 and defines two lifecycle hooks (install, setup) that access ctx.
 
 The provides kwarg on component() exercises the extra-kwargs path in builtinComponent.
-The dep() URL is recorded without resolution — no loader is configured in the test evaluator.
+The dep() name+version is recorded without resolution — no loader is configured in the test evaluator.
 """
 
 module(name = "fixture", version = "1.0.0")
@@ -14,7 +14,7 @@ component(name = "git", provides = ["vcs"])
 pkg(manager = "apt", name = "git")
 pkg(manager = "brew", name = "git")
 
-dep(url = "self//lib.star")
+dep(name = "stdlib", version = "0.1.0")
 
 _p = platform()
 

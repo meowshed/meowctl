@@ -29,22 +29,22 @@ func readFile(t *testing.T, path string) string {
 func TestSetDepVersion_Basic(t *testing.T) {
 	tmp := t.TempDir()
 	path := writeFile(t, tmp, "meowctl.mod", `module(name = "dotfiles", version = "0.1.0")
-dep(url = "github://owner/repo@v1.0.0")
+dep(name = "owner-repo", version = "v1.0.0")
 `)
-	if err := rewrite.SetDepVersion(path, "github://owner/repo", "v1.2.3"); err != nil {
+	if err := rewrite.SetDepVersion(path, "owner-repo", "v1.2.3"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	got := readFile(t, path)
-	if !contains(got, `github://owner/repo@v1.2.3`) {
+	if !contains(got, `version = "v1.2.3"`) {
 		t.Errorf("expected updated version in:\n%s", got)
 	}
 }
 
 func TestSetDepVersion_NotFound(t *testing.T) {
 	tmp := t.TempDir()
-	path := writeFile(t, tmp, "meowctl.mod", `dep(url = "github://other/repo@v1.0.0")
+	path := writeFile(t, tmp, "meowctl.mod", `dep(name = "other-repo", version = "v1.0.0")
 `)
-	err := rewrite.SetDepVersion(path, "github://owner/repo", "v2.0.0")
+	err := rewrite.SetDepVersion(path, "owner-repo", "v2.0.0")
 	if err == nil {
 		t.Fatal("expected error when module not found")
 	}

@@ -549,7 +549,8 @@ func (l *RegistryLoader) SyncModules(deps []ModfileDep, replaces []ModfileReplac
 
 // syncOneDep resolves a single dep entry, updating modules and result in-place.
 func (l *RegistryLoader) syncOneDep(dep ModfileDep, replaceIndex map[string]string, index *registryIndex, modules map[string]lock.ModuleEntry, result *SyncResult) error {
-	modName, reqVersion := splitModuleURL(dep.URL)
+	modName := dep.Name
+	reqVersion := dep.Version
 
 	if localPath, replaced := replaceIndex[modName]; replaced {
 		fmt.Fprintf(os.Stderr, "meowctl: warning: module %q is replaced by local path %q — skipping registry resolution\n", modName, localPath)
@@ -633,22 +634,14 @@ func (l *RegistryLoader) LatestVersion(modName string) (string, error) {
 
 // ModfileDep is a dep() entry from a modfile, used by SyncModules.
 type ModfileDep struct {
-	URL string
+	Name    string
+	Version string
 }
 
 // ModfileReplace is a replace() entry from a modfile, used by SyncModules.
 type ModfileReplace struct {
 	Module string
 	Path   string
-}
-
-// splitModuleURL splits "github://owner/repo@v1.0.0" into ("github://owner/repo", "v1.0.0").
-// If no @version is present, version is "".
-func splitModuleURL(url string) (module, version string) {
-	if idx := strings.LastIndex(url, "@"); idx >= 0 {
-		return url[:idx], url[idx+1:]
-	}
-	return url, ""
 }
 
 // buildSourceURL substitutes {name} and {version} in the source URL template.
@@ -710,11 +703,11 @@ func parseModuleMeow(path string) ([]mvs.Module, error) {
 
 	var deps []mvs.Module
 	depFn := gostarlark.NewBuiltin("dep", func(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
-		var name, version string
-		if err := gostarlark.UnpackPositionalArgs("dep", args, kwargs, 2, &name, &version); err != nil {
+		var name, version gostarlark.String
+		if err := gostarlark.UnpackArgs("dep", args, kwargs, "name", &name, "version", &version); err != nil {
 			return nil, err
 		}
-		deps = append(deps, mvs.Module{Name: name, Version: version})
+		deps = append(deps, mvs.Module{Name: string(name), Version: string(version)})
 		return gostarlark.None, nil
 	})
 	// module() declares the module's own identity. We ignore its arguments —

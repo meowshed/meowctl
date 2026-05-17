@@ -46,9 +46,10 @@ type RepoDecl struct {
 	Kwargs  map[string]any
 }
 
-// DepDecl records a dep() declaration.
+// DepDecl records a dep(name, version) declaration.
 type DepDecl struct {
-	URL string
+	Name    string
+	Version string
 }
 
 // ModuleDecl records the module() declaration.

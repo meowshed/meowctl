@@ -1,13 +1,13 @@
-// Package modfile parses and writes meowctl.mod files.
-// meowctl.mod is a machine-managed Starlark file that declares the module identity,
-// its dependencies, and local path replacements. It is separate from meowctl.star
+// Package modfile parses and writes deps.mod files.
+// deps.mod is a machine-managed Starlark file that declares the module identity,
+// its dependencies, and local path replacements. It is separate from init.star
 // (user-owned) to allow tooling to rewrite dependency versions without touching
 // user configuration.
 //
 // Syntax (subset of Starlark):
 //
 //	module(name = "my-dotfiles", version = "0.1.0")
-//	dep(url = "github://owner/repo@v1.2.3")
+//	dep(name = "stdlib", version = "0.1.1")
 //	replace(module = "github://owner/repo", path = "/local/path")
 package modfile
 
@@ -36,9 +36,10 @@ type ModuleDecl struct {
 	Version string
 }
 
-// DepDecl records a dep(url) declaration.
+// DepDecl records a dep(name, version) declaration.
 type DepDecl struct {
-	URL string
+	Name    string
+	Version string
 }
 
 // ReplaceDecl records a replace(module, path) declaration.
@@ -68,12 +69,12 @@ func builtinModule(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostar
 }
 
 func builtinDep(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
-	var url gostarlark.String
-	if err := gostarlark.UnpackArgs("dep", args, kwargs, "url", &url); err != nil {
+	var name, version gostarlark.String
+	if err := gostarlark.UnpackArgs("dep", args, kwargs, "name", &name, "version", &version); err != nil {
 		return nil, err
 	}
 	acc := accFromThread(thread)
-	acc.deps = append(acc.deps, DepDecl{URL: string(url)})
+	acc.deps = append(acc.deps, DepDecl{Name: string(name), Version: string(version)})
 	return gostarlark.None, nil
 }
 
@@ -143,7 +144,7 @@ func Write(path string, mf *ModFile) error {
 	}
 
 	for _, d := range mf.Deps {
-		fmt.Fprintf(&sb, "dep(url = %q)\n", d.URL)
+		fmt.Fprintf(&sb, "dep(name = %q, version = %q)\n", d.Name, d.Version)
 	}
 	if len(mf.Deps) > 0 {
 		sb.WriteString("\n")
