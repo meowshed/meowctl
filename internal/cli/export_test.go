@@ -10,9 +10,15 @@ import (
 // ExportDefaultConfigDir exposes defaultConfigDir for tests.
 var ExportDefaultConfigDir = defaultConfigDir
 
-// ExportLoadComponents exposes loadComponentsWithDeps for tests.
+// ExportLoadComponents exposes loadComponentsWithDeps for tests (install path: synthetic deps included).
 func ExportLoadComponents(configDir string, filter []string) ([]lifecycle.ComponentID, error) {
 	ids, _, _, err := loadComponentsWithDeps(configDir, filter, true)
+	return ids, err
+}
+
+// ExportLoadComponentsForUninstall exposes loadComponentsWithDeps for tests (uninstall path: synthetic deps excluded).
+func ExportLoadComponentsForUninstall(configDir string, filter []string) ([]lifecycle.ComponentID, error) {
+	ids, _, _, err := loadComponentsWithDeps(configDir, filter, false)
 	return ids, err
 }
 
