@@ -63,12 +63,12 @@ func TestDefaultConfigDir_HomeDir(t *testing.T) {
 	}
 }
 
-// TestLoadComponents_NoFile returns ExitConfig error when meowctl.star is absent.
+// TestLoadComponents_NoFile returns ExitConfig error when init.star is absent.
 func TestLoadComponents_NoFile(t *testing.T) {
 	tmp := t.TempDir()
 	_, err := cli.ExportLoadComponents(tmp, nil)
 	if err == nil {
-		t.Fatal("expected error for missing meowctl.star")
+		t.Fatal("expected error for missing init.star")
 	}
 	var exitErr *cli.ExitError
 	if !errors.As(err, &exitErr) {
@@ -79,15 +79,14 @@ func TestLoadComponents_NoFile(t *testing.T) {
 	}
 }
 
-// TestLoadComponents_Basic verifies component names are extracted from a valid meowctl.star.
+// TestLoadComponents_Basic verifies component names are extracted from a valid init.star.
 func TestLoadComponents_Basic(t *testing.T) {
 	tmp := t.TempDir()
 	star := `
-module(name="test", version="0.1.0")
 component("shell")
 component("git")
 `
-	if err := os.WriteFile(filepath.Join(tmp, "meowctl.star"), []byte(star), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "init.star"), []byte(star), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,12 +106,11 @@ component("git")
 func TestLoadComponents_Filter(t *testing.T) {
 	tmp := t.TempDir()
 	star := `
-module(name="test", version="0.1.0")
 component("shell")
 component("git")
 component("neovim")
 `
-	if err := os.WriteFile(filepath.Join(tmp, "meowctl.star"), []byte(star), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "init.star"), []byte(star), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -129,10 +127,9 @@ component("neovim")
 func TestLoadComponents_FilterNoMatch(t *testing.T) {
 	tmp := t.TempDir()
 	star := `
-module(name="test", version="0.1.0")
 component("shell")
 `
-	if err := os.WriteFile(filepath.Join(tmp, "meowctl.star"), []byte(star), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "init.star"), []byte(star), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -146,7 +143,7 @@ component("shell")
 	}
 }
 
-// TestInitCmd_CreatesFiles verifies meowctl init creates config dir and meowctl.star.
+// TestInitCmd_CreatesFiles verifies meowctl init creates config dir and init.star.
 func TestInitCmd_CreatesFiles(t *testing.T) {
 	tmp := t.TempDir()
 	cmd := cli.NewRootCmdForTest()
@@ -154,18 +151,18 @@ func TestInitCmd_CreatesFiles(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init failed: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(tmp, "meowctl.star")); err != nil {
-		t.Fatalf("meowctl.star not created: %v", err)
+	if _, err := os.Stat(filepath.Join(tmp, "init.star")); err != nil {
+		t.Fatalf("init.star not created: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(tmp, "components")); err != nil {
 		t.Fatalf("components/ not created: %v", err)
 	}
 }
 
-// TestInitCmd_AlreadyExists returns an error when meowctl.star exists.
+// TestInitCmd_AlreadyExists returns an error when init.star exists.
 func TestInitCmd_AlreadyExists(t *testing.T) {
 	tmp := t.TempDir()
-	if err := os.WriteFile(filepath.Join(tmp, "meowctl.star"), []byte(""), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "init.star"), []byte(""), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := cli.NewRootCmdForTest()
@@ -212,11 +209,10 @@ func TestShellCmd_Unknown(t *testing.T) {
 func TestComponentListCmd(t *testing.T) {
 	tmp := t.TempDir()
 	star := `
-module(name="test", version="0.1.0")
 component("alpha")
 component("beta")
 `
-	if err := os.WriteFile(filepath.Join(tmp, "meowctl.star"), []byte(star), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "init.star"), []byte(star), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var out strings.Builder
@@ -246,13 +242,12 @@ func TestLockShowCmd_MissingFile(t *testing.T) {
 // being uninstalled.
 func TestLoadComponents_Uninstall_SyntheticDepsExcluded(t *testing.T) {
 	tmp := t.TempDir()
-	// "tool" declares an after= dep on "pm", but "pm" is NOT declared in meowctl.star.
+	// "tool" declares an after= dep on "pm", but "pm" is NOT declared in init.star.
 	// "pm" is therefore synthetic — auto-discovered by expandWithFileDeps.
 	star := `
-module(name="test", version="0.1.0")
 component("tool", after=["pm"])
 `
-	if err := os.WriteFile(filepath.Join(tmp, "meowctl.star"), []byte(star), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "init.star"), []byte(star), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
