@@ -44,6 +44,18 @@ func (r *PMRegistry) Register(managerName string, h *PMHandler) {
 	r.handlers[managerName] = h
 }
 
+// Merge copies handlers from other into r. Existing handlers in r are not overwritten.
+func (r *PMRegistry) Merge(other *PMRegistry) {
+	if other == nil {
+		return
+	}
+	for name, h := range other.handlers {
+		if _, exists := r.handlers[name]; !exists {
+			r.handlers[name] = h
+		}
+	}
+}
+
 // Handler returns the PMHandler for managerName, or nil if not found.
 func (r *PMRegistry) Handler(managerName string) *PMHandler {
 	if r == nil {
