@@ -143,7 +143,8 @@ component("shell")
 	}
 }
 
-// TestInitCmd_CreatesFiles verifies meowctl init creates config dir and init.star.
+// TestInitCmd_CreatesFiles verifies meowctl init creates config dir, init.star,
+// components/, hooks/, local.star, deps.mod, and .gitignore.
 func TestInitCmd_CreatesFiles(t *testing.T) {
 	tmp := t.TempDir()
 	cmd := cli.NewRootCmdForTest()
@@ -151,11 +152,19 @@ func TestInitCmd_CreatesFiles(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("init failed: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(tmp, "init.star")); err != nil {
-		t.Fatalf("init.star not created: %v", err)
+	for _, name := range []string{"init.star", "local.star", "deps.mod", ".gitignore"} {
+		if _, err := os.Stat(filepath.Join(tmp, name)); err != nil {
+			t.Fatalf("%s not created: %v", name, err)
+		}
 	}
-	if _, err := os.Stat(filepath.Join(tmp, "components")); err != nil {
-		t.Fatalf("components/ not created: %v", err)
+	for _, dir := range []string{"components", "hooks"} {
+		info, err := os.Stat(filepath.Join(tmp, dir))
+		if err != nil {
+			t.Fatalf("%s/ not created: %v", dir, err)
+		}
+		if !info.IsDir() {
+			t.Fatalf("%s is not a directory", dir)
+		}
 	}
 }
 
@@ -177,6 +186,48 @@ func TestInitCmd_AlreadyExists(t *testing.T) {
 	}
 	if exitErr.Code != cli.ExitConfig {
 		t.Fatalf("want ExitConfig, got %d", exitErr.Code)
+	}
+}
+
+// TestInitCmd_Force overwrites existing init.star when --force is given.
+func TestInitCmd_Force(t *testing.T) {
+	tmp := t.TempDir()
+	initPath := filepath.Join(tmp, "init.star")
+	if err := os.WriteFile(initPath, []byte("# old content\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := cli.NewRootCmdForTest()
+	cmd.SetArgs([]string{"--config", tmp, "init", "--force"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --force failed: %v", err)
+	}
+	data, err := os.ReadFile(initPath) // #nosec G304 -- test-only temp path
+	if err != nil {
+		t.Fatalf("read init.star: %v", err)
+	}
+	if strings.Contains(string(data), "# old content") {
+		t.Fatal("--force did not overwrite existing init.star")
+	}
+}
+
+// TestInitCmd_Force_CreatesAllFiles verifies --force creates all expected files.
+func TestInitCmd_Force_CreatesAllFiles(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "init.star"), []byte(""), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := cli.NewRootCmdForTest()
+	cmd.SetArgs([]string{"--config", tmp, "init", "--force"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("init --force failed: %v", err)
+	}
+	for _, dir := range []string{"components", "hooks"} {
+		if info, err := os.Stat(filepath.Join(tmp, dir)); err != nil || !info.IsDir() {
+			t.Fatalf("%s/ not created after --force", dir)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "local.star")); err != nil {
+		t.Fatalf("local.star not created after --force: %v", err)
 	}
 }
 
