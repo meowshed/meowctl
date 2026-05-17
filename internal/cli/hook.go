@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/meowshed/meowctl/internal/ctx"
 	"github.com/meowshed/meowctl/internal/lifecycle"
@@ -72,6 +73,25 @@ func (h *runtimeHookCaller) buildCaps(componentID, hookName string) *ctx.Capabil
 	return caps
 }
 
+// writeHookError writes a .hook-error flag file containing the timestamp and error message.
+func writeHookError(configDir string, runErr error) {
+	path := filepath.Join(configDir, configHookErrorFile)
+	content := fmt.Sprintf("%s\n%s\n", time.Now().UTC().Format(time.RFC3339), runErr.Error())
+	_ = os.WriteFile(path, []byte(content), 0o600) // #nosec G304
+}
+
+// clearHookError removes the .hook-error flag file if it exists.
+func clearHookError(configDir string) {
+	path := filepath.Join(configDir, configHookErrorFile)
+	_ = os.Remove(path) // ignore error if file doesn't exist
+}
+
+// hookErrorExists returns true if a .hook-error flag file is present.
+func hookErrorExists(configDir string) bool {
+	_, err := os.Lstat(filepath.Join(configDir, configHookErrorFile))
+	return err == nil
+}
+
 func newHookCmd(gf *globalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:       "hook <phase>",
@@ -98,7 +118,9 @@ func newHookCmd(gf *globalFlags) *cobra.Command {
 
 			order, pmReg, _, err := loadComponentsWithDeps(configDir, nil, true)
 			if err != nil {
-				return err
+				// Eval failure: write flag file, exit 0 (shell startup must never break).
+				writeHookError(configDir, err)
+				return nil
 			}
 
 			caller := &runtimeHookCaller{
@@ -110,7 +132,7 @@ func newHookCmd(gf *globalFlags) *cobra.Command {
 			w := tui.New(os.Stdout)
 			defer func() { _ = w.Close() }()
 
-			statePath := filepath.Join(configDir, "state.toml")
+			statePath := filepath.Join(configDir, configStateFile)
 			sentinel := state.NewManager(statePath)
 
 			runner := &lifecycle.Runner{
@@ -121,7 +143,14 @@ func newHookCmd(gf *globalFlags) *cobra.Command {
 				NoRollback: true,
 				Writer:     w,
 			}
-			return runner.RunPhaseSet("hook:"+phase, []lifecycle.Phase{lifecycle.Phase(phase)})
+			runErr := runner.RunPhaseSet("hook:"+phase, []lifecycle.Phase{lifecycle.Phase(phase)})
+			if runErr != nil {
+				// Hook eval failure: write flag file, exit 0.
+				writeHookError(configDir, runErr)
+				return nil
+			}
+			clearHookError(configDir)
+			return nil
 		},
 	}
 }

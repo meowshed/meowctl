@@ -19,6 +19,7 @@ import (
 	gostarlark "go.starlark.net/starlark"
 	"go.starlark.net/syntax"
 
+	"github.com/meowshed/meowctl/internal/lock"
 	"github.com/meowshed/meowctl/internal/starlark/loader"
 )
 
@@ -584,21 +585,6 @@ func TestParseGitHubSource_Invalid(t *testing.T) {
 
 // --- SyncModules GitHub source dep tests ---
 
-// newTestRegistryLoaderWithGitHubAPI creates a RegistryLoader with overridden
-// GitHub API base and registry index URL for testing.
-func newTestRegistryLoaderWithGitHubAPI(
-	t *testing.T,
-	cacheDir, lockPath string,
-	githubAPIBase string,
-) *loader.RegistryLoader {
-	t.Helper()
-	return &loader.RegistryLoader{
-		CacheDir:      filepath.Join(cacheDir, "modules"),
-		LockPath:      lockPath,
-		GitHubAPIBase: githubAPIBase,
-	}
-}
-
 // TestSyncModules_GitHubSourceDep verifies that a dep with source="github:owner/repo@ref"
 // resolves the commit SHA via the GitHub API, downloads the tarball, and writes
 // the lock entry with CommitSHA set.
@@ -624,18 +610,40 @@ func TestSyncModules_GitHubSourceDep(t *testing.T) {
 	cacheDir := t.TempDir()
 	lockPath := filepath.Join(t.TempDir(), "meowctl.lock")
 
-	rl := newTestRegistryLoaderWithGitHubAPI(t, cacheDir, lockPath, apiServer.URL)
-	_ = rl
+	rl := &loader.RegistryLoader{
+		CacheDir:          filepath.Join(cacheDir, "modules"),
+		LockPath:          lockPath,
+		GitHubAPIBase:     apiServer.URL,
+		GitHubTarballBase: tarballServer.URL,
+	}
 
-	// Override the tarball URL construction requires a custom GitHub host — we patch
-	// the tarball URL by setting the github.com base to our test server. Since
-	// githubTarballURL is unexported, we rely on the actual format:
-	// https://github.com/{owner}/{repo}/archive/{ref}.tar.gz
-	// The RegistryLoader fetches tarballs via l.fetchTarball(tarballURL) where
-	// tarballURL = "https://github.com/owner/repo/archive/<sha>.tar.gz".
-	// For testability we need a GitHubTarballBase override too — but that doesn't exist yet.
-	// SKIP this sub-test body for now; test parseGitHubSource path through SyncModules error path instead.
-	t.Skip("requires GitHubTarballBase override — not yet implemented")
+	deps := []loader.ModfileDep{
+		{Name: "mypkg", Source: "github:owner/myrepo@v1.0.0"},
+	}
+	result, err := rl.SyncModules(deps, nil)
+	if err != nil {
+		t.Fatalf("SyncModules: unexpected error: %v", err)
+	}
+	sha, ok := result.Resolved["mypkg"]
+	if !ok {
+		t.Fatal("expected 'mypkg' in Resolved")
+	}
+	if sha != fakeCommit {
+		t.Errorf("expected commit SHA %q, got %q", fakeCommit, sha)
+	}
+
+	// Lock file must have CommitSHA set.
+	lf, err := lock.Read(lockPath)
+	if err != nil {
+		t.Fatalf("read lock: %v", err)
+	}
+	entry, ok := lf.Modules["mypkg"]
+	if !ok {
+		t.Fatal("expected 'mypkg' in lock file")
+	}
+	if entry.CommitSHA != fakeCommit {
+		t.Errorf("lock CommitSHA: want %q, got %q", fakeCommit, entry.CommitSHA)
+	}
 }
 
 // TestSyncModules_GitHubSourceDep_CommitResolutionFailure verifies that a bad
@@ -765,5 +773,129 @@ func TestRegistryLoader_ReplaceLocal(t *testing.T) {
 	}
 	if _, ok := globals2["pm_name"]; !ok {
 		t.Error("expected 'pm_name' in globals (without .star)")
+	}
+}
+
+// TestSyncModules_GitHubDep_TransitiveDeps verifies that a GitHub dep whose
+// MODULE.meow declares another source dep causes that transitive dep to be
+// resolved and written to the lock file.
+func TestSyncModules_GitHubDep_TransitiveDeps(t *testing.T) {
+	const commitA = "aaaa000000000000000000000000000000000000"
+	const commitB = "bbbb000000000000000000000000000000000000"
+
+	// dep-b tarball — no MODULE.meow (leaf).
+	tarballB := buildTarGz(t, map[string][]byte{"lib.star": []byte(`b_val = 2`)})
+
+	// dep-a tarball — MODULE.meow declares dep-b as a transitive source dep.
+	moduleMeowA := []byte(`dep(name="dep-b", source="github:owner/dep-b@main")` + "\n")
+	tarballA := buildTarGz(t, map[string][]byte{
+		"lib.star":    []byte(`a_val = 1`),
+		"MODULE.meow": moduleMeowA,
+	})
+
+	// Tarball server serves both tarballs.
+	tarballServer := testServer(t, map[string][]byte{
+		"/owner/dep-a/archive/" + commitA + ".tar.gz": tarballA,
+		"/owner/dep-b/archive/" + commitB + ".tar.gz": tarballB,
+	})
+	defer tarballServer.Close()
+
+	// API server resolves both refs.
+	apiServer := testServer(t, map[string][]byte{
+		"/repos/owner/dep-a/commits/main": []byte(`{"sha":"` + commitA + `"}`),
+		"/repos/owner/dep-b/commits/main": []byte(`{"sha":"` + commitB + `"}`),
+	})
+	defer apiServer.Close()
+
+	cacheDir := t.TempDir()
+	lockPath := filepath.Join(t.TempDir(), "meowctl.lock")
+
+	rl := &loader.RegistryLoader{
+		CacheDir:          filepath.Join(cacheDir, "modules"),
+		LockPath:          lockPath,
+		GitHubAPIBase:     apiServer.URL,
+		GitHubTarballBase: tarballServer.URL,
+	}
+
+	deps := []loader.ModfileDep{
+		{Name: "dep-a", Source: "github:owner/dep-a@main"},
+	}
+	result, err := rl.SyncModules(deps, nil)
+	if err != nil {
+		t.Fatalf("SyncModules: unexpected error: %v", err)
+	}
+
+	// Both dep-a and transitive dep-b must appear in Resolved.
+	if sha := result.Resolved["dep-a"]; sha != commitA {
+		t.Errorf("dep-a resolved SHA: want %q, got %q", commitA, sha)
+	}
+	if sha := result.Resolved["dep-b"]; sha != commitB {
+		t.Errorf("dep-b transitive SHA: want %q, got %q", commitB, sha)
+	}
+
+	// Lock file must contain both entries.
+	lf, err := lock.Read(lockPath)
+	if err != nil {
+		t.Fatalf("read lock: %v", err)
+	}
+	if lf.Modules["dep-a"].CommitSHA != commitA {
+		t.Errorf("lock dep-a CommitSHA: want %q, got %q", commitA, lf.Modules["dep-a"].CommitSHA)
+	}
+	if lf.Modules["dep-b"].CommitSHA != commitB {
+		t.Errorf("lock dep-b CommitSHA: want %q, got %q", commitB, lf.Modules["dep-b"].CommitSHA)
+	}
+}
+
+// TestSyncModules_GitHubDep_CircularDeps verifies that a circular MODULE.meow
+// dependency (A → B → A) does not cause infinite recursion and completes without error.
+func TestSyncModules_GitHubDep_CircularDeps(t *testing.T) {
+	const commitA = "aaaa111111111111111111111111111111111111"
+	const commitB = "bbbb111111111111111111111111111111111111"
+
+	// dep-a MODULE.meow → dep-b; dep-b MODULE.meow → dep-a (circular).
+	tarballA := buildTarGz(t, map[string][]byte{
+		"lib.star":    []byte(`a_val = 1`),
+		"MODULE.meow": []byte(`dep(name="dep-b", source="github:owner/dep-b@main")` + "\n"),
+	})
+	tarballB := buildTarGz(t, map[string][]byte{
+		"lib.star":    []byte(`b_val = 2`),
+		"MODULE.meow": []byte(`dep(name="dep-a", source="github:owner/dep-a@main")` + "\n"),
+	})
+
+	tarballServer := testServer(t, map[string][]byte{
+		"/owner/dep-a/archive/" + commitA + ".tar.gz": tarballA,
+		"/owner/dep-b/archive/" + commitB + ".tar.gz": tarballB,
+	})
+	defer tarballServer.Close()
+
+	apiServer := testServer(t, map[string][]byte{
+		"/repos/owner/dep-a/commits/main": []byte(`{"sha":"` + commitA + `"}`),
+		"/repos/owner/dep-b/commits/main": []byte(`{"sha":"` + commitB + `"}`),
+	})
+	defer apiServer.Close()
+
+	cacheDir := t.TempDir()
+	lockPath := filepath.Join(t.TempDir(), "meowctl.lock")
+
+	rl := &loader.RegistryLoader{
+		CacheDir:          filepath.Join(cacheDir, "modules"),
+		LockPath:          lockPath,
+		GitHubAPIBase:     apiServer.URL,
+		GitHubTarballBase: tarballServer.URL,
+	}
+
+	// SyncModules must terminate and not error due to circular deps.
+	result, err := rl.SyncModules([]loader.ModfileDep{
+		{Name: "dep-a", Source: "github:owner/dep-a@main"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("SyncModules with circular deps: unexpected error: %v", err)
+	}
+	// Both modules resolved despite the cycle.
+	if result.Resolved["dep-a"] == "" {
+		t.Error("expected dep-a in Resolved")
+	}
+	if result.Resolved["dep-b"] == "" {
+		t.Error("expected dep-b in Resolved (transitive via circular reference)")
 	}
 }

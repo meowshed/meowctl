@@ -26,3 +26,16 @@ func ParseGitHubSourceForTest(s string) (owner, repo, ref string, err error) {
 	gs, err := parseGitHubSource(s)
 	return gs.owner, gs.repo, gs.ref, err
 }
+
+// ParseModuleMeowGitHubForTest exposes parseModuleMeowGitHub for external tests.
+func ParseModuleMeowGitHubForTest(path string) (names, sources []string, err error) {
+	entries, err := parseModuleMeowGitHub(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, e := range entries {
+		names = append(names, e.name)
+		sources = append(sources, e.source)
+	}
+	return names, sources, nil
+}
