@@ -44,6 +44,7 @@ Starlark configuration files.`,
 		newStatusCmd(&gf),
 		newSelfUpdateCmd(),
 		newDepCmd(&gf),
+		newCheckCmd(),
 	)
 
 	// Completion subcommands are added automatically by Cobra on first Execute.
