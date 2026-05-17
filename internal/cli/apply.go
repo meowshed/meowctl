@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/meowshed/meowctl/internal/lifecycle"
@@ -276,6 +277,10 @@ func runAdd(cfg runConfig, names []string) error {
 			fmt.Printf("meowctl: %s already declared, skipping\n", name)
 			continue
 		}
+		// Check that the component's module is declared in a modfile.
+		if err := checkModuleDeclared(cfg.ConfigDir, name); err != nil {
+			return err
+		}
 		if !cfg.DryRun {
 			if err := rewrite.AppendComponent(localPath, name); err != nil {
 				return fmt.Errorf("add: append to local.star: %w", err)
@@ -363,7 +368,36 @@ func runRemove(cfg runConfig, names []string) error {
 	return runApply(cfg, nil)
 }
 
-// loadDeclaredNames loads logical component names from init.star and local.star
+// checkModuleDeclared verifies that the module referenced by a component name
+// is declared in deps.mod or deps.local.mod. Component names of the form
+// "@modname//path/to/component" carry an explicit module; bare names (no "@")
+// are local and require no module declaration.
+func checkModuleDeclared(configDir, componentName string) error {
+	if !strings.HasPrefix(componentName, "@") {
+		return nil // bare local component — no module required
+	}
+	// Extract module name: "@modname//..." → "modname"
+	rest := componentName[1:]
+	slash := strings.Index(rest, "//")
+	if slash < 0 {
+		return nil // malformed — let the evaluator catch it
+	}
+	moduleName := rest[:slash]
+
+	if depExistsInEitherModfile(configDir, moduleName) {
+		return nil
+	}
+	return fmt.Errorf("module %q not found in deps.mod or deps.local.mod — run 'meowctl dep add %s' first", moduleName, moduleName)
+}
+
+// depExistsInEitherModfile returns true if name exists in deps.mod or deps.local.mod.
+func depExistsInEitherModfile(configDir, name string) bool {
+	if depExistsInFile(filepath.Join(configDir, configModFile), name) {
+		return true
+	}
+	return depExistsInFile(filepath.Join(configDir, configLocalModFile), name)
+}
+
 // without expanding transitive deps. Returns separate slices for each file.
 func loadDeclaredNames(configDir string) (initNames []string, localNames []string, err error) {
 	ev := makeEvaluator()

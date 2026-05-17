@@ -3,6 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/meowshed/meowctl/internal/lock"
@@ -16,12 +18,12 @@ func newDoctorCmd(gf *globalFlags) *cobra.Command {
 		Use:   "doctor",
 		Short: "Check the meowctl configuration and environment for problems",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			configDir, err := resolveConfigDir(gf)
 			if err != nil {
 				return err
 			}
-			return runDoctor(configDir, jsonOut)
+			return runDoctor(cmd.OutOrStdout(), configDir, jsonOut)
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Output results as JSON")
@@ -34,7 +36,7 @@ type doctorCheck struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-func runDoctor(configDir string, jsonOut bool) error {
+func runDoctor(w io.Writer, configDir string, jsonOut bool) error {
 	var checks []doctorCheck
 
 	// Check 1: init.star exists.
@@ -52,8 +54,9 @@ func runDoctor(configDir string, jsonOut bool) error {
 	} else {
 		checks = append(checks, doctorCheck{"lock-file", "ok", fmt.Sprintf("%d module(s)", len(lf.Modules))})
 	}
+
 	// Check 3: sentinel state readable.
-	statePath := filepath.Join(configDir, "state.toml")
+	statePath := filepath.Join(configDir, configStateFile)
 	sm := state.NewManager(statePath)
 	if _, err := sm.Load(); err != nil {
 		checks = append(checks, doctorCheck{"state", "warn", fmt.Sprintf("unreadable: %v", err)})
@@ -61,9 +64,20 @@ func runDoctor(configDir string, jsonOut bool) error {
 		checks = append(checks, doctorCheck{"state", "ok", statePath})
 	}
 
+	// Check 4: hook-error flag file.
+	if hookErrorExists(configDir) {
+		hookErrPath := filepath.Join(configDir, configHookErrorFile)
+		data, readErr := os.ReadFile(hookErrPath) // #nosec G304
+		detail := "hook eval failed (see .hook-error for details)"
+		if readErr == nil {
+			detail = string(data)
+		}
+		checks = append(checks, doctorCheck{"hook-error", "warn", detail})
+	}
+
 	if jsonOut {
 		out, _ := json.MarshalIndent(checks, "", "  ")
-		fmt.Println(string(out))
+		_, _ = fmt.Fprintln(w, string(out))
 		return nil
 	}
 
@@ -78,9 +92,9 @@ func runDoctor(configDir string, jsonOut bool) error {
 			hasError = true
 		}
 		if c.Detail != "" {
-			fmt.Printf("  %s %s: %s\n", icon, c.Name, c.Detail)
+			_, _ = fmt.Fprintf(w, "  %s %s: %s\n", icon, c.Name, c.Detail)
 		} else {
-			fmt.Printf("  %s %s\n", icon, c.Name)
+			_, _ = fmt.Fprintf(w, "  %s %s\n", icon, c.Name)
 		}
 	}
 	if hasError {
