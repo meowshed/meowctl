@@ -256,35 +256,6 @@ func TestShellCmd_Unknown(t *testing.T) {
 	}
 }
 
-// TestComponentListCmd verifies component list outputs declared component names.
-func TestComponentListCmd(t *testing.T) {
-	tmp := t.TempDir()
-	star := `
-component("alpha")
-component("beta")
-`
-	if err := os.WriteFile(filepath.Join(tmp, "init.star"), []byte(star), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	var out strings.Builder
-	cmd := cli.NewRootCmdForTest()
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"--config", tmp, "component", "list"})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("component list failed: %v", err)
-	}
-}
-
-// TestLockShowCmd_MissingFile prints empty lock info without error when lock file is absent.
-func TestLockShowCmd_MissingFile(t *testing.T) {
-	tmp := t.TempDir()
-	cmd := cli.NewRootCmdForTest()
-	cmd.SetArgs([]string{"--config", tmp, "lock", "show"})
-	// Missing lock file is not an error — lock.Read returns empty LockFile.
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("lock show on missing file should not error, got: %v", err)
-	}
-}
 
 // TestComputeToInstall_FullSet installs all declared components when none are installed.
 func TestComputeToInstall_FullSet(t *testing.T) {

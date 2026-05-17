@@ -16,6 +16,66 @@ import (
 // unbounded memory/disk usage from a malicious or runaway server response.
 const bootstrapMaxTarballBytes = 256 << 20
 
+// runBootstrap implements "meowctl init <repo-url>".
+// It downloads a dotfiles repo as a tarball, extracts it to configDir,
+// then runs dep sync and apply.
+func runBootstrap(configDir, repoURL string, force bool) error {
+	entryPath := filepath.Join(configDir, configEntryFile)
+
+	// Guard: init.star already exists.
+	if _, err := os.Lstat(entryPath); err == nil {
+		if !force {
+			return exitErrorf(ExitConfig,
+				"config already initialized at %s\n  delete it or run 'meowctl init --force' to overwrite",
+				entryPath)
+		}
+		// --force: remove the entire configDir and re-create it below.
+		if err := os.RemoveAll(configDir); err != nil {
+			return fmt.Errorf("init: remove existing config: %w", err)
+		}
+	}
+
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		return fmt.Errorf("init: create config dir: %w", err)
+	}
+
+	// Download tarball.
+	url := tarballURL(repoURL)
+	fmt.Printf("meowctl: downloading %s\n", url)
+	tmpPath, err := downloadTarball(url)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmpPath) }()
+
+	// Extract tarball to configDir.
+	fmt.Printf("meowctl: extracting to %s\n", configDir)
+	if err := extractTarball(tmpPath, configDir); err != nil {
+		return err
+	}
+
+	// Verify init.star is present after extraction.
+	if _, err := os.Lstat(entryPath); err != nil {
+		_ = os.RemoveAll(configDir)
+		return fmt.Errorf("init: init.star not found after extraction — is this a meowctl dotfiles repo?")
+	}
+
+	// Run dep sync (resolve deps.mod → deps.lock); skip if deps.lock already present.
+	lockPath := filepath.Join(configDir, configLockFile)
+	if _, err := os.Lstat(lockPath); os.IsNotExist(err) {
+		fmt.Println("meowctl: running dep sync")
+		if err := runSync(configDir); err != nil {
+			return fmt.Errorf("init: dep sync: %w", err)
+		}
+	} else {
+		fmt.Println("meowctl: deps.lock present — skipping dep sync")
+	}
+
+	// Run apply.
+	fmt.Println("meowctl: running apply")
+	return runApply(runConfig{ConfigDir: configDir}, nil)
+}
+
 // tarballURL derives the tarball download URL from a repo URL.
 // Convention: <repo-url>/archive/refs/heads/main.tar.gz (GitHub / GitLab).
 func tarballURL(repoURL string) string {
@@ -28,22 +88,22 @@ func tarballURL(repoURL string) string {
 func downloadTarball(url string) (string, error) {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil) // #nosec G107 -- URL is user-supplied
 	if err != nil {
-		return "", fmt.Errorf("bootstrap: build request for %s: %w", url, err)
+		return "", fmt.Errorf("init: build request for %s: %w", url, err)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("bootstrap: download %s: %w", url, err)
+		return "", fmt.Errorf("init: download %s: %w", url, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("bootstrap: download %s: server returned %s", url, resp.Status)
+		return "", fmt.Errorf("init: download %s: server returned %s", url, resp.Status)
 	}
 
-	tmp, err := os.CreateTemp("", "meowctl-bootstrap-*.tar.gz")
+	tmp, err := os.CreateTemp("", "meowctl-init-*.tar.gz")
 	if err != nil {
-		return "", fmt.Errorf("bootstrap: create temp file: %w", err)
+		return "", fmt.Errorf("init: create temp file: %w", err)
 	}
 
 	limited := &io.LimitedReader{R: resp.Body, N: bootstrapMaxTarballBytes + 1}
@@ -51,15 +111,15 @@ func downloadTarball(url string) (string, error) {
 	if err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmp.Name())
-		return "", fmt.Errorf("bootstrap: write temp file: %w", err)
+		return "", fmt.Errorf("init: write temp file: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(tmp.Name())
-		return "", fmt.Errorf("bootstrap: close temp file: %w", err)
+		return "", fmt.Errorf("init: close temp file: %w", err)
 	}
 	if n > bootstrapMaxTarballBytes {
 		_ = os.Remove(tmp.Name())
-		return "", fmt.Errorf("bootstrap: tarball exceeds %d bytes limit", bootstrapMaxTarballBytes)
+		return "", fmt.Errorf("init: tarball exceeds %d bytes limit", bootstrapMaxTarballBytes)
 	}
 	return tmp.Name(), nil
 }
@@ -70,13 +130,13 @@ func downloadTarball(url string) (string, error) {
 func extractTarball(tarPath, destDir string) error {
 	f, err := os.Open(tarPath) // #nosec G304 -- path comes from our own temp file
 	if err != nil {
-		return fmt.Errorf("bootstrap: open tarball: %w", err)
+		return fmt.Errorf("init: open tarball: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
-		return fmt.Errorf("bootstrap: decompress tarball: %w", err)
+		return fmt.Errorf("init: decompress tarball: %w", err)
 	}
 	defer func() { _ = gz.Close() }()
 
@@ -94,7 +154,7 @@ func extractTarEntries(tr *tar.Reader, destDir string) error {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("bootstrap: read tarball: %w", err)
+			return fmt.Errorf("init: read tarball: %w", err)
 		}
 
 		relPath, skip, err := stripTopDir(hdr.Name, &topDir)
@@ -128,7 +188,7 @@ func stripTopDir(name string, topDir *string) (relPath string, skip bool, err er
 		return "", true, nil
 	}
 	if containsDotDot(parts[1]) {
-		return "", false, fmt.Errorf("bootstrap: unsafe path in tarball: %s", name)
+		return "", false, fmt.Errorf("init: unsafe path in tarball: %s", name)
 	}
 	return parts[1], false, nil
 }
@@ -141,7 +201,7 @@ func safeDestPath(relPath, destDir, originalName string) (string, error) {
 		filepath.Clean(destPath)+string(os.PathSeparator),
 		filepath.Clean(destDir)+string(os.PathSeparator),
 	) {
-		return "", fmt.Errorf("bootstrap: path escapes destination: %s", originalName)
+		return "", fmt.Errorf("init: path escapes destination: %s", originalName)
 	}
 	return destPath, nil
 }
@@ -151,11 +211,11 @@ func writeEntry(hdr *tar.Header, destPath string, r io.Reader) error {
 	switch hdr.Typeflag {
 	case tar.TypeDir:
 		if err := os.MkdirAll(destPath, 0o700); err != nil {
-			return fmt.Errorf("bootstrap: create directory %s: %w", destPath, err)
+			return fmt.Errorf("init: create directory %s: %w", destPath, err)
 		}
 	case tar.TypeReg:
 		if err := os.MkdirAll(filepath.Dir(destPath), 0o700); err != nil {
-			return fmt.Errorf("bootstrap: create parent for %s: %w", destPath, err)
+			return fmt.Errorf("init: create parent for %s: %w", destPath, err)
 		}
 		if err := writeExtractedFile(destPath, r); err != nil {
 			return err
@@ -170,11 +230,11 @@ func writeEntry(hdr *tar.Header, destPath string, r io.Reader) error {
 func writeExtractedFile(path string, r io.Reader) error {
 	out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) // #nosec G304
 	if err != nil {
-		return fmt.Errorf("bootstrap: create %s: %w", path, err)
+		return fmt.Errorf("init: create %s: %w", path, err)
 	}
 	if _, err := io.Copy(out, r); err != nil { // #nosec G110 -- tarball size capped by downloadTarball
 		_ = out.Close()
-		return fmt.Errorf("bootstrap: write %s: %w", path, err)
+		return fmt.Errorf("init: write %s: %w", path, err)
 	}
 	return out.Close()
 }

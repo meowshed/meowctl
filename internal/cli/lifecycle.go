@@ -754,24 +754,6 @@ func mergeAfterFromGlobals(existing []string, globals gostarlark.StringDict, eva
 	return result
 }
 
-func newUpdateCmd(gf *globalFlags) *cobra.Command {
-	var cfg runConfig
-	cmd := &cobra.Command{
-		Use:   "update [<component>...]",
-		Short: "Refresh package index for all (or specified) components",
-		RunE: func(_ *cobra.Command, args []string) error {
-			configDir, err := resolveConfigDir(gf)
-			if err != nil {
-				return err
-			}
-			cfg.ConfigDir = configDir
-			return runLifecyclePhaseSet("update", lifecycle.PhaseSetUpdate, cfg, args)
-		},
-	}
-	addLifecycleFlags(cmd, &cfg)
-	return cmd
-}
-
 func newUpgradeCmd(gf *globalFlags) *cobra.Command {
 	var cfg runConfig
 	cmd := &cobra.Command{

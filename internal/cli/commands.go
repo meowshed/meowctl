@@ -33,106 +33,43 @@ const localStarTemplate = `# local.star — machine-specific component additions
 # component("work-vpn")
 `
 
-func newBootstrapCmd(gf *globalFlags) *cobra.Command {
-	var force bool
-	cmd := &cobra.Command{
-		Use:   "bootstrap <repo-url>",
-		Short: "Bootstrap a new machine from an existing dotfiles repo",
-		Long: `bootstrap downloads a dotfiles repo as a tarball, extracts it to the
-meowctl config directory, then runs sync and apply.
+// localModTemplate is the content written to deps.local.mod by meowctl init.
+// deps.local.mod is gitignored and used for machine-specific module overrides.
+const localModTemplate = `# deps.local.mod — machine-specific module declarations (gitignored)
+# Declare additional or override deps for this machine only.
+# Entries here shadow the same-named entries in deps.mod at runtime.
+`
 
+func newInitCmd(gf *globalFlags) *cobra.Command {
+	var force bool
+	var repoURL string
+	cmd := &cobra.Command{
+		Use:   "init [<repo-url>]",
+		Short: "Scaffold a new config directory, or bootstrap from an existing dotfiles repo",
+		Long: `init with no arguments scaffolds a meowctl config directory with a starter
+init.star, local.star, deps.mod, and deps.local.mod.
+
+init <repo-url> bootstraps a new machine from an existing dotfiles repository.
 The repo must be a public GitHub or GitLab repository. The tarball is fetched
 from <repo-url>/archive/refs/heads/main.tar.gz using pure Go HTTPS — no git
 subprocess is required.
 
-If init.star already exists in the config directory, bootstrap exits with an
-error unless --force is passed.`,
-		Args: cobra.ExactArgs(1),
+If init.star already exists in the config directory, init exits with an error
+unless --force is passed.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			configDir, err := resolveConfigDir(gf)
 			if err != nil {
 				return err
 			}
-			return runBootstrap(configDir, args[0], force)
-		},
-	}
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "Overwrite existing config")
-	return cmd
-}
-
-// runBootstrap implements "meowctl bootstrap <repo-url>".
-func runBootstrap(configDir, repoURL string, force bool) error {
-	entryPath := filepath.Join(configDir, configEntryFile)
-
-	// Guard: init.star already exists.
-	if _, err := os.Lstat(entryPath); err == nil {
-		if !force {
-			return exitErrorf(ExitConfig,
-				"config already initialized at %s\n  delete it or run 'meowctl bootstrap --force' to overwrite",
-				entryPath)
-		}
-		// --force: remove the entire configDir and re-create it below.
-		if err := os.RemoveAll(configDir); err != nil {
-			return fmt.Errorf("bootstrap: remove existing config: %w", err)
-		}
-	}
-
-	if err := os.MkdirAll(configDir, 0o700); err != nil {
-		return fmt.Errorf("bootstrap: create config dir: %w", err)
-	}
-
-	// Download tarball.
-	url := tarballURL(repoURL)
-	fmt.Printf("meowctl: downloading %s\n", url)
-	tmpPath, err := downloadTarball(url)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmpPath) }()
-
-	// Extract tarball to configDir.
-	fmt.Printf("meowctl: extracting to %s\n", configDir)
-	if err := extractTarball(tmpPath, configDir); err != nil {
-		return err
-	}
-
-	// Verify init.star is present after extraction.
-	if _, err := os.Lstat(entryPath); err != nil {
-		_ = os.RemoveAll(configDir)
-		return fmt.Errorf("bootstrap: init.star not found after extraction — is this a meowctl dotfiles repo?")
-	}
-
-	// Run sync (resolve deps.mod → deps.lock); skip if deps.lock already present.
-	lockPath := filepath.Join(configDir, configLockFile)
-	if _, err := os.Lstat(lockPath); os.IsNotExist(err) {
-		fmt.Println("meowctl: running sync")
-		if err := runSync(configDir); err != nil {
-			return fmt.Errorf("bootstrap: sync: %w", err)
-		}
-	} else {
-		fmt.Println("meowctl: deps.lock present — skipping sync")
-	}
-
-	// Run apply.
-	fmt.Println("meowctl: running apply")
-	return runApply(runConfig{ConfigDir: configDir}, nil)
-}
-
-func newInitCmd(gf *globalFlags) *cobra.Command {
-	var force bool
-	cmd := &cobra.Command{
-		Use:   "init",
-		Short: "Scaffold a meowctl config directory with a starter init.star",
-		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			configDir, err := resolveConfigDir(gf)
-			if err != nil {
-				return err
+			if len(args) == 1 {
+				return runBootstrap(configDir, args[0], force)
 			}
 			return runInit(configDir, force)
 		},
 	}
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "Overwrite existing init.star")
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Overwrite existing config")
+	_ = repoURL // consumed via args
 	return cmd
 }
 
@@ -195,9 +132,19 @@ func runInit(configDir string, force bool) error {
 		return fmt.Errorf("init: write deps.mod: %w", err)
 	}
 
-	// Ensure local.star is gitignored.
-	if err := ensureGitignore(configDir, configLocalFile); err != nil {
-		return fmt.Errorf("init: update .gitignore: %w", err)
+	// Write deps.local.mod stub (gitignored; machine-specific module overrides).
+	localModPath := filepath.Join(configDir, configLocalModFile)
+	if _, localModStatErr := os.Lstat(localModPath); os.IsNotExist(localModStatErr) {
+		if writeErr := os.WriteFile(localModPath, []byte(localModTemplate), 0o600); writeErr != nil {
+			return fmt.Errorf("init: write deps.local.mod: %w", writeErr)
+		}
+	}
+
+	// Ensure local files are gitignored.
+	for _, entry := range []string{configLocalFile, configLocalModFile, configLocalLockFile} {
+		if err := ensureGitignore(configDir, entry); err != nil {
+			return fmt.Errorf("init: update .gitignore: %w", err)
+		}
 	}
 
 	fmt.Printf("Dotfiles initialized at %s\n", configDir)
@@ -254,15 +201,4 @@ func splitLines(s string) []string {
 		return nil
 	}
 	return strings.Split(strings.TrimSuffix(s, "\n"), "\n")
-}
-
-func newSetupCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "setup",
-		Short: "Run the setup phase of all components (not yet implemented)",
-		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return errNotImplemented("setup")
-		},
-	}
 }
