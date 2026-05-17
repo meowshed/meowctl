@@ -47,7 +47,7 @@ func (e *Evaluator) fileOpts() *syntax.FileOptions {
 //   - filename: path or identifier used in error messages and load() resolution.
 //   - src: file content (string or []byte); if nil, filename is read from disk.
 //   - predeclared: additional predeclared names injected alongside builtins (must not shadow
-//     builtin names such as "component", "pkg", "dep", "module", "select", "platform").
+//     builtin names such as "component", "pkg", "uppkg", "unpkg", "dep", "module", "select", "platform").
 //   - ctx: the ctx object passed as a thread-local for hook calls; may be nil during plain eval.
 func (e *Evaluator) ExecFile(filename string, src any, predeclared gostarlark.StringDict, ctx gostarlark.Value) (*EvalResult, error) {
 	acc := &Accumulator{}
