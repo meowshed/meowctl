@@ -327,6 +327,7 @@ func runRemove(cfg runConfig, names []string) error {
 	}
 
 	localPath := filepath.Join(cfg.ConfigDir, configLocalFile)
+	var toRemove []string
 
 	for _, name := range names {
 		if initSet[name] {
@@ -336,10 +337,25 @@ func runRemove(cfg runConfig, names []string) error {
 			fmt.Printf("meowctl: %s not declared, skipping\n", name)
 			continue
 		}
-		if !cfg.DryRun {
-			if err := rewrite.RemoveComponent(localPath, name); err != nil {
-				return fmt.Errorf("remove: remove from local.star: %w", err)
-			}
+		toRemove = append(toRemove, name)
+	}
+
+	if len(toRemove) == 0 {
+		fmt.Println("meowctl: nothing to do")
+		return nil
+	}
+
+	if cfg.DryRun {
+		fmt.Println("will uninstall:")
+		for _, name := range toRemove {
+			fmt.Printf("  - %s\n", name)
+		}
+		return nil
+	}
+
+	for _, name := range toRemove {
+		if err := rewrite.RemoveComponent(localPath, name); err != nil {
+			return fmt.Errorf("remove: remove from local.star: %w", err)
 		}
 	}
 
@@ -355,7 +371,7 @@ func loadDeclaredNames(configDir string) (initNames []string, localNames []strin
 	starPath := filepath.Join(configDir, configEntryFile)
 	result, execErr := ev.ExecFile(starPath, nil, nil, nil)
 	if execErr != nil {
-		return nil, nil, fmt.Errorf("load init.star: %w", execErr)
+		return nil, nil, exitErrorf(ExitConfig, "load init.star: %v", execErr)
 	}
 	for _, c := range result.Declarations.Components {
 		initNames = append(initNames, c.LogicalName())
@@ -367,7 +383,7 @@ func loadDeclaredNames(configDir string) (initNames []string, localNames []strin
 	}
 	localResult, localExecErr := ev.ExecFile(localPath, nil, nil, nil)
 	if localExecErr != nil {
-		return nil, nil, fmt.Errorf("load local.star: %w", localExecErr)
+		return nil, nil, exitErrorf(ExitConfig, "load local.star: %v", localExecErr)
 	}
 	for _, c := range localResult.Declarations.Components {
 		localNames = append(localNames, c.LogicalName())
