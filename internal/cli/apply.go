@@ -1,14 +1,17 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/meowshed/meowctl/internal/lifecycle"
+	"github.com/meowshed/meowctl/internal/lock"
 	"github.com/meowshed/meowctl/internal/pkg"
 	"github.com/meowshed/meowctl/internal/rewrite"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
@@ -65,6 +68,96 @@ func writeInstalledLock(configDir string, components []string) error {
 	if err := os.Rename(tmpPath, path); err != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("write installed.lock: rename: %w", err)
+	}
+	return nil
+}
+
+// readPkgsLock reads <configDir>/<filename> as a lock.LockFile.
+// Returns an empty LockFile (not an error) if the file is absent.
+func readPkgsLock(configDir, filename string) (lock.LockFile, error) {
+	path := filepath.Join(configDir, filename)
+	var lf lock.LockFile
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		return lf, nil
+	}
+	if _, err := toml.DecodeFile(path, &lf); err != nil { // #nosec G304
+		return lf, fmt.Errorf("read %s: %w", filename, err)
+	}
+	return lf, nil
+}
+
+// writePkgsLockFile atomically writes a lock.LockFile to <configDir>/<filename>.
+func writePkgsLockFile(configDir, filename string, lf lock.LockFile) error {
+	path := filepath.Join(configDir, filename)
+	tmpPath := path + ".tmp"
+	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) // #nosec G304
+	if err != nil {
+		return fmt.Errorf("write %s: create tmp: %w", filename, err)
+	}
+	if err := toml.NewEncoder(f).Encode(lf); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("write %s: encode: %w", filename, err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("write %s: close: %w", filename, err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("write %s: rename: %w", filename, err)
+	}
+	return nil
+}
+
+// appendPkgsLock merges pkgsPins into pkgs.lock (shared) and pkgs.local.lock (local).
+// localSet contains the logical names of components declared in local.star.
+func appendPkgsLock(configDir string, pkgsPins map[string][]starlarkpkg.PkgDecl, localSet map[string]bool) error {
+	sharedLF, err := readPkgsLock(configDir, configPkgsLockFile)
+	if err != nil {
+		return err
+	}
+	localLF, err := readPkgsLock(configDir, configPkgsLocalLockFile)
+	if err != nil {
+		return err
+	}
+
+	sharedDirty, localDirty := false, false
+	for compName, decls := range pkgsPins {
+		isLocal := localSet[compName]
+		for _, d := range decls {
+			entry := lock.PackageEntry{Requested: d.Version, Installed: d.Version}
+			if isLocal {
+				if localLF.Packages == nil {
+					localLF.Packages = make(map[string]lock.ManagerPackages)
+				}
+				if localLF.Packages[d.Manager] == nil {
+					localLF.Packages[d.Manager] = make(lock.ManagerPackages)
+				}
+				localLF.Packages[d.Manager][d.Name] = entry
+				localDirty = true
+			} else {
+				if sharedLF.Packages == nil {
+					sharedLF.Packages = make(map[string]lock.ManagerPackages)
+				}
+				if sharedLF.Packages[d.Manager] == nil {
+					sharedLF.Packages[d.Manager] = make(lock.ManagerPackages)
+				}
+				sharedLF.Packages[d.Manager][d.Name] = entry
+				sharedDirty = true
+			}
+		}
+	}
+
+	if sharedDirty {
+		if err := writePkgsLockFile(configDir, configPkgsLockFile, sharedLF); err != nil {
+			return err
+		}
+	}
+	if localDirty {
+		if err := writePkgsLockFile(configDir, configPkgsLocalLockFile, localLF); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -140,18 +233,22 @@ func mergeInstalledAfterApply(installedSet map[string]bool, toInstall []lifecycl
 }
 
 // execApplyPhases runs the install and uninstall phase sets for the given component lists.
-func execApplyPhases(cfg runConfig, toInstall, toUninstall []lifecycle.ComponentID, pmReg *pkg.PMRegistry, urlMap map[string]string) error {
+// It returns the install caller (for pkgsPins access) which may be nil if no installs ran.
+func execApplyPhases(cfg runConfig, toInstall, toUninstall []lifecycle.ComponentID, pmReg *pkg.PMRegistry, urlMap map[string]string) (*starlarkHookCaller, error) {
+	var installCaller *starlarkHookCaller
 	if len(toInstall) > 0 {
-		if err := runLifecyclePhaseSetOrdered("install", lifecycle.PhaseSetInstall, cfg, toInstall, pmReg, urlMap); err != nil {
-			return err
+		var err error
+		installCaller, err = runLifecyclePhaseSetOrderedWithCaller("install", lifecycle.PhaseSetInstall, cfg, toInstall, pmReg, urlMap)
+		if err != nil {
+			return nil, err
 		}
 	}
 	if len(toUninstall) > 0 {
 		if err := runLifecyclePhaseSetOrdered("uninstall", lifecycle.PhaseSetUninstall, cfg, toUninstall, pmReg, urlMap); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return installCaller, nil
 }
 
 // computeNewInstalled returns the component list to write to installed.lock after apply.
@@ -207,12 +304,34 @@ func runApply(cfg runConfig, scopeFilter []string) error {
 		return printApplyDryRun(toInstall, toUninstall)
 	}
 
-	if err := execApplyPhases(cfg, toInstall, toUninstall, pmReg, urlMap); err != nil {
+	installCaller, err := execApplyPhases(cfg, toInstall, toUninstall, pmReg, urlMap)
+	if err != nil {
 		return err
 	}
 
 	newInstalled := computeNewInstalled(scoped, allOrder, installedSet, toInstall)
-	return writeInstalledLock(cfg.ConfigDir, newInstalled)
+	if err := writeInstalledLock(cfg.ConfigDir, newInstalled); err != nil {
+		return err
+	}
+
+	return writePkgsLockAfterApply(cfg.ConfigDir, installCaller)
+}
+
+// writePkgsLockAfterApply writes pkgs.lock / pkgs.local.lock after a successful apply.
+// It is a no-op when installCaller is nil or has no package pins.
+func writePkgsLockAfterApply(configDir string, installCaller *starlarkHookCaller) error {
+	if installCaller == nil || len(installCaller.pkgsPins) == 0 {
+		return nil
+	}
+	_, localNames, err := loadDeclaredNames(configDir)
+	if err != nil {
+		return err
+	}
+	localSet := make(map[string]bool, len(localNames))
+	for _, n := range localNames {
+		localSet[n] = true
+	}
+	return appendPkgsLock(configDir, installCaller.pkgsPins, localSet)
 }
 
 // printApplyDryRun prints the install/uninstall plan and returns nil.
@@ -275,6 +394,10 @@ func runAdd(cfg runConfig, names []string) error {
 		if initSet[name] || localSet[name] {
 			fmt.Printf("meowctl: %s already declared, skipping\n", name)
 			continue
+		}
+		// Check that the component's module is declared in a modfile.
+		if err := checkModuleDeclared(cfg.ConfigDir, name); err != nil {
+			return err
 		}
 		if !cfg.DryRun {
 			if err := rewrite.AppendComponent(localPath, name); err != nil {
@@ -363,7 +486,36 @@ func runRemove(cfg runConfig, names []string) error {
 	return runApply(cfg, nil)
 }
 
-// loadDeclaredNames loads logical component names from init.star and local.star
+// checkModuleDeclared verifies that the module referenced by a component name
+// is declared in deps.mod or deps.local.mod. Component names of the form
+// "@modname//path/to/component" carry an explicit module; bare names (no "@")
+// are local and require no module declaration.
+func checkModuleDeclared(configDir, componentName string) error {
+	if !strings.HasPrefix(componentName, "@") {
+		return nil // bare local component — no module required
+	}
+	// Extract module name: "@modname//..." → "modname"
+	rest := componentName[1:]
+	slash := strings.Index(rest, "//")
+	if slash < 0 {
+		return nil // malformed — let the evaluator catch it
+	}
+	moduleName := rest[:slash]
+
+	if depExistsInEitherModfile(configDir, moduleName) {
+		return nil
+	}
+	return fmt.Errorf("module %q not found in deps.mod or deps.local.mod — run 'meowctl dep add %s' first", moduleName, moduleName)
+}
+
+// depExistsInEitherModfile returns true if name exists in deps.mod or deps.local.mod.
+func depExistsInEitherModfile(configDir, name string) bool {
+	if depExistsInFile(filepath.Join(configDir, configModFile), name) {
+		return true
+	}
+	return depExistsInFile(filepath.Join(configDir, configLocalModFile), name)
+}
+
 // without expanding transitive deps. Returns separate slices for each file.
 func loadDeclaredNames(configDir string) (initNames []string, localNames []string, err error) {
 	ev := makeEvaluator()

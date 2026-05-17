@@ -32,26 +32,18 @@ Starlark configuration files.`,
 
 	cmd.AddCommand(
 		newVersionCmd(),
-		newBootstrapCmd(&gf),
 		newInitCmd(&gf),
 		newApplyCmd(&gf),
 		newAddCmd(&gf),
 		newRemoveCmd(&gf),
-		newUpdateCmd(&gf),
 		newUpgradeCmd(&gf),
-		newSetupCmd(),
 		newShellCmd(),
 		newHookCmd(&gf),
 		newVerifyCmd(&gf),
-		newRestoreCmd(&gf),
 		newDoctorCmd(&gf),
 		newStatusCmd(&gf),
-		newLockCmd(&gf),
-		newComponentCmd(&gf),
 		newSelfUpdateCmd(),
-		newSyncCmd(&gf),
-		newGetCmd(&gf),
-		newOutdatedCmd(&gf),
+		newDepCmd(&gf),
 	)
 
 	// Completion subcommands are added automatically by Cobra on first Execute.
