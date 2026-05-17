@@ -37,7 +37,7 @@ func newLockVerifyCmd(gf *globalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			lockPath := filepath.Join(configDir, "meowctl.lock")
+			lockPath := filepath.Join(configDir, configLockFile)
 			lf, err := lock.Read(lockPath)
 			if err != nil {
 				return exitErrorf(ExitConfig, "lock verify: %v", err)
@@ -105,7 +105,7 @@ func newLockShowCmd(gf *globalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			lockPath := filepath.Join(configDir, "meowctl.lock")
+			lockPath := filepath.Join(configDir, configLockFile)
 			lf, err := lock.Read(lockPath)
 			if err != nil {
 				return exitErrorf(ExitConfig, "lock show: %v", err)

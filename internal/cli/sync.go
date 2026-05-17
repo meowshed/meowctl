@@ -16,15 +16,15 @@ import (
 )
 
 // newSyncCmd returns the "meowctl sync" command.
-// sync reads meowctl.mod, resolves all deps against the registry, downloads
+// sync reads deps.mod, resolves all deps against the registry, downloads
 // changed tarballs, updates the lock file, and re-runs install for any
 // component whose module version changed.
 func newSyncCmd(gf *globalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync",
-		Short: "Resolve and download modules declared in meowctl.mod",
-		Long: `sync reads meowctl.mod, resolves all dep() declarations against the registry,
-downloads any changed tarballs, updates meowctl.lock, and re-runs the install
+		Short: "Resolve and download modules declared in deps.mod",
+		Long: `sync reads deps.mod, resolves all dep() declarations against the registry,
+downloads any changed tarballs, updates deps.lock, and re-runs the install
 phase for every component whose module version changed.
 
 replace() directives are honoured: replaced modules are read from the local
@@ -42,12 +42,12 @@ local path is a hard error.`,
 }
 
 // newGetCmd returns the "meowctl get" command.
-// get rewrites a dep version in meowctl.mod and refreshes the lock entry.
+// get rewrites a dep version in deps.mod and refreshes the lock entry.
 func newGetCmd(gf *globalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <module>[@<version>]",
-		Short: "Add or update a module dependency in meowctl.mod",
-		Long: `get rewrites the dep() version for <module> in meowctl.mod and updates
+		Short: "Add or update a module dependency in deps.mod",
+		Long: `get rewrites the dep() version for <module> in deps.mod and updates
 the lock file. Use @latest to resolve the newest available version.
 
 Replaced modules (replace() directives) are skipped with a warning.`,
@@ -68,7 +68,7 @@ func newOutdatedCmd(gf *globalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "outdated",
 		Short: "List module dependencies with available upgrades",
-		Long: `outdated reads meowctl.lock and queries the registry for the latest version
+		Long: `outdated reads deps.lock and queries the registry for the latest version
 of each module. It prints a table of deps where a newer version is available.
 
 No files are modified. Replaced modules are skipped with a warning.`,
@@ -100,7 +100,7 @@ func newRegistryLoader(configDir string) (*loader.RegistryLoader, error) {
 	}
 	return &loader.RegistryLoader{
 		CacheDir: cd,
-		LockPath: filepath.Join(configDir, "meowctl.lock"),
+		LockPath: filepath.Join(configDir, configLockFile),
 	}, nil
 }
 
@@ -136,7 +136,7 @@ func runSync(configDir string) error {
 
 // syncPrepare loads the modfile, registry loader, and old lock for runSync.
 func syncPrepare(configDir string) (*modfile.ModFile, *loader.RegistryLoader, *lock.LockFile, error) {
-	modPath := filepath.Join(configDir, "meowctl.mod")
+	modPath := filepath.Join(configDir, configModFile)
 	mf, err := modfile.Parse(modPath)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("sync: %w", err)
@@ -145,7 +145,7 @@ func syncPrepare(configDir string) (*modfile.ModFile, *loader.RegistryLoader, *l
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	lockPath := filepath.Join(configDir, "meowctl.lock")
+	lockPath := filepath.Join(configDir, configLockFile)
 	oldLock, err := lock.Read(lockPath)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("sync: read old lock: %w", err)
@@ -191,7 +191,7 @@ func runGet(configDir, arg string) error {
 		return exitErrorf(ExitUsage, "get: invalid argument %q — expected <module> or <module>@<version>", arg)
 	}
 
-	modPath := filepath.Join(configDir, "meowctl.mod")
+	modPath := filepath.Join(configDir, configModFile)
 	mf, err := modfile.Parse(modPath)
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
@@ -219,7 +219,7 @@ func runGet(configDir, arg string) error {
 		version = latest
 	}
 
-	// Rewrite the dep version in meowctl.mod.
+	// Rewrite the dep version in deps.mod.
 	if err := rewrite.SetDepVersion(modPath, modName, version); err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
@@ -240,13 +240,13 @@ func runGet(configDir, arg string) error {
 
 // runOutdated implements "meowctl outdated".
 func runOutdated(configDir string) error {
-	modPath := filepath.Join(configDir, "meowctl.mod")
+	modPath := filepath.Join(configDir, configModFile)
 	mf, err := modfile.Parse(modPath)
 	if err != nil {
 		return fmt.Errorf("outdated: %w", err)
 	}
 
-	lockPath := filepath.Join(configDir, "meowctl.lock")
+	lockPath := filepath.Join(configDir, configLockFile)
 	lf, err := lock.Read(lockPath)
 	if err != nil {
 		return fmt.Errorf("outdated: read lock: %w", err)
