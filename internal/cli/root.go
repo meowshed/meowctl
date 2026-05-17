@@ -32,7 +32,7 @@ Starlark configuration files.`,
 
 	cmd.AddCommand(
 		newVersionCmd(),
-		newBootstrapCmd(),
+		newBootstrapCmd(&gf),
 		newInitCmd(&gf),
 		newApplyCmd(&gf),
 		newAddCmd(&gf),
