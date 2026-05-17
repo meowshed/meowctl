@@ -39,6 +39,7 @@ func makePredeclared(platform PlatformInfo) gostarlark.StringDict {
 		"component": gostarlark.NewBuiltin("component", builtinComponent),
 		"pkg":       gostarlark.NewBuiltin("pkg", builtinPkg),
 		"unpkg":     gostarlark.NewBuiltin("unpkg", builtinUnpkg),
+		"uppkg":     gostarlark.NewBuiltin("uppkg", builtinUppkg),
 		"repo":      gostarlark.NewBuiltin("repo", builtinRepo),
 		"query_pm":  gostarlark.NewBuiltin("query_pm", builtinQueryPM),
 		"dep":       gostarlark.NewBuiltin("dep", builtinDep),
@@ -300,6 +301,29 @@ func builtinUnpkg(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarl
 		return nil, fmt.Errorf("unpkg: no PM registry available")
 	}
 	if err := caps.PMRegistry.Dispatch("uninstall", managerStr, nameStr, versionStr, extra, ctxVal); err != nil {
+		return nil, err
+	}
+	return gostarlark.None, nil
+}
+
+// builtinUppkg implements uppkg(manager, name, version="", **kwargs).
+// Dispatches an immediate upgrade call to the named PM's update_pkg handler,
+// falling back to install_pkg(ctx, name, "latest", **kwargs) if update_pkg is
+// not defined. Must be called during hook execution (ctx with PMRegistry must be on thread).
+func builtinUppkg(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
+	managerStr, nameStr, _, extra, err := parsePkgArgs(args, kwargs)
+	if err != nil {
+		return nil, err
+	}
+	ctxVal := ctxFromThread(thread)
+	if ctxVal == nil {
+		return nil, fmt.Errorf("uppkg: no ctx on thread; uppkg() must be called during hook execution")
+	}
+	caps := ctxVal.Caps()
+	if caps.PMRegistry == nil {
+		return nil, fmt.Errorf("uppkg: no PM registry available")
+	}
+	if err := caps.PMRegistry.DispatchUpdate(managerStr, nameStr, extra, ctxVal); err != nil {
 		return nil, err
 	}
 	return gostarlark.None, nil
