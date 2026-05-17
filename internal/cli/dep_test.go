@@ -343,12 +343,11 @@ dep(name = "orphan", version = "0.2.0")
 func TestDepSyncCmd_RejectsExtraArgs(t *testing.T) {
 	tmp := t.TempDir()
 	writeModfile(t, filepath.Join(tmp, "deps.mod"), "# empty\n")
-	// dep sync takes no args — Cobra rejects extra positional args.
+	// dep sync declares Args: cobra.NoArgs — extra positional args must be rejected.
 	_, err := execCmd(t, "--config", tmp, "dep", "sync", "extra-arg")
-	// Cobra marks unknown args as an error by default only when Args validator is set;
-	// our newDepSyncCmd has no Args restriction so extra args are silently ignored.
-	// What we DO want to verify is that the command is wired and reachable (no panic).
-	_ = err // error or nil — we only care the call doesn't panic.
+	if err == nil {
+		t.Fatal("expected error when extra args passed to dep sync")
+	}
 }
 
 func TestDepSyncCmd_Runs(t *testing.T) {
