@@ -807,12 +807,6 @@ func parseGitHubSource(s string) (githubSource, error) {
 	return githubSource{owner: owner, repo: repo, ref: ref}, nil
 }
 
-// githubTarballURL returns the GitHub archive URL for the given owner/repo/ref.
-// GitHub serves .tar.gz archives for any ref (tag, branch, or commit SHA) at this URL.
-func githubTarballURL(owner, repo, ref string) string {
-	return fmt.Sprintf("https://github.com/%s/%s/archive/%s.tar.gz", owner, repo, ref)
-}
-
 // githubTarballURLWithBase returns the GitHub archive URL using the provided base.
 // If base is empty it falls back to https://github.com.
 func githubTarballURLWithBase(base, owner, repo, ref string) string {

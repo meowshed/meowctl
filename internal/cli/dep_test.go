@@ -122,10 +122,16 @@ func TestDepAddCmd_WritesModfile(t *testing.T) {
 	tmp := t.TempDir()
 	writeModfile(t, filepath.Join(tmp, "deps.mod"), `dep(name = "alpha", version = "0.1.0")`)
 
-	// Duplicate same version → no-op, should not error.
-	_, err := execCmd(t, "--config", tmp, "dep", "add", "alpha", "--version", "0.1.0")
+	// Add a brand-new dep — should be written to the modfile.
+	// runSync will fail (no registry), which is fine; we only check the modfile was updated.
+	_, _ = execCmd(t, "--config", tmp, "dep", "add", "beta", "--version", "0.2.0") //nolint:errcheck
+
+	data, err := os.ReadFile(filepath.Join(tmp, "deps.mod")) // #nosec G304
 	if err != nil {
-		t.Fatalf("exact duplicate should be no-op (no error), got: %v", err)
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "beta") {
+		t.Fatalf("expected beta to be written to deps.mod, got:\n%s", data)
 	}
 }
 
@@ -198,7 +204,7 @@ dep(name = "bravo", version = "0.2.0")
 	// Actually since bravo is gone from modfile, runSync will just try to resolve alpha.
 	// With empty lock and no registry, it will fail. That's acceptable for this test —
 	// we check the modfile was written by inspecting it directly.
-	if _, err := execCmd(t, "--config", tmp, "dep", "remove", "bravo"); err != nil { //nolint:errcheck
+	if _, err := execCmd(t, "--config", tmp, "dep", "remove", "bravo"); err != nil {
 		t.Log("dep remove bravo:", err) // error expected (runSync will fail with no registry)
 	}
 

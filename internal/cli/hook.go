@@ -77,7 +77,7 @@ func (h *runtimeHookCaller) buildCaps(componentID, hookName string) *ctx.Capabil
 func writeHookError(configDir string, runErr error) {
 	path := filepath.Join(configDir, configHookErrorFile)
 	content := fmt.Sprintf("%s\n%s\n", time.Now().UTC().Format(time.RFC3339), runErr.Error())
-	_ = os.WriteFile(path, []byte(content), 0o600) // #nosec G306
+	_ = os.WriteFile(path, []byte(content), 0o600) // #nosec G304
 }
 
 // clearHookError removes the .hook-error flag file if it exists.

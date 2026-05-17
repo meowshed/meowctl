@@ -39,6 +39,7 @@ func newDepSyncCmd(gf *globalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync",
 		Short: "Sync deps.mod and deps.local.mod to their lock files",
+		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			configDir, err := resolveConfigDir(gf)
 			if err != nil {
@@ -278,7 +279,7 @@ func depExistsInFile(path, name string) bool {
 // parseOrEmpty parses the modfile at path or returns an empty ModFile if the file doesn't exist.
 func parseOrEmpty(path string) (*modfile.ModFile, error) {
 	mf, err := modfile.Parse(path)
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return &modfile.ModFile{}, nil
 	}
 	if err != nil {
@@ -323,6 +324,9 @@ func loadUpgradeDeps(configDir string) ([]upgradeDepEntry, error) {
 	modPath := filepath.Join(configDir, configModFile)
 	mf, err := modfile.Parse(modPath)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("dep upgrade: %s not found — run 'meowctl dep add' to declare dependencies first", configModFile)
+		}
 		return nil, fmt.Errorf("dep upgrade: %w", err)
 	}
 	var all []upgradeDepEntry
@@ -392,6 +396,8 @@ func runDepUpgrade(configDir string, filter []string, dryRun bool) error {
 	if dryRun {
 		return nil
 	}
+	// Write the cleared lock before calling runSync so that the pre-sync state is
+	// persisted even if runSync fails partway through (idempotent re-run is then safe).
 	if err := lock.Write(lockPath, lf); err != nil {
 		return fmt.Errorf("dep upgrade: write lock: %w", err)
 	}
@@ -476,7 +482,7 @@ func newDepTidyCmd(gf *globalFlags) *cobra.Command {
 }
 
 // depRefRE matches @name// load-URL refs in star files.
-var depRefRE = regexp.MustCompile(`@([\w][\w-]*)//`)
+var depRefRE = regexp.MustCompile(`@(\w[\w-]*)//`)
 
 func runDepTidy(configDir string, dryRun bool) error {
 	refs := collectStarRefs(configDir)
@@ -487,6 +493,7 @@ func runDepTidy(configDir string, dryRun bool) error {
 		return fmt.Errorf("dep tidy: %w", err)
 	}
 
+	// Note: deps.local.mod is not tidied — local overrides are user-managed.
 	kept, orphans := partitionDeps(mf.Deps, refs)
 	for _, name := range orphans {
 		fmt.Printf("  orphan %s (not referenced in any star file)\n", name)
@@ -554,6 +561,8 @@ func partitionDeps(deps []modfile.DepDecl, refs map[string]bool) (kept []modfile
 }
 
 // warnUnknownRefs prints a warning for any ref not declared in shared or local modfile.
+// Warnings go to os.Stderr directly (not the cobra output writer) so they appear even
+// when stdout is captured or redirected.
 func warnUnknownRefs(refs map[string]bool, sharedDeps []modfile.DepDecl, localModPath string) error {
 	declared := map[string]bool{}
 	for _, d := range sharedDeps {
