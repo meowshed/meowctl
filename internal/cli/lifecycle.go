@@ -102,7 +102,7 @@ func addInstallFlags(cmd *cobra.Command, cfg *runConfig) {
 }
 
 // buildHookCaller constructs a starlarkHookCaller with a CompositeLoader wired
-// with replace directives read from <configDir>/meowctl.mod.
+// with replace directives read from <configDir>/deps.mod.
 func buildHookCaller(cfg runConfig) *starlarkHookCaller {
 	distro, distroLike := "", ""
 	if runtime.GOOS == "linux" {

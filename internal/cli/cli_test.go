@@ -270,12 +270,11 @@ func TestComputeToInstall_Scoped(t *testing.T) {
 
 // TestComputeToUninstall_RemovedFromInstalled returns components installed but not declared.
 func TestComputeToUninstall_RemovedFromInstalled(t *testing.T) {
-	// "old-tool" is installed but not declared — should be uninstalled.
+	// "old-tool" is in installed.lock but not in declared set — should be uninstalled.
 	order := []string{"brew", "shell"}
 	declared := map[string]bool{"brew": true, "shell": true}
-	installed := map[string]bool{"brew": true, "shell": true, "old-tool": true}
 	installedList := []string{"brew", "shell", "old-tool"}
-	result := cli.ExportComputeToUninstall(order, declared, installed, installedList)
+	result := cli.ExportComputeToUninstall(order, declared, nil, installedList)
 	if len(result) != 1 || result[0] != "old-tool" {
 		t.Fatalf("want [old-tool], got %v", result)
 	}
@@ -285,9 +284,8 @@ func TestComputeToUninstall_RemovedFromInstalled(t *testing.T) {
 func TestComputeToUninstall_NothingToRemove(t *testing.T) {
 	order := []string{"brew", "shell"}
 	declared := map[string]bool{"brew": true, "shell": true}
-	installed := map[string]bool{"brew": true, "shell": true}
 	installedList := []string{"brew", "shell"}
-	result := cli.ExportComputeToUninstall(order, declared, installed, installedList)
+	result := cli.ExportComputeToUninstall(order, declared, nil, installedList)
 	if len(result) != 0 {
 		t.Fatalf("want nothing to uninstall, got %v", result)
 	}

@@ -276,8 +276,10 @@ func runAdd(cfg runConfig, names []string) error {
 			fmt.Printf("meowctl: %s already declared, skipping\n", name)
 			continue
 		}
-		if err := rewrite.AppendComponent(localPath, name); err != nil {
-			return fmt.Errorf("add: append to local.star: %w", err)
+		if !cfg.DryRun {
+			if err := rewrite.AppendComponent(localPath, name); err != nil {
+				return fmt.Errorf("add: append to local.star: %w", err)
+			}
 		}
 		toApply = append(toApply, name)
 	}
@@ -334,8 +336,10 @@ func runRemove(cfg runConfig, names []string) error {
 			fmt.Printf("meowctl: %s not declared, skipping\n", name)
 			continue
 		}
-		if err := rewrite.RemoveComponent(localPath, name); err != nil {
-			return fmt.Errorf("remove: remove from local.star: %w", err)
+		if !cfg.DryRun {
+			if err := rewrite.RemoveComponent(localPath, name); err != nil {
+				return fmt.Errorf("remove: remove from local.star: %w", err)
+			}
 		}
 	}
 

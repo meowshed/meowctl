@@ -219,7 +219,7 @@ func runGet(configDir, arg string) error {
 		version = latest
 	}
 
-	// Rewrite the dep version in meowctl.mod.
+	// Rewrite the dep version in deps.mod.
 	if err := rewrite.SetDepVersion(modPath, modName, version); err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
