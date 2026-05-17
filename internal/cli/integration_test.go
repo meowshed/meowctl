@@ -6,9 +6,9 @@ package cli_test
 // Run with: go test -tags integration ./internal/cli/...
 //
 // These tests validate the full resolution pipeline end-to-end:
-// 1. Registry index is reachable and contains meowctl-stdlib.
+// 1. Registry index is reachable and contains stdlib.
 // 2. The stdlib tarball is downloadable, extracted, and integrity-verified.
-// 3. loadComponentsWithDeps resolves @meowctl-stdlib// references, including
+// 3. loadComponentsWithDeps resolves @stdlib// references, including
 //    transitive after= dependencies, filtering, and cache reuse.
 
 import (
@@ -45,12 +45,12 @@ func containsID(ids []lifecycle.ComponentID, name string) bool {
 }
 
 // TestLiveLoadComponents_StdlibGit creates a minimal meowctl.star that declares
-// a single @meowctl-stdlib//components/git component and verifies that
+// a single @stdlib//components/git component and verifies that
 // loadComponentsWithDeps resolves it successfully against the live registry.
 func TestLiveLoadComponents_StdlibGit(t *testing.T) {
 	configDir := sharedConfigDir(t, `
 module(name = "test", version = "0.1.0")
-component("@meowctl-stdlib//components/git")
+component("@stdlib//components/git")
 `)
 
 	ids, err := cli.ExportLoadComponents(configDir, nil)
@@ -69,7 +69,7 @@ component("@meowctl-stdlib//components/git")
 func TestLiveLoadComponents_TransitiveDeps(t *testing.T) {
 	star := `
 module(name = "test", version = "0.1.0")
-component("@meowctl-stdlib//bundles/git")
+component("@stdlib//bundles/git")
 `
 	wantComponents := []string{"lazygit", "tig", "delta", "forgit"}
 
@@ -105,8 +105,8 @@ component("@meowctl-stdlib//bundles/git")
 func TestLiveLoadComponents_MultipleComponents(t *testing.T) {
 	configDir := sharedConfigDir(t, `
 module(name = "test", version = "0.1.0")
-component("@meowctl-stdlib//components/git")
-component("@meowctl-stdlib//components/gh")
+component("@stdlib//components/git")
+component("@stdlib//components/gh")
 `)
 
 	ids, err := cli.ExportLoadComponents(configDir, nil)
@@ -138,9 +138,9 @@ component("@meowctl-stdlib//components/gh")
 func TestLiveLoadComponents_Filter(t *testing.T) {
 	configDir := sharedConfigDir(t, `
 module(name = "test", version = "0.1.0")
-component("@meowctl-stdlib//components/git")
-component("@meowctl-stdlib//components/gh")
-component("@meowctl-stdlib//components/jq")
+component("@stdlib//components/git")
+component("@stdlib//components/gh")
+component("@stdlib//components/jq")
 `)
 
 	ids, err := cli.ExportLoadComponents(configDir, []string{"git"})
@@ -173,7 +173,7 @@ func TestLiveLoadComponents_CacheReuse(t *testing.T) {
 
 	star := `
 module(name = "test", version = "0.1.0")
-component("@meowctl-stdlib//components/git")
+component("@stdlib//components/git")
 `
 	configDir := sharedConfigDir(t, star)
 
@@ -216,7 +216,7 @@ func TestLiveRegistry_AllBundles(t *testing.T) {
 	// Trigger a download by loading a known component so the tarball is cached.
 	configDir := sharedConfigDir(t, `
 module(name = "test", version = "0.1.0")
-component("@meowctl-stdlib//components/git")
+component("@stdlib//components/git")
 `)
 	if _, err := cli.ExportLoadComponents(configDir, nil); err != nil {
 		t.Fatalf("seed download failed: %v", err)
@@ -228,15 +228,15 @@ component("@meowctl-stdlib//components/git")
 	if err != nil {
 		t.Fatalf("read lock file: %v", err)
 	}
-	stdlibEntry, ok := lf.Modules["meowctl-stdlib"]
+	stdlibEntry, ok := lf.Modules["stdlib"]
 	if !ok {
-		t.Fatal("meowctl-stdlib not found in lock file after resolution")
+		t.Fatal("stdlib not found in lock file after resolution")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatalf("UserHomeDir: %v", err)
 	}
-	bundleDir := filepath.Join(home, ".cache", "meowctl", "modules", "meowctl-stdlib", stdlibEntry.Version, "bundles")
+	bundleDir := filepath.Join(home, ".cache", "meowctl", "modules", "stdlib", stdlibEntry.Version, "bundles")
 	if _, err := os.Stat(bundleDir); err != nil {
 		t.Fatalf("bundle dir not found in cache (%s): %v", bundleDir, err)
 	}

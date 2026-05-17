@@ -24,9 +24,9 @@ type LockMeta struct {
 	UpdatedAt string `toml:"updated-at"`
 }
 
-// ModuleEntry records the resolved state of one registry module.
+// ModuleEntry records the resolved state of one registry or GitHub module.
 type ModuleEntry struct {
-	// Version is the resolved semver version selected by MVS.
+	// Version is the resolved semver version selected by MVS (registry deps only).
 	Version string `toml:"version"`
 	// Source is the canonical URL of the source tarball.
 	Source string `toml:"source"`
@@ -35,6 +35,10 @@ type ModuleEntry struct {
 	// Files maps each extracted file path (relative to module root) to its
 	// individual SRI hash, enabling per-file integrity verification.
 	Files map[string]string `toml:"files"`
+	// CommitSHA is the full Git commit SHA resolved at sync time for GitHub deps.
+	// For registry deps this is empty. For GitHub deps (source = "github:..."),
+	// this is the commit the tag or branch resolved to, ensuring reproducible fetches.
+	CommitSHA string `toml:"commit-sha,omitempty"`
 	// Replaced is true when this module is replaced by a local path via replace().
 	// When true, Source and Integrity are empty; Path holds the local directory.
 	Replaced bool `toml:"replaced,omitempty"`
