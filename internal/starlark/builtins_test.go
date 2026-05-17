@@ -175,6 +175,52 @@ func TestBuiltinPkg_MissingArgs(t *testing.T) {
 	}
 }
 
+// --- unpkg() ---
+
+func TestBuiltinUnpkg_NoCtx(t *testing.T) {
+	// unpkg() requires a ctx on the thread; no accumulator path exists.
+	thread := &gostarlark.Thread{Name: "no-ctx"}
+	_, err := builtinUnpkg(
+		thread, nil,
+		gostarlark.Tuple{gostarlark.String("brew"), gostarlark.String("ripgrep")},
+		nil,
+	)
+	if err == nil {
+		t.Fatal("expected error when ctx is not set on thread")
+	}
+}
+
+func TestBuiltinUnpkg_MissingArgs(t *testing.T) {
+	thread := &gostarlark.Thread{Name: "test"}
+	_, err := builtinUnpkg(thread, nil, gostarlark.Tuple{gostarlark.String("brew")}, nil)
+	if err == nil {
+		t.Fatal("expected error for missing name argument")
+	}
+}
+
+// --- uppkg() ---
+
+func TestBuiltinUppkg_NoCtx(t *testing.T) {
+	// uppkg() requires a ctx on the thread; no accumulator path exists.
+	thread := &gostarlark.Thread{Name: "no-ctx"}
+	_, err := builtinUppkg(
+		thread, nil,
+		gostarlark.Tuple{gostarlark.String("brew"), gostarlark.String("ripgrep")},
+		nil,
+	)
+	if err == nil {
+		t.Fatal("expected error when ctx is not set on thread")
+	}
+}
+
+func TestBuiltinUppkg_MissingArgs(t *testing.T) {
+	thread := &gostarlark.Thread{Name: "test"}
+	_, err := builtinUppkg(thread, nil, gostarlark.Tuple{gostarlark.String("brew")}, nil)
+	if err == nil {
+		t.Fatal("expected error for missing name argument")
+	}
+}
+
 // --- dep() ---
 
 func TestBuiltinDep_Basic(t *testing.T) {

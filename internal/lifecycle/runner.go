@@ -14,12 +14,15 @@ import (
 // Phase identifies one of the meowctl lifecycle phases.
 type Phase string
 
-// Phase constants define the 12 command-scoped lifecycle phases.
+// Phase constants define the 13 command-scoped lifecycle phases.
 const (
 	// install phases
 	PhaseInstallCheck     Phase = "install_check"
 	PhaseInstall          Phase = "install"
 	PhaseInstallConfigure Phase = "install_configure"
+
+	// update phase
+	PhaseUpdate Phase = "update"
 
 	// upgrade phases
 	PhaseUpgradeCheck     Phase = "upgrade_check"
@@ -42,6 +45,7 @@ const (
 // Phase sets define the ordered phases for each top-level command.
 var (
 	PhaseSetInstall   = []Phase{PhaseInstallCheck, PhaseInstall, PhaseInstallConfigure}
+	PhaseSetUpdate    = []Phase{PhaseUpdate}
 	PhaseSetUpgrade   = []Phase{PhaseUpgradeCheck, PhaseUpgrade, PhaseUpgradeConfigure}
 	PhaseSetUninstall = []Phase{PhaseUninstallCheck, PhaseUninstall, PhaseUninstallCleanup}
 	PhaseSetVerify    = []Phase{PhaseVerify}
