@@ -125,12 +125,13 @@ func (c *CompositeLoader) Load(thread *gostarlark.Thread, moduleURL string, pred
 			sub = gh
 		case len(moduleURL) > 1 && moduleURL[0] == '@' && strings.Contains(moduleURL, "//"):
 			sub = &RegistryLoader{
-				RegistryURL: c.registryURL,
-				CacheDir:    filepath.Join(c.cacheDir, "modules"),
-				LockPath:    c.lockPath,
-				Client:      c.client,
-				FileOpts:    c.fileOpts,
-				Replaces:    c.replaces,
+				RegistryURL:   c.registryURL,
+				CacheDir:      filepath.Join(c.cacheDir, "modules"),
+				LockPath:      c.lockPath,
+				Client:        c.client,
+				FileOpts:      c.fileOpts,
+				Replaces:      c.replaces,
+				GitHubAPIBase: c.githubAPIBase,
 			}
 		default:
 			return nil, fmt.Errorf("CompositeLoader: unknown scheme in module URL %q", moduleURL)

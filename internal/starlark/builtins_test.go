@@ -229,23 +229,26 @@ func TestBuiltinDep_Basic(t *testing.T) {
 
 	_, err := builtinDep(
 		thread, nil,
-		gostarlark.Tuple{gostarlark.String("github://meowshed/stdlib//base")},
-		nil,
+		gostarlark.Tuple{},
+		[]gostarlark.Tuple{
+			{gostarlark.String("name"), gostarlark.String("stdlib")},
+			{gostarlark.String("version"), gostarlark.String("0.1.0")},
+		},
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(acc.Deps) != 1 || acc.Deps[0].URL != "github://meowshed/stdlib//base" {
+	if len(acc.Deps) != 1 || acc.Deps[0].Name != "stdlib" || acc.Deps[0].Version != "0.1.0" {
 		t.Errorf("unexpected deps: %+v", acc.Deps)
 	}
 }
 
-func TestBuiltinDep_MissingURL(t *testing.T) {
+func TestBuiltinDep_MissingArgs(t *testing.T) {
 	acc := &Accumulator{}
 	thread := newThread(acc)
 	_, err := builtinDep(thread, nil, gostarlark.Tuple{}, nil)
 	if err == nil {
-		t.Fatal("expected error for missing url argument")
+		t.Fatal("expected error for missing name/version arguments")
 	}
 }
 
