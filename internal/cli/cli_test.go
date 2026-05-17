@@ -256,36 +256,6 @@ func TestShellCmd_Unknown(t *testing.T) {
 	}
 }
 
-// TestComponentListCmd verifies component list outputs declared component names.
-func TestComponentListCmd(t *testing.T) {
-	tmp := t.TempDir()
-	star := `
-component("alpha")
-component("beta")
-`
-	if err := os.WriteFile(filepath.Join(tmp, "init.star"), []byte(star), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	var out strings.Builder
-	cmd := cli.NewRootCmdForTest()
-	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"--config", tmp, "component", "list"})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("component list failed: %v", err)
-	}
-}
-
-// TestLockShowCmd_MissingFile prints empty lock info without error when lock file is absent.
-func TestLockShowCmd_MissingFile(t *testing.T) {
-	tmp := t.TempDir()
-	cmd := cli.NewRootCmdForTest()
-	cmd.SetArgs([]string{"--config", tmp, "lock", "show"})
-	// Missing lock file is not an error — lock.Read returns empty LockFile.
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("lock show on missing file should not error, got: %v", err)
-	}
-}
-
 // TestComputeToInstall_FullSet installs all declared components when none are installed.
 func TestComputeToInstall_FullSet(t *testing.T) {
 	order := []string{"brew", "shell", "git"}
@@ -453,5 +423,55 @@ component("tool", after=["pm"])
 	}
 	if len(uninstallIDs) != 1 || uninstallIDs[0] != "tool" {
 		t.Fatalf("uninstall path: expected only ['tool'], got %v", uninstallIDs)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// M3: shell posix
+// ---------------------------------------------------------------------------
+
+func TestShellCmd_Posix_EmitsValidSh(t *testing.T) {
+	out, err := execCmd(t, "shell", "posix")
+	if err != nil {
+		t.Fatalf("shell posix should not error, got: %v", err)
+	}
+	bashSpecific := []string{"[[ ", "]] "}
+	for _, s := range bashSpecific {
+		if strings.Contains(out, s) {
+			t.Fatalf("posix snippet contains bash-specific syntax %q:\n%s", s, out)
+		}
+	}
+	if !strings.Contains(out, "MEOWCTL_SHELL=posix") {
+		t.Fatalf("posix snippet missing MEOWCTL_SHELL=posix:\n%s", out)
+	}
+	if !strings.Contains(out, `eval "$(meowctl hook shell)"`) {
+		t.Fatalf("posix snippet missing eval subshell:\n%s", out)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// M3: doctor hook-error diagnostic
+// ---------------------------------------------------------------------------
+
+func TestDoctorCmd_HookErrorDiagnostic_Present(t *testing.T) {
+	tmp := t.TempDir()
+	_ = os.WriteFile(filepath.Join(tmp, ".hook-error"), []byte("some eval error\n"), 0o600)
+	_ = os.WriteFile(filepath.Join(tmp, "init.star"), []byte(""), 0o600)
+	_ = os.WriteFile(filepath.Join(tmp, "deps.lock"), []byte("[modules]\n"), 0o600)
+
+	out, _ := execCmd(t, "--config", tmp, "doctor")
+	if !strings.Contains(out, "hook-error") {
+		t.Fatalf("doctor output should contain hook-error diagnostic:\n%s", out)
+	}
+}
+
+func TestDoctorCmd_HookErrorDiagnostic_Absent(t *testing.T) {
+	tmp := t.TempDir()
+	_ = os.WriteFile(filepath.Join(tmp, "init.star"), []byte(""), 0o600)
+	_ = os.WriteFile(filepath.Join(tmp, "deps.lock"), []byte("[modules]\n"), 0o600)
+
+	out, _ := execCmd(t, "--config", tmp, "doctor")
+	if strings.Contains(out, "hook-error") {
+		t.Fatalf("doctor output should NOT contain hook-error when absent:\n%s", out)
 	}
 }

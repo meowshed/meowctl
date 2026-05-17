@@ -43,6 +43,19 @@ if not set -q _MEOWCTL_SHELL_DONE
     meowctl hook shell | source
 end
 `,
+	"posix": `# meowctl shell integration for POSIX sh
+# Add this to your ~/.profile or ~/.shrc:
+#   eval "$(meowctl shell posix)"
+
+meowctl_shell_init() {
+    export MEOWCTL_SHELL=posix
+    if [ -z "$_MEOWCTL_SHELL_DONE" ]; then
+        export _MEOWCTL_SHELL_DONE=1
+        eval "$(meowctl hook shell)"
+    fi
+}
+meowctl_shell_init
+`,
 }
 
 func newShellCmd() *cobra.Command {
@@ -50,15 +63,15 @@ func newShellCmd() *cobra.Command {
 		Use:       "shell <shell>",
 		Short:     "Emit shell integration code for the given shell",
 		Args:      cobra.ExactArgs(1),
-		ValidArgs: []string{"bash", "zsh", "fish"},
-		RunE: func(_ *cobra.Command, args []string) error {
+		ValidArgs: []string{"bash", "zsh", "fish", "posix"},
+		RunE: func(cmd *cobra.Command, args []string) error {
 			shell := args[0]
 			snippet, ok := shellSnippets[shell]
 			if !ok {
-				return exitErrorf(ExitUsage, "unsupported shell %q (supported: bash, zsh, fish)", shell)
+				return exitErrorf(ExitUsage, "unsupported shell %q (supported: bash, zsh, fish, posix)", shell)
 			}
-			fmt.Print(snippet)
-			return nil
+			_, err := fmt.Fprint(cmd.OutOrStdout(), snippet)
+			return err
 		},
 	}
 }
