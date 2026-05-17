@@ -26,9 +26,10 @@ type Accumulator struct {
 
 // ComponentDecl records a component() declaration.
 type ComponentDecl struct {
-	Name   string
-	After  []string       // logical dep names from after= kwarg; may be nil
-	Kwargs map[string]any // remaining kwargs after After is extracted
+	Name      string
+	After     []string       // logical dep names from after= kwarg; may be nil
+	Kwargs    map[string]any // remaining kwargs after After is extracted
+	Synthetic bool           // true if auto-discovered as a transitive dep, not declared in meowctl.star
 }
 
 // PkgDecl records a pkg() declaration.

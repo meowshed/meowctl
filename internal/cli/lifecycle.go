@@ -326,7 +326,12 @@ func envMap() map[string]string {
 // transitive dependency in meowctl.star.
 // Replace directives are read from <configDir>/meowctl.mod automatically.
 // Returns the topo-sorted component IDs (logical names) and a PMRegistry.
-func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.ComponentID, *pkg.PMRegistry, map[string]string, error) {
+//
+// runDepsHooks controls whether synthetic (auto-discovered) dependency components
+// run their own lifecycle hooks. Pass true for install/upgrade (deps should install
+// themselves first), false for uninstall (only the declared components are uninstalled,
+// not their shared PM dependencies like brew or mise).
+func loadComponentsWithDeps(configDir string, filter []string, runDepsHooks bool) ([]lifecycle.ComponentID, *pkg.PMRegistry, map[string]string, error) {
 	starPath := filepath.Join(configDir, "meowctl.star")
 	distro, distroLike := "", ""
 	if runtime.GOOS == "linux" {
@@ -371,7 +376,16 @@ func loadComponentsWithDeps(configDir string, filter []string) ([]lifecycle.Comp
 	allDecls, globalsCache := expandWithFileDeps(configDir, eval, cl, seed, result.Declarations.Components)
 
 	deps, pmReg := buildDepsAndRegistry(eval, allDecls, globalsCache)
-	declIdx := buildDeclIndex(allDecls)
+
+	// For uninstall-like phases, only the user-declared (seed) components should
+	// have their hooks executed. Synthetic deps (e.g. brew, mise) are included in
+	// the topo sort for ordering purposes, but should not run their own uninstall
+	// hooks — otherwise uninstalling a single tool would tear down the whole PM.
+	declBase := allDecls
+	if !runDepsHooks {
+		declBase = seed
+	}
+	declIdx := buildDeclIndex(declBase)
 
 	ordered, sortErr := lifecycle.TopoSort(deps, declIdx)
 	if sortErr != nil {
@@ -431,7 +445,7 @@ func expandWithFileDeps(configDir string, eval *starlarkpkg.Evaluator, cl *loade
 					walk(dc)
 				} else {
 					// Auto-discover: create a synthetic decl for this dep.
-					synthetic := starlarkpkg.ComponentDecl{Name: dep}
+					synthetic := starlarkpkg.ComponentDecl{Name: dep, Synthetic: true}
 					byName[depLN] = synthetic
 					walk(synthetic)
 				}
@@ -779,7 +793,10 @@ func newVerifyCmd(gf *globalFlags) *cobra.Command {
 
 // runLifecyclePhaseSet executes a named phase set, loading components from meowctl.star.
 func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, filter []string) error {
-	order, pmReg, urlMap, err := loadComponentsWithDeps(cfg.ConfigDir, filter)
+	// For uninstall, synthetic deps (PMs like brew/mise) should not run their
+	// own uninstall hooks — they are only needed for ordering.
+	runDepsHooks := name != "uninstall"
+	order, pmReg, urlMap, err := loadComponentsWithDeps(cfg.ConfigDir, filter, runDepsHooks)
 	if err != nil {
 		return err
 	}
