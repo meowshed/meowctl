@@ -148,40 +148,6 @@ func buildRunner(cfg runConfig, order []lifecycle.ComponentID, stack *rollback.S
 	}
 }
 
-// phaseEmitFile returns the absolute path of the shell init file that
-// ctx.emit should append to during install-time execution of the given phase.
-// Returns empty string if the phase does not write to any rc file, or if the
-// shell name is unrecognised.
-func phaseEmitFile(home, phase, shellName string) string {
-	switch phase {
-	case string(lifecycle.PhaseShell):
-		switch shellName {
-		case "zsh":
-			return filepath.Join(home, ".zshrc")
-		case "bash":
-			return filepath.Join(home, ".bashrc")
-		case "fish":
-			return filepath.Join(home, ".config", "fish", "config.fish")
-		}
-	case string(lifecycle.PhaseLogin):
-		switch shellName {
-		case "zsh":
-			return filepath.Join(home, ".zprofile")
-		case "bash":
-			return filepath.Join(home, ".bash_profile")
-		case "fish":
-			return filepath.Join(home, ".config", "fish", "conf.d", "meowctl.fish")
-		}
-	}
-	return ""
-}
-
-// shellFromEnv returns the base name of the user's login shell derived from
-// the SHELL environment variable (e.g. "zsh", "bash", "fish").
-func shellFromEnv() string {
-	return strings.ToLower(filepath.Base(os.Getenv("SHELL")))
-}
-
 type starlarkHookCaller struct {
 	configDir     string
 	eval          *starlarkpkg.Evaluator
@@ -232,7 +198,6 @@ func (h *starlarkHookCaller) callHookFromFile(componentID, componentFile, hookNa
 	if home, err := os.UserHomeDir(); err == nil {
 		caps.Home = home
 		caps.StateDir = filepath.Join(home, ".local", "share", "meowctl", componentID)
-		caps.EmitFile = phaseEmitFile(home, hookName, shellFromEnv())
 	}
 
 	ctxVal := ctx.New(caps)
@@ -272,7 +237,6 @@ func (h *starlarkHookCaller) callHookFromURL(componentID, moduleURL, hookName st
 	if home, err := os.UserHomeDir(); err == nil {
 		caps.Home = home
 		caps.StateDir = filepath.Join(home, ".local", "share", "meowctl", componentID)
-		caps.EmitFile = phaseEmitFile(home, hookName, shellFromEnv())
 	}
 
 	ctxVal := ctx.New(caps)
@@ -310,14 +274,14 @@ func (h *starlarkHookCaller) callHookFromURL(componentID, moduleURL, hookName st
 }
 
 // dispatchPackages iterates pkg declarations and calls the appropriate PM handler.
-// Only install, uninstall, and update phases trigger dispatch; other phases are no-ops.
+// Only install, uninstall, and upgrade phases trigger dispatch; other phases are no-ops.
 func dispatchPackages(phase string, packages []starlarkpkg.PkgDecl, reg *pkg.PMRegistry, ctxVal gostarlark.Value) error {
 	if reg == nil || len(packages) == 0 {
 		return nil
 	}
 	for _, p := range packages {
 		var err error
-		if phase == "update" {
+		if phase == "upgrade" {
 			err = reg.DispatchUpdate(p.Manager, p.Name, p.Kwargs, ctxVal)
 		} else {
 			err = reg.Dispatch(phase, p.Manager, p.Name, p.Version, p.Kwargs, ctxVal)
@@ -740,18 +704,18 @@ func newInstallCmd(gf *globalFlags) *cobra.Command {
 	return cmd
 }
 
-func newUpdateCmd(gf *globalFlags) *cobra.Command {
+func newUpgradeCmd(gf *globalFlags) *cobra.Command {
 	var cfg runConfig
 	cmd := &cobra.Command{
-		Use:   "update [<component>...]",
-		Short: "Run the update phase set for all (or specified) components",
+		Use:   "upgrade [<component>...]",
+		Short: "Run the upgrade phase set for all (or specified) components",
 		RunE: func(_ *cobra.Command, args []string) error {
 			configDir, err := resolveConfigDir(gf)
 			if err != nil {
 				return err
 			}
 			cfg.ConfigDir = configDir
-			return runLifecyclePhaseSet("update", lifecycle.PhaseSetUpdate, cfg, args)
+			return runLifecyclePhaseSet("upgrade", lifecycle.PhaseSetUpgrade, cfg, args)
 		},
 	}
 	addLifecycleFlags(cmd, &cfg)
