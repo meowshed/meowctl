@@ -59,11 +59,11 @@ func linuxDistroInfo() (distro, distroLike string) {
 	return distro, distroLike
 }
 
-// readModfileReplaces reads replace() directives from <configDir>/meowctl.mod and
+// readModfileReplaces reads replace() directives from <configDir>/deps.mod and
 // returns a map from module name to local filesystem path. Returns an empty map
 // if the file is absent or cannot be parsed.
 func readModfileReplaces(configDir string) map[string]string {
-	modPath := filepath.Join(configDir, "meowctl.mod")
+	modPath := filepath.Join(configDir, configModFile)
 	mf, err := modfile.Parse(modPath)
 	if err != nil {
 		return nil
@@ -102,7 +102,7 @@ func addInstallFlags(cmd *cobra.Command, cfg *runConfig) {
 }
 
 // buildHookCaller constructs a starlarkHookCaller with a CompositeLoader wired
-// with replace directives read from <configDir>/meowctl.mod.
+// with replace directives read from <configDir>/deps.mod.
 func buildHookCaller(cfg runConfig) *starlarkHookCaller {
 	distro, distroLike := "", ""
 	if runtime.GOOS == "linux" {
@@ -119,7 +119,7 @@ func buildHookCaller(cfg runConfig) *starlarkHookCaller {
 	if home, err := os.UserHomeDir(); err == nil {
 		cl = loader.NewCompositeLoader(cfg.ConfigDir, nil, loader.CompositeLoaderOptions{
 			CacheDir: filepath.Join(home, ".cache", "meowctl"),
-			LockPath: filepath.Join(cfg.ConfigDir, "meowctl.lock"),
+			LockPath: filepath.Join(cfg.ConfigDir, configLockFile),
 			Replaces: readModfileReplaces(cfg.ConfigDir),
 		})
 	}
@@ -318,13 +318,54 @@ func envMap() map[string]string {
 	return env
 }
 
-// loadComponentsWithDeps evaluates <configDir>/meowctl.star, then iteratively
+// checkLegacyConfig checks if a legacy meowctl.star exists without init.star
+// and returns an error with migration instructions if so.
+func checkLegacyConfig(configDir, starPath string) error {
+	legacyPath := filepath.Join(configDir, "meowctl.star")
+	if _, legacyErr := os.Lstat(legacyPath); legacyErr == nil {
+		if _, newErr := os.Lstat(starPath); os.IsNotExist(newErr) {
+			fmt.Fprintf(os.Stderr, "meowctl: found legacy config — rename files to continue:\n")
+			fmt.Fprintf(os.Stderr, "  mv %s %s\n", legacyPath, starPath)
+			fmt.Fprintf(os.Stderr, "  mv %s %s\n",
+				filepath.Join(configDir, "meowctl.mod"), filepath.Join(configDir, configModFile))
+			fmt.Fprintf(os.Stderr, "  mv %s %s\n",
+				filepath.Join(configDir, "meowctl.lock"), filepath.Join(configDir, configLockFile))
+			return exitErrorf(ExitConfig, "legacy config found — see instructions above")
+		}
+	}
+	return nil
+}
+
+// mergeLocalStar loads local.star if present and appends its components into result,
+// skipping any component already declared in init.star (first-wins dedup).
+func mergeLocalStar(configDir string, eval *starlarkpkg.Evaluator, result *starlarkpkg.EvalResult) error {
+	localPath := filepath.Join(configDir, configLocalFile)
+	if _, localErr := os.Lstat(localPath); localErr != nil {
+		return nil
+	}
+	localResult, localLoadErr := eval.ExecFile(localPath, nil, nil, nil)
+	if localLoadErr != nil {
+		return exitErrorf(ExitConfig, "load local.star: %v", localLoadErr)
+	}
+	initNames := make(map[string]bool, len(result.Declarations.Components))
+	for _, c := range result.Declarations.Components {
+		initNames[c.LogicalName()] = true
+	}
+	for _, c := range localResult.Declarations.Components {
+		if !initNames[c.LogicalName()] {
+			result.Declarations.Components = append(result.Declarations.Components, c)
+		}
+	}
+	return nil
+}
+
+// loadComponentsWithDeps evaluates <configDir>/init.star, then iteratively
 // discovers transitive after= dependencies by reading each component's file-level
 // globals (including URL-named @registry// components loaded via CompositeLoader).
 // Unknown deps encountered during expansion are auto-discovered and added as
 // synthetic ComponentDecl entries so callers don't need to pre-declare every
-// transitive dependency in meowctl.star.
-// Replace directives are read from <configDir>/meowctl.mod automatically.
+// transitive dependency in init.star.
+// Replace directives are read from <configDir>/deps.mod automatically.
 // Returns the topo-sorted component IDs (logical names) and a PMRegistry.
 //
 // runSyntheticHooks controls whether synthetic (auto-discovered) dependency components
@@ -332,7 +373,12 @@ func envMap() map[string]string {
 // themselves first), false for uninstall (only the declared components are uninstalled,
 // not their shared PM dependencies like brew or mise).
 func loadComponentsWithDeps(configDir string, filter []string, runSyntheticHooks bool) ([]lifecycle.ComponentID, *pkg.PMRegistry, map[string]string, error) {
-	starPath := filepath.Join(configDir, "meowctl.star")
+	starPath := filepath.Join(configDir, configEntryFile)
+
+	if err := checkLegacyConfig(configDir, starPath); err != nil {
+		return nil, nil, nil, err
+	}
+
 	distro, distroLike := "", ""
 	if runtime.GOOS == "linux" {
 		distro, distroLike = linuxDistroInfo()
@@ -347,30 +393,34 @@ func loadComponentsWithDeps(configDir string, filter []string, runSyntheticHooks
 
 	result, err := eval.ExecFile(starPath, nil, nil, nil)
 	if err != nil {
-		return nil, nil, nil, exitErrorf(ExitConfig, "load meowctl.star: %v", err)
+		return nil, nil, nil, exitErrorf(ExitConfig, "load init.star: %v", err)
+	}
+
+	if err := mergeLocalStar(configDir, eval, result); err != nil {
+		return nil, nil, nil, err
 	}
 
 	// Build a CompositeLoader for resolving URL-named components (e.g. @stdlib//...).
-	// Replace directives come from meowctl.mod.
+	// Replace directives come from deps.mod.
 	var cl *loader.CompositeLoader
 	if home, err := os.UserHomeDir(); err == nil {
 		cl = loader.NewCompositeLoader(configDir, nil, loader.CompositeLoaderOptions{
 			CacheDir: filepath.Join(home, ".cache", "meowctl"),
-			LockPath: filepath.Join(configDir, "meowctl.lock"),
+			LockPath: filepath.Join(configDir, configLockFile),
 			Replaces: readModfileReplaces(configDir),
 		})
 	}
 
-	// Seed from meowctl.star declarations; filter to requested components first.
+	// Seed from init.star declarations; filter to requested components first.
 	seed, err := filterDecls(result.Declarations.Components, filter)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// Iteratively expand transitive deps. Unknown deps (not in meowctl.star) are
+	// Iteratively expand transitive deps. Unknown deps (not in init.star) are
 	// auto-discovered by reading their component file globals, creating synthetic
 	// ComponentDecl entries. This allows test-*.star to declare
-	// after = ["@stdlib//components/apt"] without pre-declaring apt in meowctl.star.
+	// after = ["@stdlib//components/apt"] without pre-declaring apt in init.star.
 	// globalsCache holds the already-read globals for each component (logical name),
 	// passed to buildDepsAndRegistry to avoid re-reading files.
 	allDecls, globalsCache := expandWithFileDeps(configDir, eval, cl, seed, result.Declarations.Components)
@@ -699,25 +749,6 @@ func mergeAfterFromGlobals(existing []string, globals gostarlark.StringDict, eva
 	return result
 }
 
-func newInstallCmd(gf *globalFlags) *cobra.Command {
-	var cfg runConfig
-	cmd := &cobra.Command{
-		Use:   "install [<component>...]",
-		Short: "Run the full install phase set for all (or specified) components",
-		RunE: func(_ *cobra.Command, args []string) error {
-			configDir, err := resolveConfigDir(gf)
-			if err != nil {
-				return err
-			}
-			cfg.ConfigDir = configDir
-			return runLifecyclePhaseSet("install", lifecycle.PhaseSetInstall, cfg, args)
-		},
-	}
-	addLifecycleFlags(cmd, &cfg)
-	addInstallFlags(cmd, &cfg)
-	return cmd
-}
-
 func newUpdateCmd(gf *globalFlags) *cobra.Command {
 	var cfg runConfig
 	cmd := &cobra.Command{
@@ -755,24 +786,6 @@ func newUpgradeCmd(gf *globalFlags) *cobra.Command {
 	return cmd
 }
 
-func newUninstallCmd(gf *globalFlags) *cobra.Command {
-	var cfg runConfig
-	cmd := &cobra.Command{
-		Use:   "uninstall [<component>...]",
-		Short: "Run the uninstall phase for all (or specified) components",
-		RunE: func(_ *cobra.Command, args []string) error {
-			configDir, err := resolveConfigDir(gf)
-			if err != nil {
-				return err
-			}
-			cfg.ConfigDir = configDir
-			return runLifecyclePhaseSet("uninstall", lifecycle.PhaseSetUninstall, cfg, args)
-		},
-	}
-	addLifecycleFlags(cmd, &cfg)
-	return cmd
-}
-
 func newVerifyCmd(gf *globalFlags) *cobra.Command {
 	var cfg runConfig
 	cmd := &cobra.Command{
@@ -791,7 +804,7 @@ func newVerifyCmd(gf *globalFlags) *cobra.Command {
 	return cmd
 }
 
-// runLifecyclePhaseSet executes a named phase set, loading components from meowctl.star.
+// runLifecyclePhaseSet executes a named phase set, loading components from init.star.
 func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, filter []string) error {
 	// For uninstall, synthetic deps (PMs like brew/mise) should not run their
 	// own uninstall hooks — they are only needed for ordering.
@@ -800,7 +813,13 @@ func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, 
 	if err != nil {
 		return err
 	}
+	return runLifecyclePhaseSetOrdered(name, phases, cfg, order, pmReg, urlMap)
+}
 
+// runLifecyclePhaseSetOrdered executes a lifecycle phase set against a pre-computed
+// component order, PMRegistry, and URL map. Used by apply to avoid redundant
+// config reloads when install and uninstall phases share context.
+func runLifecyclePhaseSetOrdered(name string, phases []lifecycle.Phase, cfg runConfig, order []lifecycle.ComponentID, pmReg *pkg.PMRegistry, urlMap map[string]string) error {
 	journalPath := filepath.Join(cfg.ConfigDir, "rollback.jsonl")
 	var stack *rollback.Stack
 	if !cfg.DryRun {
@@ -815,7 +834,7 @@ func runLifecyclePhaseSet(name string, phases []lifecycle.Phase, cfg runConfig, 
 	w := tui.New(os.Stdout)
 	defer func() { _ = w.Close() }()
 
-	// Build hook caller with loader; replace directives come from meowctl.mod.
+	// Build hook caller with loader; replace directives come from deps.mod.
 	caller := buildHookCaller(cfg)
 	caller.urlComponents = urlMap
 
