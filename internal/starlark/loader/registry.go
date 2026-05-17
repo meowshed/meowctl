@@ -256,10 +256,8 @@ func (l *RegistryLoader) resolveVersion(name string) (string, error) {
 				return "", fmt.Errorf("fetch tarball for %s@%s: %w", mod.Name, mod.Version, fetchErr)
 			}
 			// If the index carries a per-version integrity hash, verify before extracting.
-			if expected, ok := modEntry.Integrity[mod.Version]; ok && expected != "" {
-				if verifyErr := checkSRI(expected, tarball); verifyErr != nil {
-					return "", fmt.Errorf("SRI mismatch for %s@%s (index integrity): %w", mod.Name, mod.Version, verifyErr)
-				}
+			if verifyErr := checkIndexIntegrity(modEntry, mod.Version, tarball); verifyErr != nil {
+				return "", fmt.Errorf("resolve: SRI mismatch for %s@%s (index integrity): %w", mod.Name, mod.Version, verifyErr)
 			}
 			integ = computeSRI(tarball)
 			if _, statErr := os.Stat(cacheDir); statErr != nil {
@@ -461,6 +459,17 @@ func readSRISidecar(cacheDir string) (string, error) {
 	return string(data), nil
 }
 
+// checkIndexIntegrity verifies tarball against the index's per-version SRI hash
+// for the given entry and version. It is a no-op when no hash is recorded for
+// the version (backwards-compatible with modules that predate per-version integrity).
+func checkIndexIntegrity(entry indexEntry, version string, tarball []byte) error {
+	expected, ok := entry.Integrity[version]
+	if !ok || expected == "" {
+		return nil
+	}
+	return checkSRI(expected, tarball)
+}
+
 // writeLockEntry persists a ModuleEntry to the lock file.
 func (l *RegistryLoader) writeLockEntry(name, version, source, integrity string) error {
 	lf, err := lock.Read(l.LockPath)
@@ -582,10 +591,8 @@ func (l *RegistryLoader) resolveDepVersion(modName, reqVersion string, entry ind
 			return "", "", "", fmt.Errorf("sync: fetch %s@%s: %w", modName, version, fetchErr)
 		}
 		// If the index carries a per-version integrity hash, verify before extracting.
-		if expected, ok := entry.Integrity[version]; ok && expected != "" {
-			if verifyErr := checkSRI(expected, tarball); verifyErr != nil {
-				return "", "", "", fmt.Errorf("sync: SRI mismatch for %s@%s (index integrity): %w", modName, version, verifyErr)
-			}
+		if verifyErr := checkIndexIntegrity(entry, version, tarball); verifyErr != nil {
+			return "", "", "", fmt.Errorf("sync: SRI mismatch for %s@%s (index integrity): %w", modName, version, verifyErr)
 		}
 		integ = computeSRI(tarball)
 		if _, statErr := os.Stat(cacheDir); statErr != nil {
