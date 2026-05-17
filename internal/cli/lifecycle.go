@@ -318,6 +318,47 @@ func envMap() map[string]string {
 	return env
 }
 
+// checkLegacyConfig checks if a legacy meowctl.star exists without init.star
+// and returns an error with migration instructions if so.
+func checkLegacyConfig(configDir, starPath string) error {
+	legacyPath := filepath.Join(configDir, "meowctl.star")
+	if _, legacyErr := os.Lstat(legacyPath); legacyErr == nil {
+		if _, newErr := os.Lstat(starPath); os.IsNotExist(newErr) {
+			fmt.Fprintf(os.Stderr, "meowctl: found legacy config — rename files to continue:\n")
+			fmt.Fprintf(os.Stderr, "  mv %s %s\n", legacyPath, starPath)
+			fmt.Fprintf(os.Stderr, "  mv %s %s\n",
+				filepath.Join(configDir, "meowctl.mod"), filepath.Join(configDir, configModFile))
+			fmt.Fprintf(os.Stderr, "  mv %s %s\n",
+				filepath.Join(configDir, "meowctl.lock"), filepath.Join(configDir, configLockFile))
+			return exitErrorf(ExitConfig, "legacy config found — see instructions above")
+		}
+	}
+	return nil
+}
+
+// mergeLocalStar loads local.star if present and appends its components into result,
+// skipping any component already declared in init.star (first-wins dedup).
+func mergeLocalStar(configDir string, eval *starlarkpkg.Evaluator, result *starlarkpkg.EvalResult) error {
+	localPath := filepath.Join(configDir, configLocalFile)
+	if _, localErr := os.Lstat(localPath); localErr != nil {
+		return nil
+	}
+	localResult, localLoadErr := eval.ExecFile(localPath, nil, nil, nil)
+	if localLoadErr != nil {
+		return exitErrorf(ExitConfig, "load local.star: %v", localLoadErr)
+	}
+	initNames := make(map[string]bool, len(result.Declarations.Components))
+	for _, c := range result.Declarations.Components {
+		initNames[c.LogicalName()] = true
+	}
+	for _, c := range localResult.Declarations.Components {
+		if !initNames[c.LogicalName()] {
+			result.Declarations.Components = append(result.Declarations.Components, c)
+		}
+	}
+	return nil
+}
+
 // loadComponentsWithDeps evaluates <configDir>/init.star, then iteratively
 // discovers transitive after= dependencies by reading each component's file-level
 // globals (including URL-named @registry// components loaded via CompositeLoader).
@@ -334,20 +375,10 @@ func envMap() map[string]string {
 func loadComponentsWithDeps(configDir string, filter []string, runSyntheticHooks bool) ([]lifecycle.ComponentID, *pkg.PMRegistry, map[string]string, error) {
 	starPath := filepath.Join(configDir, configEntryFile)
 
-	// Legacy migration check: if meowctl.star exists but init.star does not,
-	// print clear migration instructions and return a hard error.
-	legacyPath := filepath.Join(configDir, "meowctl.star")
-	if _, legacyErr := os.Lstat(legacyPath); legacyErr == nil {
-		if _, newErr := os.Lstat(starPath); os.IsNotExist(newErr) {
-			fmt.Fprintf(os.Stderr, "meowctl: found legacy config — rename files to continue:\n")
-			fmt.Fprintf(os.Stderr, "  mv %s %s\n", legacyPath, starPath)
-			fmt.Fprintf(os.Stderr, "  mv %s %s\n",
-				filepath.Join(configDir, "meowctl.mod"), filepath.Join(configDir, configModFile))
-			fmt.Fprintf(os.Stderr, "  mv %s %s\n",
-				filepath.Join(configDir, "meowctl.lock"), filepath.Join(configDir, configLockFile))
-			return nil, nil, nil, exitErrorf(ExitConfig, "legacy config found — see instructions above")
-		}
+	if err := checkLegacyConfig(configDir, starPath); err != nil {
+		return nil, nil, nil, err
 	}
+
 	distro, distroLike := "", ""
 	if runtime.GOOS == "linux" {
 		distro, distroLike = linuxDistroInfo()
@@ -365,24 +396,8 @@ func loadComponentsWithDeps(configDir string, filter []string, runSyntheticHooks
 		return nil, nil, nil, exitErrorf(ExitConfig, "load init.star: %v", err)
 	}
 
-	// Load local.star if present; first-wins dedup (init.star declarations take precedence).
-	localPath := filepath.Join(configDir, configLocalFile)
-	if _, localErr := os.Lstat(localPath); localErr == nil {
-		localResult, localLoadErr := eval.ExecFile(localPath, nil, nil, nil)
-		if localLoadErr != nil {
-			return nil, nil, nil, exitErrorf(ExitConfig, "load local.star: %v", localLoadErr)
-		}
-		// Merge: build set of logical names already declared in init.star.
-		initNames := make(map[string]bool, len(result.Declarations.Components))
-		for _, c := range result.Declarations.Components {
-			initNames[c.LogicalName()] = true
-		}
-		// Append only components not already declared in init.star.
-		for _, c := range localResult.Declarations.Components {
-			if !initNames[c.LogicalName()] {
-				result.Declarations.Components = append(result.Declarations.Components, c)
-			}
-		}
+	if err := mergeLocalStar(configDir, eval, result); err != nil {
+		return nil, nil, nil, err
 	}
 
 	// Build a CompositeLoader for resolving URL-named components (e.g. @stdlib//...).

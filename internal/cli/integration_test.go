@@ -24,11 +24,11 @@ import (
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
 )
 
-// sharedConfigDir returns a per-test config dir with a pre-written meowctl.star.
+// sharedConfigDir returns a per-test config dir with a pre-written init.star.
 func sharedConfigDir(t *testing.T, star string) string {
 	t.Helper()
 	tmp := t.TempDir()
-	if err := os.WriteFile(filepath.Join(tmp, "meowctl.star"), []byte(star), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "init.star"), []byte(star), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return tmp
@@ -224,7 +224,7 @@ component("@meowctl-stdlib//components/git")
 
 	// Locate the extracted tarball in the default cache.
 	// Read the resolved version from the lock file — avoids hardcoding the version.
-	lf, err := lock.Read(filepath.Join(configDir, "meowctl.lock"))
+	lf, err := lock.Read(filepath.Join(configDir, "deps.lock"))
 	if err != nil {
 		t.Fatalf("read lock file: %v", err)
 	}
