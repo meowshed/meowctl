@@ -42,7 +42,6 @@ const localModTemplate = `# deps.local.mod — machine-specific module declarati
 
 func newInitCmd(gf *globalFlags) *cobra.Command {
 	var force bool
-	var repoURL string
 	cmd := &cobra.Command{
 		Use:   "init [<repo-url>]",
 		Short: "Scaffold a new config directory, or bootstrap from an existing dotfiles repo",
@@ -69,7 +68,6 @@ unless --force is passed.`,
 		},
 	}
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Overwrite existing config")
-	_ = repoURL // consumed via args
 	return cmd
 }
 

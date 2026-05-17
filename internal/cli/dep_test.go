@@ -122,6 +122,15 @@ func TestDepAddCmd_WritesModfile(t *testing.T) {
 	tmp := t.TempDir()
 	writeModfile(t, filepath.Join(tmp, "deps.mod"), `dep(name = "alpha", version = "0.1.0")`)
 
+	// Verify beta is not present before the add.
+	pre, err := os.ReadFile(filepath.Join(tmp, "deps.mod")) // #nosec G304
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(pre), "beta") {
+		t.Fatal("beta should not be present in deps.mod before add")
+	}
+
 	// Add a brand-new dep — should be written to the modfile.
 	// runSync will fail (no registry), which is fine; we only check the modfile was updated.
 	_, _ = execCmd(t, "--config", tmp, "dep", "add", "beta", "--version", "0.2.0") //nolint:errcheck

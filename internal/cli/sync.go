@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -74,7 +75,7 @@ func runSync(configDir string) error {
 // Returns true if any local modules changed, false if nothing changed or file absent.
 func runSyncLocal(configDir string) (bool, error) {
 	localModPath := filepath.Join(configDir, configLocalModFile)
-	if _, err := os.Stat(localModPath); os.IsNotExist(err) {
+	if _, err := os.Stat(localModPath); errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 

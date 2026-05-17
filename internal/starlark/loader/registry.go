@@ -900,7 +900,7 @@ type githubDepEntry struct {
 // A missing MODULE.meow is not an error.
 func parseModuleMeowGitHub(path string) ([]githubDepEntry, error) {
 	data, err := os.ReadFile(path) // #nosec G304 -- path constructed from validated cache dir
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
@@ -939,7 +939,7 @@ func parseModuleMeowGitHub(path string) ([]githubDepEntry, error) {
 // (the module has no dependencies).
 func parseModuleMeow(path string) ([]mvs.Module, error) {
 	data, err := os.ReadFile(path) // #nosec G304 -- path is constructed from validated cache dir
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
