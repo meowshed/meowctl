@@ -131,7 +131,7 @@ func newHookCmd(gf *globalFlags) *cobra.Command {
 				return err
 			}
 
-			order, pmReg, _, err := loadComponentsWithDeps(configDir, nil)
+			order, pmReg, _, err := loadComponentsWithDeps(configDir, nil, true)
 			if err != nil {
 				return err
 			}
