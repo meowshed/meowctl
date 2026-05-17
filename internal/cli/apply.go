@@ -283,9 +283,18 @@ func runApply(cfg runConfig, scopeFilter []string) error {
 	}
 
 	scoped := len(scopeFilter) > 0
+	// When scoped, expand the scope set to include transitive dependencies of
+	// the requested components. A filtered loadComponentsWithDeps call returns
+	// only the dep-expanded subgraph for the requested names.
 	scopeSet := make(map[string]bool, len(scopeFilter))
-	for _, name := range scopeFilter {
-		scopeSet[name] = true
+	if scoped {
+		scopedOrder, _, _, scopeErr := loadComponentsWithDeps(cfg.ConfigDir, scopeFilter, true)
+		if scopeErr != nil {
+			return scopeErr
+		}
+		for _, id := range scopedOrder {
+			scopeSet[id] = true
+		}
 	}
 
 	toInstall := computeToInstall(allOrder, installedSet, scopeSet, scoped)
