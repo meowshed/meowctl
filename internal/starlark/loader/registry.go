@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -82,6 +83,10 @@ type RegistryLoader struct {
 	// Example: {"stdlib": "/path/to/meowctl-stdlib"} makes
 	// @stdlib//components/apt → /path/to/meowctl-stdlib/components/apt.star
 	Replaces map[string]string
+	// GitHubAPIBase overrides the GitHub API base URL (https://api.github.com).
+	// Used in tests to point at a local httptest.Server.
+	// Zero value uses the default production URL.
+	GitHubAPIBase string
 }
 
 // registryURL is the parsed form of a @name// module URL.
@@ -197,10 +202,10 @@ func (l *RegistryLoader) loadFromLocal(thread *gostarlark.Thread, moduleURL, loc
 	return globals, nil
 }
 
-// resolveVersion returns the version to use for the named module. If the lock
-// file already has an entry, that version is used (no MVS). Otherwise MVS is
-// run, all resolved modules (root + transitive deps) are downloaded and written
-// to the lock file, then the requested version is returned.
+// resolveVersion returns the cache-dir key for the named module. For registry
+// deps this is the semver version; for GitHub source deps it is the commit SHA.
+// If the lock file already has an entry, that value is used (no MVS). Otherwise
+// MVS is run, all resolved modules are downloaded and written to the lock file.
 func (l *RegistryLoader) resolveVersion(name string) (string, error) {
 	lf, err := lock.Read(l.LockPath)
 	if err != nil {
@@ -208,7 +213,20 @@ func (l *RegistryLoader) resolveVersion(name string) (string, error) {
 	}
 
 	if entry, ok := lf.Modules[name]; ok {
-		// Locked: ensure the tarball is present in cache.
+		// GitHub source dep: cache dir is keyed by commit SHA.
+		if entry.CommitSHA != "" {
+			extractDir := l.moduleCacheDir(name, entry.CommitSHA)
+			if _, statErr := os.Stat(extractDir); statErr == nil {
+				return entry.CommitSHA, nil
+			}
+			// Cache missing — re-download using locked source URL.
+			if fetchErr := l.downloadAndExtract(name, entry.CommitSHA, entry.Source, entry.Integrity); fetchErr != nil {
+				return "", fmt.Errorf("re-fetch locked github module %s@%s: %w", name, entry.CommitSHA, fetchErr)
+			}
+			return entry.CommitSHA, nil
+		}
+
+		// Registry dep: cache dir is keyed by version.
 		extractDir := l.moduleCacheDir(name, entry.Version)
 		if _, statErr := os.Stat(extractDir); statErr == nil {
 			return entry.Version, nil
@@ -512,9 +530,9 @@ type SyncResult struct {
 // Modules with active replace() are recorded in the lock with Replaced=true.
 func (l *RegistryLoader) SyncModules(deps []ModfileDep, replaces []ModfileReplace) (*SyncResult, error) {
 	// Build replace index for fast lookup.
-	replaceIndex := make(map[string]string, len(replaces))
+	replaceIndex := make(map[string]ModfileReplace, len(replaces))
 	for _, r := range replaces {
-		replaceIndex[r.Module] = r.Path
+		replaceIndex[r.Name] = r
 	}
 
 	lf, err := lock.Read(l.LockPath)
@@ -530,9 +548,24 @@ func (l *RegistryLoader) SyncModules(deps []ModfileDep, replaces []ModfileReplac
 		ReplacedPaths: make(map[string]string),
 	}
 
-	index, err := l.fetchIndex()
-	if err != nil {
-		return nil, err
+	// Only fetch the registry index when there are registry deps that need it.
+	var index *registryIndex
+	needsRegistry := false
+	for _, dep := range deps {
+		if dep.Source == "" {
+			r, hasReplace := replaceIndex[dep.Name]
+			if !hasReplace || r.Source != "" {
+				// registry dep without a local-path replace needs the index
+				needsRegistry = true
+				break
+			}
+		}
+	}
+	if needsRegistry {
+		index, err = l.fetchIndex()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	for _, dep := range deps {
@@ -548,26 +581,43 @@ func (l *RegistryLoader) SyncModules(deps []ModfileDep, replaces []ModfileReplac
 }
 
 // syncOneDep resolves a single dep entry, updating modules and result in-place.
-func (l *RegistryLoader) syncOneDep(dep ModfileDep, replaceIndex map[string]string, index *registryIndex, modules map[string]lock.ModuleEntry, result *SyncResult) error {
+func (l *RegistryLoader) syncOneDep(dep ModfileDep, replaceIndex map[string]ModfileReplace, index *registryIndex, modules map[string]lock.ModuleEntry, result *SyncResult) error {
 	modName := dep.Name
-	reqVersion := dep.Version
 
-	if localPath, replaced := replaceIndex[modName]; replaced {
-		fmt.Fprintf(os.Stderr, "meowctl: warning: module %q is replaced by local path %q — skipping registry resolution\n", modName, localPath)
-		if _, statErr := os.Stat(localPath); statErr != nil {
-			return fmt.Errorf("sync: replace() path for %q does not exist: %s (G5)", modName, localPath)
+	// Check for a replace directive first — it overrides the dep source.
+	if r, replaced := replaceIndex[modName]; replaced {
+		if r.Path != "" {
+			// Local path override.
+			fmt.Fprintf(os.Stderr, "meowctl: warning: module %q is replaced by local path %q — skipping registry resolution\n", modName, r.Path)
+			if _, statErr := os.Stat(r.Path); statErr != nil {
+				return fmt.Errorf("sync: replace() path for %q does not exist: %s", modName, r.Path)
+			}
+			modules[modName] = lock.ModuleEntry{Replaced: true, Path: r.Path}
+			result.ReplacedPaths[modName] = r.Path
+			return nil
 		}
-		modules[modName] = lock.ModuleEntry{Replaced: true, Path: localPath}
-		result.ReplacedPaths[modName] = localPath
-		return nil
+		if r.Source != "" {
+			// Remote source override — treat as a GitHub source dep using the replace source.
+			fmt.Fprintf(os.Stderr, "meowctl: warning: module %q is replaced by remote source %q\n", modName, r.Source)
+			return l.syncGitHubDep(modName, r.Source, modules, result)
+		}
 	}
 
+	// GitHub source dep (no replace active).
+	if dep.Source != "" {
+		return l.syncGitHubDep(modName, dep.Source, modules, result)
+	}
+
+	// Registry dep.
+	if index == nil {
+		return fmt.Errorf("sync: registry index not loaded for module %q", modName)
+	}
 	entry, ok := index.Modules[modName]
 	if !ok {
 		return fmt.Errorf("sync: module %q not found in registry", modName)
 	}
 
-	version, integ, source, err := l.resolveDepVersion(modName, reqVersion, entry)
+	version, integ, source, err := l.resolveDepVersion(modName, dep.Version, entry)
 	if err != nil {
 		return err
 	}
@@ -578,6 +628,46 @@ func (l *RegistryLoader) syncOneDep(dep ModfileDep, replaceIndex map[string]stri
 		Integrity: integ,
 	}
 	result.Resolved[modName] = version
+	return nil
+}
+
+// syncGitHubDep resolves a GitHub source dep: parses the source string, resolves
+// the ref to a commit SHA, downloads and extracts the tarball, and writes the lock entry.
+func (l *RegistryLoader) syncGitHubDep(modName, sourceStr string, modules map[string]lock.ModuleEntry, result *SyncResult) error {
+	gs, err := parseGitHubSource(sourceStr)
+	if err != nil {
+		return fmt.Errorf("sync: dep %q: %w", modName, err)
+	}
+
+	commit, err := l.resolveGitHubCommit(gs.owner, gs.repo, gs.ref)
+	if err != nil {
+		return fmt.Errorf("sync: dep %q: resolve commit: %w", modName, err)
+	}
+
+	tarballURL := githubTarballURL(gs.owner, gs.repo, commit)
+	cacheDir := l.moduleCacheDir(modName, commit)
+
+	integ, sriErr := readSRISidecar(cacheDir)
+	if sriErr != nil {
+		tarball, fetchErr := l.fetchTarball(tarballURL)
+		if fetchErr != nil {
+			return fmt.Errorf("sync: dep %q: fetch tarball: %w", modName, fetchErr)
+		}
+		integ = computeSRI(tarball)
+		if _, statErr := os.Stat(cacheDir); statErr != nil {
+			if extractErr := l.extractTarball(tarball, cacheDir); extractErr != nil {
+				return fmt.Errorf("sync: dep %q: extract tarball: %w", modName, extractErr)
+			}
+		}
+		_ = writeSRISidecar(cacheDir, integ)
+	}
+
+	modules[modName] = lock.ModuleEntry{
+		Source:    tarballURL,
+		Integrity: integ,
+		CommitSHA: commit,
+	}
+	result.Resolved[modName] = commit
 	return nil
 }
 
@@ -633,21 +723,94 @@ func (l *RegistryLoader) LatestVersion(modName string) (string, error) {
 }
 
 // ModfileDep is a dep() entry from a modfile, used by SyncModules.
+// Exactly one of Version or Source must be set.
 type ModfileDep struct {
-	Name    string // registry module name (e.g. "stdlib")
-	Version string // required version, v-prefixed semver (e.g. "v0.1.1")
+	// Name is the logical module name used in @name// load URLs (e.g. "stdlib").
+	Name string
+	// Version is the required registry version (e.g. "0.1.1"). Set for registry deps.
+	Version string
+	// Source is the GitHub source reference (e.g. "github:owner/repo@v1.2.3"). Set for GitHub deps.
+	Source string
 }
 
 // ModfileReplace is a replace() entry from a modfile, used by SyncModules.
+// Exactly one of Path or Source must be set.
 type ModfileReplace struct {
-	Module string
-	Path   string
+	// Name is the logical module name to replace (matches a dep Name).
+	Name string
+	// Path is the local filesystem path for a local override.
+	Path string
+	// Source is the GitHub source reference for a remote override (e.g. "github:fork/stdlib@v1.2.4").
+	Source string
 }
 
 // buildSourceURL substitutes {name} and {version} in the source URL template.
 func buildSourceURL(sourceTmpl, name, version string) string {
 	s := strings.ReplaceAll(sourceTmpl, "{name}", name)
 	return strings.ReplaceAll(s, "{version}", version)
+}
+
+// githubSource holds the parsed components of a "github:owner/repo@ref" source string.
+type githubSource struct {
+	owner string
+	repo  string
+	ref   string
+}
+
+// parseGitHubSource decomposes "github:owner/repo@ref" into its parts.
+// The @ref component is required — bare refs are rejected to avoid ambiguity.
+func parseGitHubSource(s string) (githubSource, error) {
+	rest, ok := strings.CutPrefix(s, "github:")
+	if !ok {
+		return githubSource{}, fmt.Errorf("parseGitHubSource: not a github: source: %q", s)
+	}
+	ownerRepo, ref, found := strings.Cut(rest, "@")
+	if !found || ref == "" {
+		return githubSource{}, fmt.Errorf("parseGitHubSource: missing @ref in %q (use github:owner/repo@tag-or-branch)", s)
+	}
+	owner, repo, found2 := strings.Cut(ownerRepo, "/")
+	if !found2 || owner == "" || repo == "" {
+		return githubSource{}, fmt.Errorf("parseGitHubSource: expected owner/repo in %q", s)
+	}
+	return githubSource{owner: owner, repo: repo, ref: ref}, nil
+}
+
+// githubTarballURL returns the GitHub archive URL for the given owner/repo/ref.
+// GitHub serves .tar.gz archives for any ref (tag, branch, or commit SHA) at this URL.
+func githubTarballURL(owner, repo, ref string) string {
+	return fmt.Sprintf("https://github.com/%s/%s/archive/%s.tar.gz", owner, repo, ref)
+}
+
+// resolveGitHubCommit resolves a ref (tag/branch/SHA) to a full commit SHA
+// using the GitHub commits API.
+func (l *RegistryLoader) resolveGitHubCommit(owner, repo, ref string) (string, error) {
+	apiBase := l.GitHubAPIBase
+	if apiBase == "" {
+		apiBase = "https://api.github.com"
+	}
+	apiURL := fmt.Sprintf("%s/repos/%s/%s/commits/%s", apiBase, owner, repo, ref)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("resolveGitHubCommit: build request: %w", err)
+	}
+	resp, err := l.client().Do(req) //nolint:gosec
+	if err != nil {
+		return "", fmt.Errorf("resolveGitHubCommit %s/%s@%s: %w", owner, repo, ref, err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("resolveGitHubCommit %s/%s@%s: HTTP %d", owner, repo, ref, resp.StatusCode)
+	}
+	var payload struct {
+		SHA string `json:"sha"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", fmt.Errorf("resolveGitHubCommit %s/%s@%s: decode: %w", owner, repo, ref, err)
+	}
+	if payload.SHA == "" {
+		return "", fmt.Errorf("resolveGitHubCommit %s/%s@%s: empty SHA in response", owner, repo, ref)
+	}
+	return payload.SHA, nil
 }
 
 // registryReqs implements mvs.Reqs for the registry loader.

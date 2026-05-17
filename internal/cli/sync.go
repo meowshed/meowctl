@@ -157,11 +157,11 @@ func syncPrepare(configDir string) (*modfile.ModFile, *loader.RegistryLoader, *l
 func modfileAdapters(mf *modfile.ModFile) ([]loader.ModfileDep, []loader.ModfileReplace) {
 	deps := make([]loader.ModfileDep, len(mf.Deps))
 	for i, d := range mf.Deps {
-		deps[i] = loader.ModfileDep{Name: d.Name, Version: d.Version}
+		deps[i] = loader.ModfileDep{Name: d.Name, Version: d.Version, Source: d.Source}
 	}
 	replaces := make([]loader.ModfileReplace, len(mf.Replace))
 	for i, r := range mf.Replace {
-		replaces[i] = loader.ModfileReplace{Module: r.Module, Path: r.Path}
+		replaces[i] = loader.ModfileReplace{Name: r.Name, Path: r.Path, Source: r.Source}
 	}
 	return deps, replaces
 }
@@ -199,7 +199,7 @@ func runGet(configDir, arg string) error {
 
 	// Check if module is replaced — skip with warning.
 	for _, r := range mf.Replace {
-		if r.Module == modName {
+		if r.Name == modName {
 			fmt.Fprintf(os.Stderr, "meowctl: warning: module %q has an active replace() directive — skipping get\n", modName)
 			return nil
 		}
@@ -260,7 +260,7 @@ func runOutdated(configDir string) error {
 	// Build replace set for fast lookup.
 	replaceSet := make(map[string]bool, len(mf.Replace))
 	for _, r := range mf.Replace {
-		replaceSet[r.Module] = true
+		replaceSet[r.Name] = true
 	}
 
 	type outdatedRow struct {
