@@ -90,6 +90,11 @@ type runConfig struct {
 	Force      bool
 	IgnoreLock bool
 	Verbose    bool
+	// ExtraPMReg and ExtraURLMap carry PM handlers and tarball URLs loaded
+	// before a destructive config edit (e.g. remove). runApply merges them
+	// into the main registry so uninstall phases have all required handlers.
+	ExtraPMReg  *pkg.PMRegistry
+	ExtraURLMap map[lifecycle.ComponentID]string
 }
 
 // addLifecycleFlags attaches --dry-run, --no-rollback, and --verbose flags to cmd.

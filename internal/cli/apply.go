@@ -268,9 +268,19 @@ func runApply(cfg runConfig, scopeFilter []string) error {
 		return err
 	}
 
+	// declaredSet includes synthetic deps (e.g. mise, github) so they are
+	// never treated as "installed but removed" by computeToUninstall.
 	declaredSet := make(map[string]bool, len(allOrder))
 	for _, id := range allOrder {
 		declaredSet[id] = true
+	}
+
+	// explicitOrder contains only user-declared components (no synthetic deps).
+	// This is what gets written to installed.lock so that auto-discovered PM
+	// provider components are never tracked as independently installed/uninstalled.
+	explicitOrder, _, _, err := loadComponentsWithDeps(cfg.ConfigDir, nil, false)
+	if err != nil {
+		return err
 	}
 
 	il, err := readInstalledLock(cfg.ConfigDir)
@@ -304,6 +314,11 @@ func runApply(cfg runConfig, scopeFilter []string) error {
 		toUninstall = computeToUninstall(allOrder, declaredSet, installedSet, il.Components)
 	}
 
+	// Components to uninstall may no longer be declared, so their PM handlers
+	// may be absent from pmReg. Merge any pre-loaded registry from the caller
+	// (populated before a destructive config edit such as runRemove).
+	supplementPMRegistry(cfg, pmReg, urlMap)
+
 	if len(toInstall) == 0 && len(toUninstall) == 0 {
 		fmt.Println("meowctl: nothing to do")
 		return nil
@@ -318,12 +333,27 @@ func runApply(cfg runConfig, scopeFilter []string) error {
 		return err
 	}
 
-	newInstalled := computeNewInstalled(scoped, allOrder, installedSet, toInstall)
+	newInstalled := computeNewInstalled(scoped, explicitOrder, installedSet, toInstall)
 	if err := writeInstalledLock(cfg.ConfigDir, newInstalled); err != nil {
 		return err
 	}
 
 	return writePkgsLockAfterApply(cfg.ConfigDir, installCaller)
+}
+
+// supplementPMRegistry merges any pre-loaded PM handlers and URL map entries
+// from cfg into pmReg / urlMap. This is necessary when components are removed
+// from the config before reconcile runs: their PM provider deps (e.g. node for
+// npm) are no longer discovered in the main load, yet their packages still need
+// to be uninstalled. The caller (runRemove) loads the dep graph before editing
+// local.star and stores it in cfg.ExtraPMReg / cfg.ExtraURLMap.
+func supplementPMRegistry(cfg runConfig, pmReg *pkg.PMRegistry, urlMap map[lifecycle.ComponentID]string) {
+	pmReg.Merge(cfg.ExtraPMReg)
+	for k, v := range cfg.ExtraURLMap {
+		if _, exists := urlMap[k]; !exists {
+			urlMap[k] = v
+		}
+	}
 }
 
 // writePkgsLockAfterApply writes pkgs.lock / pkgs.local.lock after a successful apply.
@@ -483,6 +513,17 @@ func runRemove(cfg runConfig, names []string) error {
 			fmt.Printf("  - %s\n", name)
 		}
 		return nil
+	}
+
+	// Load the full dep graph before rewriting local.star so that ALL PM
+	// handlers currently declared (including transitive deps like node→npm,
+	// ruby→gem) are captured in cfg.ExtraPMReg. After the rewrite, removed
+	// components and their PM providers are no longer discovered by runApply,
+	// which would cause "no handler registered" errors during uninstall.
+	_, extraReg, extraURLMap, err := loadComponentsWithDeps(cfg.ConfigDir, nil, false)
+	if err == nil {
+		cfg.ExtraPMReg = extraReg
+		cfg.ExtraURLMap = extraURLMap
 	}
 
 	for _, name := range toRemove {
