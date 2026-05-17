@@ -85,7 +85,7 @@ func TestExecFile_Accumulator(t *testing.T) {
 module(name="mymod", version="1.0.0")
 component(name="shell")
 pkg(manager="apt", name="curl")
-dep(url="self//lib.star")
+dep(name="stdlib", version="0.1.0")
 `
 	result, err := e.ExecFile("meowctl.star", src, nil, nil)
 	if err != nil {
@@ -101,7 +101,7 @@ dep(url="self//lib.star")
 	if len(acc.Packages) != 1 || acc.Packages[0].Name != "curl" {
 		t.Errorf("unexpected packages: %+v", acc.Packages)
 	}
-	if len(acc.Deps) != 1 || acc.Deps[0].URL != "self//lib.star" {
+	if len(acc.Deps) != 1 || acc.Deps[0].Name != "stdlib" || acc.Deps[0].Version != "0.1.0" {
 		t.Errorf("unexpected deps: %+v", acc.Deps)
 	}
 }

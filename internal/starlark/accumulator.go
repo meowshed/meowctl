@@ -46,9 +46,10 @@ type RepoDecl struct {
 	Kwargs  map[string]any
 }
 
-// DepDecl records a dep() declaration.
+// DepDecl records a dep(name, version) declaration.
 type DepDecl struct {
-	URL string
+	Name    string // registry module name (e.g. "stdlib")
+	Version string // required version, v-prefixed semver (e.g. "v0.1.1")
 }
 
 // ModuleDecl records the module() declaration.
