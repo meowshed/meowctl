@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -286,21 +287,21 @@ func parseOrEmpty(path string) (*modfile.ModFile, error) {
 	return mf, nil
 }
 
-// newDepUpgradeCmd implements "meowctl dep upgrade [--dry-run]".
+// newDepUpgradeCmd implements "meowctl dep upgrade [<module>...] [--dry-run]".
 func newDepUpgradeCmd(gf *globalFlags) *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
-		Use:   "upgrade",
+		Use:   "upgrade [<module>...]",
 		Short: "Upgrade registry deps to latest versions; re-resolve non-SHA GitHub refs",
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			configDir, err := resolveConfigDir(gf)
 			if err != nil {
 				return err
 			}
-			return runDepUpgrade(configDir, dryRun)
+			return runDepUpgrade(configDir, args, dryRun)
 		},
 	}
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would change without writing files")
+	cmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "Show what would change without writing files")
 	return cmd
 }
 
@@ -311,43 +312,140 @@ func shaPinned(ref string) bool {
 	return shaRE.MatchString(ref)
 }
 
-func runDepUpgrade(configDir string, dryRun bool) error {
+// upgradeDepEntry pairs a dep declaration with the modfile path that owns it.
+type upgradeDepEntry struct {
+	dep         modfile.DepDecl
+	modfilePath string
+}
+
+// loadUpgradeDeps collects all dep entries from both modfiles.
+func loadUpgradeDeps(configDir string) ([]upgradeDepEntry, error) {
 	modPath := filepath.Join(configDir, configModFile)
 	mf, err := modfile.Parse(modPath)
 	if err != nil {
-		return fmt.Errorf("dep upgrade: %w", err)
+		return nil, fmt.Errorf("dep upgrade: %w", err)
+	}
+	var all []upgradeDepEntry
+	for _, d := range mf.Deps {
+		all = append(all, upgradeDepEntry{d, modPath})
+	}
+
+	localModPath := filepath.Join(configDir, configLocalModFile)
+	localMF, localErr := modfile.Parse(localModPath)
+	if localErr != nil && !errors.Is(localErr, os.ErrNotExist) {
+		return nil, fmt.Errorf("dep upgrade: local modfile: %w", localErr)
+	}
+	if localMF != nil {
+		for _, d := range localMF.Deps {
+			all = append(all, upgradeDepEntry{d, localModPath})
+		}
+	}
+	return all, nil
+}
+
+// runDepUpgrade upgrades all (or the named) modules:
+//   - Registry deps: clear version pin so SyncModules re-resolves to latest; rewrite modfile.
+//   - GitHub source deps: if not SHA-pinned, dep sync will re-resolve to latest commit SHA.
+//   - SHA-pinned GitHub deps are skipped.
+func runDepUpgrade(configDir string, filter []string, dryRun bool) error {
+	filterSet := make(map[string]struct{}, len(filter))
+	for _, name := range filter {
+		filterSet[name] = struct{}{}
+	}
+	wantUpgrade := func(name string) bool {
+		if len(filterSet) == 0 {
+			return true
+		}
+		_, ok := filterSet[name]
+		return ok
+	}
+
+	allDeps, err := loadUpgradeDeps(configDir)
+	if err != nil {
+		return err
+	}
+
+	lockPath := filepath.Join(configDir, configLockFile)
+	lf, lockReadErr := lock.Read(lockPath)
+	if lockReadErr != nil {
+		return fmt.Errorf("dep upgrade: read lock: %w", lockReadErr)
 	}
 
 	changed := false
-	for i, d := range mf.Deps {
-		if d.Source != "" {
-			// GitHub dep — skip SHA-pinned refs.
-			ref := githubRefFromSource(d.Source)
-			if shaPinned(ref) {
-				continue
-			}
-			// Non-SHA ref: will be re-resolved by dep sync (SyncModules always resolves to current SHA).
-			if dryRun {
-				fmt.Printf("  would re-resolve %s (ref: %s)\n", d.Name, ref)
-			} else {
-				fmt.Printf("  queuing re-resolve %s (ref: %s)\n", d.Name, ref)
-			}
-			changed = true
-			_ = i
+	for _, ds := range allDeps {
+		if !wantUpgrade(ds.dep.Name) {
+			continue
 		}
-		// Registry deps: version bumping requires registry index lookup — handled by dep sync
-		// after we clear the locked version to force re-resolution. For now, report as-is.
+		didChange, upgradeErr := applyOneUpgrade(ds.dep, ds.modfilePath, lf.Modules, dryRun)
+		if upgradeErr != nil {
+			return upgradeErr
+		}
+		if didChange {
+			changed = true
+		}
 	}
 
-	if dryRun {
-		if !changed {
-			fmt.Println("meowctl: nothing to upgrade")
-		}
+	if !changed {
+		fmt.Println("meowctl: nothing to upgrade")
 		return nil
 	}
-
-	// Run dep sync to re-resolve and write updated lock.
+	if dryRun {
+		return nil
+	}
+	if err := lock.Write(lockPath, lf); err != nil {
+		return fmt.Errorf("dep upgrade: write lock: %w", err)
+	}
 	return runSync(configDir)
+}
+
+// applyOneUpgrade processes a single dep for upgrade. It mutates modules (lock entries)
+// in-place and returns whether any change was made.
+func applyOneUpgrade(d modfile.DepDecl, modfilePath string, modules map[string]lock.ModuleEntry, dryRun bool) (bool, error) {
+	if d.Source != "" {
+		ref := githubRefFromSource(d.Source)
+		if shaPinned(ref) {
+			return false, nil // SHA-pinned: skip.
+		}
+		if dryRun {
+			fmt.Printf("  would re-resolve %s (ref: %s)\n", d.Name, ref)
+		} else {
+			fmt.Printf("  re-resolving %s (ref: %s)\n", d.Name, ref)
+			delete(modules, d.Name)
+		}
+		return true, nil
+	}
+	// Registry dep: clear version pin to force latest resolution.
+	if dryRun {
+		fmt.Printf("  would upgrade %s (version: %s → latest)\n", d.Name, d.Version)
+	} else {
+		fmt.Printf("  upgrading %s (version: %s → latest)\n", d.Name, d.Version)
+		delete(modules, d.Name)
+		if err := rewriteDepVersion(modfilePath, d.Name, "latest"); err != nil {
+			return false, fmt.Errorf("dep upgrade: rewrite %s: %w", d.Name, err)
+		}
+	}
+	return true, nil
+}
+
+// rewriteDepVersion updates the version field for a named dep in a modfile.
+// An empty version string signals "latest" (SyncModules interprets "" as latest).
+func rewriteDepVersion(modfilePath, name, version string) error {
+	mf, err := modfile.Parse(modfilePath)
+	if err != nil {
+		return err
+	}
+	found := false
+	for i, d := range mf.Deps {
+		if d.Name == name {
+			mf.Deps[i].Version = version
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("dep %q not found in modfile", name)
+	}
+	return modfile.Write(modfilePath, mf)
 }
 
 // githubRefFromSource extracts the ref portion from a "github:owner/repo@ref" source string.

@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/meowshed/meowctl/internal/cli"
+	"github.com/meowshed/meowctl/internal/lock"
+	"github.com/meowshed/meowctl/internal/modfile"
 )
 
 // writeModfile writes a minimal deps.mod content to path.
@@ -356,5 +358,115 @@ func TestDepUpgradeCmd_SkipsSHAPinned(t *testing.T) {
 	_, err := execCmd(t, "--config", tmp, "dep", "upgrade", "--dry-run")
 	if err != nil {
 		t.Fatalf("dep upgrade --dry-run with SHA-pinned dep should not error, got: %v", err)
+	}
+}
+
+// TestDepUpgradeCmd_RegistryDep_ClearsLockAndRewritesVersion verifies that
+// upgrading a registry dep clears its lock entry and sets version to "latest" in modfile
+// so the next sync resolves to the latest version.
+func TestDepUpgradeCmd_RegistryDep_ClearsLockAndRewritesVersion(t *testing.T) {
+	tmp := t.TempDir()
+	writeModfile(t, filepath.Join(tmp, "deps.mod"), `dep(name = "myplugin", version = "0.1.0")`)
+
+	// Seed lock with a locked version for myplugin.
+	lf := &lock.LockFile{
+		Modules: map[string]lock.ModuleEntry{
+			"myplugin": {Version: "0.1.0", Source: "https://example.com/myplugin-0.1.0.tar.gz"},
+		},
+	}
+	if err := lock.Write(filepath.Join(tmp, "deps.lock"), lf); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+
+	// dep upgrade will: clear lock entry, rewrite modfile, then call runSync which
+	// will fail (no registry). We check the pre-sync state after the error.
+	if _, err := execCmd(t, "--config", tmp, "dep", "upgrade"); err != nil {
+		t.Log("dep upgrade:", err) // expected — runSync fails without registry
+	}
+
+	// Lock entry for myplugin must be removed.
+	lf2, err := lock.Read(filepath.Join(tmp, "deps.lock"))
+	if err != nil {
+		t.Fatalf("read lock after upgrade: %v", err)
+	}
+	if _, ok := lf2.Modules["myplugin"]; ok {
+		t.Error("expected lock entry for 'myplugin' to be cleared before sync")
+	}
+
+	// Modfile version must be rewritten to "latest".
+	mf, err := modfile.Parse(filepath.Join(tmp, "deps.mod"))
+	if err != nil {
+		t.Fatalf("parse modfile after upgrade: %v", err)
+	}
+	if len(mf.Deps) == 0 {
+		t.Fatal("expected at least one dep in modfile")
+	}
+	if mf.Deps[0].Version != "latest" {
+		t.Errorf("expected version set to 'latest', got %q", mf.Deps[0].Version)
+	}
+}
+
+// TestDepUpgradeCmd_GitHubDep_NonSHA_ClearsLock verifies that a non-SHA GitHub dep
+// has its lock entry cleared before sync (enabling re-resolution to latest SHA).
+func TestDepUpgradeCmd_GitHubDep_NonSHA_ClearsLock(t *testing.T) {
+	tmp := t.TempDir()
+	writeModfile(t, filepath.Join(tmp, "deps.mod"), `dep(name = "myplugin", source = "github:owner/myplugin@main")`)
+
+	// Seed lock with an old commit SHA.
+	lf := &lock.LockFile{
+		Modules: map[string]lock.ModuleEntry{
+			"myplugin": {CommitSHA: "oldsha1234567890", Source: "https://github.com/owner/myplugin/archive/oldsha.tar.gz"},
+		},
+	}
+	if err := lock.Write(filepath.Join(tmp, "deps.lock"), lf); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+
+	if _, err := execCmd(t, "--config", tmp, "dep", "upgrade"); err != nil {
+		t.Log("dep upgrade:", err) // expected — runSync fails without GitHub API
+	}
+
+	// Lock entry must be cleared so the next sync re-resolves.
+	lf2, err := lock.Read(filepath.Join(tmp, "deps.lock"))
+	if err != nil {
+		t.Fatalf("read lock after upgrade: %v", err)
+	}
+	if _, ok := lf2.Modules["myplugin"]; ok {
+		t.Error("expected lock entry for 'myplugin' to be cleared before sync")
+	}
+}
+
+// TestDepUpgradeCmd_FilterByModule verifies that named module args limit which deps are upgraded.
+func TestDepUpgradeCmd_FilterByModule(t *testing.T) {
+	tmp := t.TempDir()
+	writeModfile(t, filepath.Join(tmp, "deps.mod"),
+		"dep(name = \"alpha\", version = \"0.1.0\")\ndep(name = \"beta\", version = \"0.2.0\")")
+
+	lf := &lock.LockFile{
+		Modules: map[string]lock.ModuleEntry{
+			"alpha": {Version: "0.1.0", Source: "https://example.com/alpha.tar.gz"},
+			"beta":  {Version: "0.2.0", Source: "https://example.com/beta.tar.gz"},
+		},
+	}
+	if err := lock.Write(filepath.Join(tmp, "deps.lock"), lf); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+
+	// Only upgrade alpha.
+	if _, err := execCmd(t, "--config", tmp, "dep", "upgrade", "alpha"); err != nil {
+		t.Log("dep upgrade alpha:", err) // expected — runSync fails without registry
+	}
+
+	lf2, err := lock.Read(filepath.Join(tmp, "deps.lock"))
+	if err != nil {
+		t.Fatalf("read lock after upgrade: %v", err)
+	}
+	// alpha must be cleared.
+	if _, ok := lf2.Modules["alpha"]; ok {
+		t.Error("expected lock entry for 'alpha' to be cleared")
+	}
+	// beta must be untouched.
+	if _, ok := lf2.Modules["beta"]; !ok {
+		t.Error("expected lock entry for 'beta' to remain unchanged")
 	}
 }
