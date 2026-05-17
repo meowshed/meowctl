@@ -33,6 +33,11 @@ type indexEntry struct {
 	Versions []string `toml:"versions"`
 	// Source is a URL template for the tarball. {name} and {version} are replaced.
 	Source string `toml:"source"`
+	// Integrity maps version strings to their sha384 SRI hashes.
+	// When present for a version, the loader verifies the downloaded tarball
+	// against this hash before extracting. Missing entries are silently skipped
+	// (backwards-compatible with modules that predate per-version integrity).
+	Integrity map[string]string `toml:"integrity"`
 }
 
 // registryIndex is the top-level structure of index.toml.
@@ -249,6 +254,12 @@ func (l *RegistryLoader) resolveVersion(name string) (string, error) {
 			tarball, fetchErr := l.fetchTarball(source)
 			if fetchErr != nil {
 				return "", fmt.Errorf("fetch tarball for %s@%s: %w", mod.Name, mod.Version, fetchErr)
+			}
+			// If the index carries a per-version integrity hash, verify before extracting.
+			if expected, ok := modEntry.Integrity[mod.Version]; ok && expected != "" {
+				if verifyErr := checkSRI(expected, tarball); verifyErr != nil {
+					return "", fmt.Errorf("SRI mismatch for %s@%s (index integrity): %w", mod.Name, mod.Version, verifyErr)
+				}
 			}
 			integ = computeSRI(tarball)
 			if _, statErr := os.Stat(cacheDir); statErr != nil {
@@ -569,6 +580,12 @@ func (l *RegistryLoader) resolveDepVersion(modName, reqVersion string, entry ind
 		tarball, fetchErr := l.fetchTarball(source)
 		if fetchErr != nil {
 			return "", "", "", fmt.Errorf("sync: fetch %s@%s: %w", modName, version, fetchErr)
+		}
+		// If the index carries a per-version integrity hash, verify before extracting.
+		if expected, ok := entry.Integrity[version]; ok && expected != "" {
+			if verifyErr := checkSRI(expected, tarball); verifyErr != nil {
+				return "", "", "", fmt.Errorf("sync: SRI mismatch for %s@%s (index integrity): %w", modName, version, verifyErr)
+			}
 		}
 		integ = computeSRI(tarball)
 		if _, statErr := os.Stat(cacheDir); statErr != nil {
