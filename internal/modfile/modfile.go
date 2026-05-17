@@ -38,8 +38,8 @@ type ModuleDecl struct {
 
 // DepDecl records a dep(name, version) declaration.
 type DepDecl struct {
-	Name    string
-	Version string
+	Name    string // registry module name (e.g. "stdlib")
+	Version string // required version, v-prefixed semver (e.g. "v0.1.1")
 }
 
 // ReplaceDecl records a replace(module, path) declaration.

@@ -634,8 +634,8 @@ func (l *RegistryLoader) LatestVersion(modName string) (string, error) {
 
 // ModfileDep is a dep() entry from a modfile, used by SyncModules.
 type ModfileDep struct {
-	Name    string
-	Version string
+	Name    string // registry module name (e.g. "stdlib")
+	Version string // required version, v-prefixed semver (e.g. "v0.1.1")
 }
 
 // ModfileReplace is a replace() entry from a modfile, used by SyncModules.
