@@ -37,6 +37,37 @@ func requirePath(op, path string) error {
 	return nil
 }
 
+// expandPath expands a leading "~" to the user's home directory.
+// Paths like "~/foo" become "/Users/user/foo". Paths without a leading "~"
+// are returned unchanged. Uses os.UserHomeDir for portability.
+func expandPath(path string) (string, error) {
+	if !strings.HasPrefix(path, "~") {
+		return path, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("expand path: %w", err)
+	}
+	// "~" alone or "~/" prefix.
+	if path == "~" {
+		return home, nil
+	}
+	if len(path) > 1 && path[1] == '/' {
+		return filepath.Join(home, path[2:]), nil
+	}
+	// "~username" form — not supported; return as-is.
+	return path, nil
+}
+
+// resolvePath validates and expands a path. Returns an error if empty;
+// expands leading "~" to home dir.
+func resolvePath(op, path string) (string, error) {
+	if err := requirePath(op, path); err != nil {
+		return "", err
+	}
+	return expandPath(path)
+}
+
 // dryLog emits a dry-run line for the given op and args.
 func (c *CtxValue) dryLog(op string, args ...string) {
 	c.logMsg(fmt.Sprintf("[dry-run] %-16s component=%-20s %s", op, c.caps.Component, strings.Join(args, " ")))
@@ -84,6 +115,10 @@ func (c *CtxValue) starWriteFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, ar
 	if err := requirePath("write_file", path); err != nil {
 		return nil, err
 	}
+	path, err := expandPath(path)
+	if err != nil {
+		return nil, fmt.Errorf("write_file: %w", err)
+	}
 	if c.caps.DryRun {
 		c.dryLog("write_file", "path="+path)
 		return gostarlark.None, nil
@@ -120,7 +155,8 @@ func (c *CtxValue) starWriteFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, ar
 func (c *CtxValue) starAppendFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (_ gostarlark.Value, retErr error) {
 	var dst, content gostarlark.String
 	var markerVal gostarlark.Value = gostarlark.None
-	if err := gostarlark.UnpackArgs("append_file", args, kwargs,
+	if err := gostarlark.UnpackArgs(
+		"append_file", args, kwargs,
 		"dst", &dst,
 		"content", &content,
 		"marker?", &markerVal,
@@ -130,6 +166,10 @@ func (c *CtxValue) starAppendFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, a
 	path := string(dst)
 	if err := requirePath("append_file", path); err != nil {
 		return nil, err
+	}
+	path, err := expandPath(path)
+	if err != nil {
+		return nil, fmt.Errorf("append_file: %w", err)
 	}
 	if c.caps.DryRun {
 		c.dryLog("append_file", "path="+path)
@@ -173,11 +213,15 @@ func (c *CtxValue) starDeleteFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, a
 	if err := requirePath("delete_file", path); err != nil {
 		return nil, err
 	}
+	path, err := expandPath(path)
+	if err != nil {
+		return nil, fmt.Errorf("delete_file: %w", err)
+	}
 	if c.caps.DryRun {
 		c.dryLog("delete_file", "path="+path)
 		return gostarlark.None, nil
 	}
-	err := os.Remove(path)
+	err = os.Remove(path)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("delete_file: %w", err)
 	}
@@ -196,6 +240,14 @@ func (c *CtxValue) starCopyFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 	}
 	if err := requirePath("copy_file", dstPath); err != nil {
 		return nil, err
+	}
+	srcPath, err := expandPath(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("copy_file: %w", err)
+	}
+	dstPath, err = expandPath(dstPath)
+	if err != nil {
+		return nil, fmt.Errorf("copy_file: %w", err)
 	}
 	if c.caps.DryRun {
 		c.dryLog("copy_file", "src="+srcPath, "dst="+dstPath)
@@ -237,11 +289,12 @@ func (c *CtxValue) starSymlink(_ *gostarlark.Thread, _ *gostarlark.Builtin, args
 	if err := gostarlark.UnpackArgs("symlink", args, kwargs, "src", &src, "dst", &dst); err != nil {
 		return nil, err
 	}
-	srcPath, dstPath := string(src), string(dst)
-	if err := requirePath("symlink", srcPath); err != nil {
+	srcPath, err := resolvePath("symlink", string(src))
+	if err != nil {
 		return nil, err
 	}
-	if err := requirePath("symlink", dstPath); err != nil {
+	dstPath, err := resolvePath("symlink", string(dst))
+	if err != nil {
 		return nil, err
 	}
 	if c.caps.DryRun {
@@ -297,6 +350,10 @@ func (c *CtxValue) starRemoveSymlink(_ *gostarlark.Thread, _ *gostarlark.Builtin
 	if err := requirePath("remove_symlink", path); err != nil {
 		return nil, err
 	}
+	path, err := expandPath(path)
+	if err != nil {
+		return nil, fmt.Errorf("remove_symlink: %w", err)
+	}
 	if c.caps.DryRun {
 		c.dryLog("remove_symlink", "path="+path)
 		return gostarlark.None, nil
@@ -349,7 +406,8 @@ func (c *CtxValue) starLinkFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 	if filepath.IsAbs(srcRel) {
 		return nil, fmt.Errorf("link_file: src must be a relative path; got %q", srcRel)
 	}
-	if err := requirePath("link_file", dstPath); err != nil {
+	dstPath, err := resolvePath("link_file", dstPath)
+	if err != nil {
 		return nil, err
 	}
 	srcPath := filepath.Join(c.caps.ComponentDir, srcRel)
@@ -397,6 +455,10 @@ func (c *CtxValue) starMkdir(_ *gostarlark.Thread, _ *gostarlark.Builtin, args g
 	p := string(path)
 	if err := requirePath("mkdir", p); err != nil {
 		return nil, err
+	}
+	p, err := expandPath(p)
+	if err != nil {
+		return nil, fmt.Errorf("mkdir: %w", err)
 	}
 	if c.caps.DryRun {
 		c.dryLog("mkdir", "path="+p)
@@ -447,7 +509,11 @@ func (c *CtxValue) starReadFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 	if err := gostarlark.UnpackArgs("read_file", args, kwargs, "path", &path); err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(string(path)) // #nosec G304
+	p, err := expandPath(string(path))
+	if err != nil {
+		return nil, fmt.Errorf("read_file: %w", err)
+	}
+	data, err := os.ReadFile(p) // #nosec G304
 	if err != nil {
 		return nil, fmt.Errorf("read_file: %w", err)
 	}
@@ -460,7 +526,11 @@ func (c *CtxValue) starFileExists(_ *gostarlark.Thread, _ *gostarlark.Builtin, a
 	if err := gostarlark.UnpackArgs("file_exists", args, kwargs, "path", &path); err != nil {
 		return nil, err
 	}
-	_, err := os.Lstat(string(path))
+	p, err := expandPath(string(path))
+	if err != nil {
+		return nil, fmt.Errorf("file_exists: %w", err)
+	}
+	_, err = os.Lstat(p)
 	if os.IsNotExist(err) {
 		return gostarlark.False, nil
 	}
@@ -476,7 +546,11 @@ func (c *CtxValue) starListDir(_ *gostarlark.Thread, _ *gostarlark.Builtin, args
 	if err := gostarlark.UnpackArgs("list_dir", args, kwargs, "path", &path); err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(string(path))
+	p, err := expandPath(string(path))
+	if err != nil {
+		return nil, fmt.Errorf("list_dir: %w", err)
+	}
+	entries, err := os.ReadDir(p)
 	if err != nil {
 		return nil, fmt.Errorf("list_dir: %w", err)
 	}
@@ -494,7 +568,8 @@ func (c *CtxValue) starRun(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 	runArgs := &gostarlark.List{}
 	runEnv := &gostarlark.Dict{}
 	var cwd gostarlark.Value = gostarlark.None
-	if err := gostarlark.UnpackArgs("run", args, kwargs,
+	if err := gostarlark.UnpackArgs(
+		"run", args, kwargs,
 		"cmd", &cmd,
 		"args?", &runArgs,
 		"env?", &runEnv,
@@ -566,7 +641,11 @@ func (c *CtxValue) execRun(cmd string, cmdArgs, mergedEnv []string, cwd gostarla
 	c2 := exec.CommandContext(context.Background(), cmd, cmdArgs...) // #nosec G204 -- cmd/args from validated Starlark config; no ctx available in hooks
 	c2.Env = mergedEnv
 	if cwdStr, ok := cwd.(gostarlark.String); ok {
-		c2.Dir = string(cwdStr)
+		dir, err := expandPath(string(cwdStr))
+		if err != nil {
+			return "", "", 0, fmt.Errorf("run: %w", err)
+		}
+		c2.Dir = dir
 	}
 	var stdoutBuf, stderrBuf strings.Builder
 	c2.Stdout = &stdoutBuf
@@ -612,7 +691,8 @@ func starlarkRunResult(stdout, stderr string, exitCode int) gostarlark.Value {
 func (c *CtxValue) starGitClone(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
 	var rawURL, dst gostarlark.String
 	var ref gostarlark.Value = gostarlark.None
-	if err := gostarlark.UnpackArgs("git_clone", args, kwargs,
+	if err := gostarlark.UnpackArgs(
+		"git_clone", args, kwargs,
 		"url", &rawURL,
 		"dst", &dst,
 		"ref?", &ref,
@@ -624,6 +704,10 @@ func (c *CtxValue) starGitClone(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 		return gostarlark.None, nil
 	}
 	dstPath := string(dst)
+	dstPath, err := expandPath(dstPath)
+	if err != nil {
+		return nil, fmt.Errorf("git_clone: %w", err)
+	}
 	// If destination exists, skip clone (idempotent).
 	if _, err := os.Stat(dstPath); err == nil {
 		return gostarlark.None, nil
@@ -643,7 +727,8 @@ func (c *CtxValue) starGitClone(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 func (c *CtxValue) starDownload(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (_ gostarlark.Value, retErr error) {
 	var rawURL, dst gostarlark.String
 	var checksum gostarlark.Value = gostarlark.None
-	if err := gostarlark.UnpackArgs("download", args, kwargs,
+	if err := gostarlark.UnpackArgs(
+		"download", args, kwargs,
 		"url", &rawURL,
 		"dst", &dst,
 		"checksum?", &checksum,
@@ -651,6 +736,10 @@ func (c *CtxValue) starDownload(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 		return nil, err
 	}
 	dstPath := string(dst)
+	dstPath, err := expandPath(dstPath)
+	if err != nil {
+		return nil, fmt.Errorf("download: %w", err)
+	}
 	if c.caps.DryRun {
 		c.dryLog("download", "url="+string(rawURL), "dst="+dstPath)
 		return gostarlark.None, nil
@@ -766,7 +855,8 @@ func combineDownloadErrors(writeErr, closeErr, cleanErr error) error {
 func (c *CtxValue) starDefaultsWrite(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
 	var domain, key, valueType gostarlark.String
 	var value gostarlark.Value
-	if err := gostarlark.UnpackArgs("defaults_write", args, kwargs,
+	if err := gostarlark.UnpackArgs(
+		"defaults_write", args, kwargs,
 		"domain", &domain,
 		"key", &key,
 		"type", &valueType,
@@ -793,7 +883,8 @@ func (c *CtxValue) starDefaultsWrite(_ *gostarlark.Thread, _ *gostarlark.Builtin
 func (c *CtxValue) starPlistSet(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
 	var file, key, valueType gostarlark.String
 	var value gostarlark.Value
-	if err := gostarlark.UnpackArgs("plist_set", args, kwargs,
+	if err := gostarlark.UnpackArgs(
+		"plist_set", args, kwargs,
 		"file", &file,
 		"key", &key,
 		"type", &valueType,
@@ -805,13 +896,17 @@ func (c *CtxValue) starPlistSet(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 		c.dryLog("plist_set", "file="+string(file), "key="+string(key))
 		return gostarlark.None, nil
 	}
+	filePath, err := expandPath(string(file))
+	if err != nil {
+		return nil, fmt.Errorf("plist_set: %w", err)
+	}
 	// PlistBuddy expects booleans as "true"/"false" (lowercase); %v on gostarlark.Bool
 	// produces "True"/"False" (Starlark casing), which PlistBuddy would reject.
 	valStr := starlarkValueToShellArg(value)
 	// PlistBuddy parses the -c string itself; keys or values containing spaces
 	// must be quoted so PlistBuddy does not split them into extra tokens.
 	cmdStr := fmt.Sprintf("Set :%s %s", shellQuote(string(key)), shellQuote(valStr))
-	cmd := exec.CommandContext(context.Background(), "/usr/libexec/PlistBuddy", "-c", cmdStr, string(file)) // #nosec G204 -- args from validated Starlark config; no ctx available in hooks
+	cmd := exec.CommandContext(context.Background(), "/usr/libexec/PlistBuddy", "-c", cmdStr, filePath) // #nosec G204 -- args from validated Starlark config; no ctx available in hooks
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("plist_set: %w\n%s", err, out)
 	}
@@ -904,7 +999,8 @@ func (c *CtxValue) starAddPath(_ *gostarlark.Thread, _ *gostarlark.Builtin, args
 func (c *CtxValue) starRender(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
 	var templateStr gostarlark.String
 	var vars *gostarlark.Dict
-	if err := gostarlark.UnpackArgs("render", args, kwargs,
+	if err := gostarlark.UnpackArgs(
+		"render", args, kwargs,
 		"template_str", &templateStr,
 		"vars", &vars,
 	); err != nil {
@@ -922,7 +1018,8 @@ func (c *CtxValue) starRender(_ *gostarlark.Thread, _ *gostarlark.Builtin, args 
 func (c *CtxValue) starRenderFile(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
 	var src gostarlark.String
 	var vars *gostarlark.Dict
-	if err := gostarlark.UnpackArgs("render_file", args, kwargs,
+	if err := gostarlark.UnpackArgs(
+		"render_file", args, kwargs,
 		"src", &src,
 		"vars", &vars,
 	); err != nil {
