@@ -198,10 +198,18 @@ func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
 // callHookFromFile evaluates a local .star file and dispatches its hook,
 // then runs any hooks/<componentID>.star extension hook.
 func (h *starlarkHookCaller) callHookFromFile(componentID, componentFile, hookName string) error {
+	// If a subdirectory with the component's name exists alongside the .star
+	// file, use it as ComponentDir. This supports dotmeow-style components where
+	// data files live in a subdir (e.g. components/git-config/config).
+	componentDir := filepath.Dir(componentFile)
+	if subdir := filepath.Join(componentDir, componentID); isDir(subdir) {
+		componentDir = subdir
+	}
+
 	caps := &ctx.Capabilities{
 		DryRun:        h.dryRun,
 		Verbose:       h.verbose,
-		ComponentDir:  filepath.Dir(componentFile),
+		ComponentDir:  componentDir,
 		Phase:         hookName,
 		Component:     componentID,
 		RollbackStack: h.stack,
@@ -883,4 +891,10 @@ func runLifecyclePhaseSetOrderedWithCaller(name string, phases []lifecycle.Phase
 	sentinel := state.NewManager(statePath)
 	runner := buildRunner(cfg, order, stack, sentinel, w, pmReg, caller)
 	return caller, runner.RunPhaseSet(name, phases)
+}
+
+// isDir returns true if path exists and is a directory.
+func isDir(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.IsDir()
 }
