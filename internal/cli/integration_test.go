@@ -63,15 +63,15 @@ component("@stdlib//components/git")
 	t.Logf("resolved ids: %v", ids)
 }
 
-// TestLiveLoadComponents_TransitiveDeps declares the git bundle which has four
-// transitive component deps (lazygit, tig, delta, forgit). Asserts all four
+// TestLiveLoadComponents_TransitiveDeps declares the git bundle which has three
+// transitive component deps (lazygit, delta, forgit). Asserts all three
 // appear in the resolved set and that topo order is stable across two runs.
 func TestLiveLoadComponents_TransitiveDeps(t *testing.T) {
 	star := `
 module(name = "test", version = "0.1.0")
 component("@stdlib//bundles/git")
 `
-	wantComponents := []string{"lazygit", "tig", "delta", "forgit"}
+	wantComponents := []string{"lazygit", "delta", "forgit"}
 
 	configDir := sharedConfigDir(t, star)
 	ids, err := cli.ExportLoadComponents(configDir, nil)
