@@ -28,9 +28,9 @@ description = "Run golangci-lint"
 run = "golangci-lint run ./..."
 
 [tasks.install]
-description = "Install meowctl to GOPATH/bin"
+description = "Install meowctl to ~/.local/bin"
 depends = ["build"]
-run = "cp bin/meowctl $(go env GOPATH)/bin/meowctl"
+run = "mkdir -p ~/.local/bin && cp bin/meowctl ~/.local/bin/meowctl"
 
 [tasks.clean]
 description = "Remove build artifacts"
