@@ -2,9 +2,6 @@ package tui
 
 import (
 	"io"
-	"os"
-
-	"golang.org/x/term"
 )
 
 // Writer is the output abstraction for progress and status events.
@@ -26,9 +23,10 @@ type Writer interface {
 
 // New returns a [Writer] suitable for out. When out is a TTY it returns a
 // [BubbleTeaWriter]; otherwise it returns a [PlainWriter].
+//
+// TODO(retran): BubbleTeaWriter puts the terminal in raw mode which breaks
+// subprocesses and ctx.prompt() calls during lifecycle hooks. Use PlainWriter
+// unconditionally until BubbleTea can suspend/resume around hook execution.
 func New(out io.Writer) Writer {
-	if f, ok := out.(*os.File); ok && term.IsTerminal(int(f.Fd())) { // #nosec G115 -- fd values fit int on all supported platforms
-		return newBubbleTeaWriter(out)
-	}
 	return NewPlainWriter(out)
 }
