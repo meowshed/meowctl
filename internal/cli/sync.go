@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/meowshed/meowctl/internal/lifecycle"
 	"github.com/meowshed/meowctl/internal/lock"
 	"github.com/meowshed/meowctl/internal/modfile"
 	"github.com/meowshed/meowctl/internal/starlark/loader"
@@ -62,13 +61,7 @@ func runSync(configDir string) error {
 		return nil
 	}
 
-	if len(changed) == 0 && !localChanged {
-		return nil
-	}
-
-	fmt.Printf("meowctl: re-running install for %d changed module(s)\n", len(changed))
-	cfg := runConfig{ConfigDir: configDir}
-	return runLifecyclePhaseSet("install", lifecycle.PhaseSetInstall, cfg, nil)
+	return nil
 }
 
 // runSyncLocal syncs deps.local.mod → deps.local.lock when the local modfile exists.
