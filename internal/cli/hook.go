@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/meowshed/meowctl/internal/ctx"
@@ -180,8 +181,12 @@ func newHookCmd(gf *globalFlags) *cobra.Command {
 			}
 
 			caller := &runtimeHookCaller{
-				configDir:     configDir,
-				eval:          &starlarkpkg.Evaluator{},
+				configDir: configDir,
+				eval: &starlarkpkg.Evaluator{
+					Platform: starlarkpkg.PlatformInfo{
+						OS: goosToPlatformOS(runtime.GOOS),
+					},
+				},
 				pmRegistry:    pmReg,
 				loader:        cl,
 				urlComponents: urlMap,
