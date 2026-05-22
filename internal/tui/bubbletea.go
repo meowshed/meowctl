@@ -75,6 +75,11 @@ func (m btModel) Init() tea.Cmd {
 // header itself.
 func (m btModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+		return m, nil
 	case componentStartMsg:
 		for i, row := range m.rows {
 			if row.name == msg.name {
@@ -174,7 +179,7 @@ type BubbleTeaWriter struct {
 
 func newBubbleTeaWriter(out io.Writer) *BubbleTeaWriter {
 	m := btModel{}
-	p := tea.NewProgram(m, tea.WithOutput(out), tea.WithInput(nil))
+	p := tea.NewProgram(m, tea.WithOutput(out))
 	w := &BubbleTeaWriter{
 		program: p,
 		done:    make(chan struct{}),
