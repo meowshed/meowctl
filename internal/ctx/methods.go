@@ -648,8 +648,9 @@ func (c *CtxValue) execRun(cmd string, cmdArgs, mergedEnv []string, cwd gostarla
 		c2.Dir = dir
 	}
 	var stdoutBuf, stderrBuf strings.Builder
-	c2.Stdout = &stdoutBuf
-	c2.Stderr = &stderrBuf
+	c2.Stdout = io.MultiWriter(&stdoutBuf, os.Stdout)
+	c2.Stderr = io.MultiWriter(&stderrBuf, os.Stderr)
+	c2.Stdin = os.Stdin
 	runErr := c2.Run()
 	exitCode := 0
 	if runErr != nil {
@@ -717,8 +718,11 @@ func (c *CtxValue) starGitClone(_ *gostarlark.Thread, _ *gostarlark.Builtin, arg
 		cloneArgs = append(cloneArgs, "--branch", string(refStr))
 	}
 	cmd := exec.CommandContext(context.Background(), "git", cloneArgs...) // #nosec G204 -- args from validated Starlark strings; no ctx available in hooks
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("git_clone: %w\n%s", err, out)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git_clone: %w", err)
 	}
 	return gostarlark.None, nil
 }
