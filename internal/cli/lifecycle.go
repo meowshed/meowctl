@@ -20,13 +20,13 @@ import (
 	gostarlark "go.starlark.net/starlark"
 )
 
-// goosToPlatformOS maps runtime.GOOS values to the meowctl platform OS identifiers.
-// "darwin" → "macos"; all others pass through unchanged.
-func goosToPlatformOS(goos string) string {
-	if goos == "darwin" {
+// goosToPlatformOS returns the meowctl platform OS identifier for the current
+// runtime OS. "darwin" → "macos"; all others pass through unchanged.
+func goosToPlatformOS() string {
+	if runtime.GOOS == "darwin" {
 		return "macos"
 	}
-	return goos
+	return runtime.GOOS
 }
 
 // linuxDistroInfo reads /etc/os-release and returns (distro, distroLike).
@@ -119,7 +119,7 @@ func buildHookCaller(cfg runConfig) *starlarkHookCaller {
 	}
 	eval := &starlarkpkg.Evaluator{
 		Platform: starlarkpkg.PlatformInfo{
-			OS:         goosToPlatformOS(runtime.GOOS),
+			OS:         goosToPlatformOS(),
 			Distro:     distro,
 			DistroLike: distroLike,
 		},
@@ -418,7 +418,7 @@ func loadComponentsWithDeps(configDir string, filter []string, runSyntheticHooks
 	}
 	eval := &starlarkpkg.Evaluator{
 		Platform: starlarkpkg.PlatformInfo{
-			OS:         goosToPlatformOS(runtime.GOOS),
+			OS:         goosToPlatformOS(),
 			Distro:     distro,
 			DistroLike: distroLike,
 		},
