@@ -601,7 +601,7 @@ func makeEvaluator() *starlarkpkg.Evaluator {
 	}
 	return &starlarkpkg.Evaluator{
 		Platform: starlarkpkg.PlatformInfo{
-			OS:         goosToPlatformOS(runtime.GOOS),
+			OS:         goosToPlatformOS(),
 			Distro:     distro,
 			DistroLike: distroLike,
 		},

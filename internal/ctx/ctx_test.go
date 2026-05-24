@@ -529,7 +529,8 @@ func TestStarLinkFile_RequiresBothArgs(t *testing.T) {
 // TestStarLinkFile_AbsSrcErrors verifies that an absolute src path is rejected.
 func TestStarLinkFile_AbsSrcErrors(t *testing.T) {
 	c := ctx.New(testCaps())
-	_, err := callBuiltin(t, c, "link_file",
+	_, err := callBuiltin(
+		t, c, "link_file",
 		gostarlark.Tuple{gostarlark.String("/abs/src"), gostarlark.String("/tmp/dst")},
 		nil,
 	)
@@ -543,7 +544,8 @@ func TestStarLinkFile_DryRun(t *testing.T) {
 	caps := dryRunCaps()
 	caps.ComponentDir = "/some/component"
 	c := ctx.New(caps)
-	_, err := callBuiltin(t, c, "link_file",
+	_, err := callBuiltin(
+		t, c, "link_file",
 		gostarlark.Tuple{gostarlark.String("file.zsh"), gostarlark.String("/tmp/dst")},
 		nil,
 	)
@@ -568,7 +570,8 @@ func TestStarLinkFile_CreatesSymlink(t *testing.T) {
 	caps := testCaps()
 	caps.ComponentDir = dir
 	c := ctx.New(caps)
-	_, err := callBuiltin(t, c, "link_file",
+	_, err := callBuiltin(
+		t, c, "link_file",
 		gostarlark.Tuple{gostarlark.String("file.zsh"), gostarlark.String(dst)},
 		nil,
 	)
@@ -598,7 +601,8 @@ func TestStarLinkFile_BackupsRegularFile(t *testing.T) {
 	caps := testCaps()
 	caps.ComponentDir = dir
 	c := ctx.New(caps)
-	_, err := callBuiltin(t, c, "link_file",
+	_, err := callBuiltin(
+		t, c, "link_file",
 		gostarlark.Tuple{gostarlark.String("file.zsh"), gostarlark.String(dst)},
 		nil,
 	)
@@ -645,7 +649,8 @@ func TestStarLinkFile_NoBackupErrors(t *testing.T) {
 	caps := testCaps()
 	caps.ComponentDir = dir
 	c := ctx.New(caps)
-	_, err := callBuiltin(t, c, "link_file",
+	_, err := callBuiltin(
+		t, c, "link_file",
 		gostarlark.Tuple{gostarlark.String("file.zsh"), gostarlark.String(dst)},
 		[]gostarlark.Tuple{{gostarlark.String("backup"), gostarlark.Bool(false)}},
 	)

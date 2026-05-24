@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/meowshed/meowctl/internal/state"
 )
 
 // bootstrapMaxTarballBytes caps the tarball download at 256 MiB to avoid
@@ -74,7 +76,16 @@ func runBootstrap(configDir, repoURL string, force bool) error {
 
 	// Run apply.
 	fmt.Println("meowctl: running apply")
-	return runApply(runConfig{ConfigDir: configDir}, nil)
+	if err := runApply(runConfig{ConfigDir: configDir}, nil); err != nil {
+		return err
+	}
+
+	// Persist repo URL for later meowctl update.
+	mgr := state.NewManager(filepath.Join(configDir, configStateFile))
+	s, _ := mgr.Load()
+	s.RepoURL = repoURL
+	_ = mgr.Save(s) // Non-fatal: update works without stored URL.
+	return nil
 }
 
 // tarballURL derives the tarball download URL from a repo URL.

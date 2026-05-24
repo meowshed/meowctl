@@ -44,6 +44,7 @@ type Sentinel struct {
 	SchemaVersion       int                  `toml:"schema_version"`
 	LastRun             LastRun              `toml:"last_run"`
 	CompletedComponents []CompletedComponent `toml:"completed_components"`
+	RepoURL             string               `toml:"repo_url,omitempty"`
 }
 
 // Manager handles reading and writing the sentinel file atomically.
