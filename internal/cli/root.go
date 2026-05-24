@@ -43,6 +43,7 @@ Starlark configuration files.`,
 		newDoctorCmd(&gf),
 		newStatusCmd(&gf),
 		newSelfUpdateCmd(),
+		newUpdateCmd(&gf),
 		newDepCmd(&gf),
 		newCheckCmd(),
 	)
