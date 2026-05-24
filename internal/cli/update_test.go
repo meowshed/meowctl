@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/meowshed/meowctl/internal/state"
 )
 
 func TestDiffConfigDirs(t *testing.T) {
@@ -120,6 +124,118 @@ func TestFilesEqual(t *testing.T) {
 	}
 	if same, err := filesEqual(a, c); err != nil || same {
 		t.Errorf("filesEqual(a,c) = %v, %v; want false, nil", same, err)
+	}
+}
+
+// TestRunUpdate_Success verifies the full update flow: tarball download, diff,
+// apply, and protected-file preservation.
+func TestRunUpdate_Success(t *testing.T) {
+	// Build a tarball with updated files.
+	tarball := makeTarball(t, map[string]string{
+		"init.star":        "component(\"dummy\")\n",
+		"deps.mod":         "module(name = \"test\", version = \"0.2.0\")\n",
+		"components/a.txt": "updated a",
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(tarball)
+	}))
+	defer srv.Close()
+
+	configDir := t.TempDir()
+
+	// Seed local config.
+	_ = os.MkdirAll(filepath.Join(configDir, "components"), 0o700)
+	writeFile(t, filepath.Join(configDir, "init.star"), "component(\"dummy\")\n")
+	writeFile(t, filepath.Join(configDir, "deps.mod"), "module(name = \"test\", version = \"0.1.0\")\n")
+	writeFile(t, filepath.Join(configDir, "components", "a.txt"), "original a")
+	writeFile(t, filepath.Join(configDir, "local.star"), "# machine local\n")
+
+	// Seed state.toml with repo URL.
+	mgr := state.NewManager(filepath.Join(configDir, configStateFile))
+	_ = mgr.Save(state.Sentinel{SchemaVersion: 1, RepoURL: srv.URL})
+
+	cfg := runConfig{ConfigDir: configDir}
+	if err := runUpdate(cfg, true); err != nil {
+		t.Fatalf("runUpdate: %v", err)
+	}
+
+	// Tracked files updated.
+	assertFileContent(t, filepath.Join(configDir, "init.star"), "component(\"dummy\")\n")
+	assertFileContent(t, filepath.Join(configDir, "deps.mod"), "module(name = \"test\", version = \"0.2.0\")\n")
+	assertFileContent(t, filepath.Join(configDir, "components", "a.txt"), "updated a")
+
+	// Protected file untouched.
+	assertFileContent(t, filepath.Join(configDir, "local.star"), "# machine local\n")
+
+	// Staging dir cleaned up.
+	if _, err := os.Lstat(filepath.Join(configDir, ".update-staging")); !os.IsNotExist(err) {
+		t.Error("staging dir should be removed after update")
+	}
+}
+
+// TestRunUpdate_NoChanges verifies that update is a no-op when upstream is
+// identical to the local config.
+func TestRunUpdate_NoChanges(t *testing.T) {
+	tarball := makeTarball(t, map[string]string{
+		"init.star": "same",
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(tarball)
+	}))
+	defer srv.Close()
+
+	configDir := t.TempDir()
+	writeFile(t, filepath.Join(configDir, "init.star"), "same")
+
+	mgr := state.NewManager(filepath.Join(configDir, configStateFile))
+	_ = mgr.Save(state.Sentinel{SchemaVersion: 1, RepoURL: srv.URL})
+
+	cfg := runConfig{ConfigDir: configDir}
+	if err := runUpdate(cfg, true); err != nil {
+		t.Fatalf("runUpdate: %v", err)
+	}
+}
+
+// TestRunUpdate_DryRun verifies that --dry-run previews changes without
+// writing them.
+func TestRunUpdate_DryRun(t *testing.T) {
+	tarball := makeTarball(t, map[string]string{
+		"init.star": "new content",
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(tarball)
+	}))
+	defer srv.Close()
+
+	configDir := t.TempDir()
+	writeFile(t, filepath.Join(configDir, "init.star"), "old content")
+
+	mgr := state.NewManager(filepath.Join(configDir, configStateFile))
+	_ = mgr.Save(state.Sentinel{SchemaVersion: 1, RepoURL: srv.URL})
+
+	cfg := runConfig{ConfigDir: configDir, DryRun: true}
+	if err := runUpdate(cfg, true); err != nil {
+		t.Fatalf("runUpdate: %v", err)
+	}
+
+	// File should NOT be modified.
+	assertFileContent(t, filepath.Join(configDir, "init.star"), "old content")
+}
+
+// TestRunUpdate_MissingRepoURL verifies that update fails gracefully when
+// state.toml does not contain a repo_url.
+func TestRunUpdate_MissingRepoURL(t *testing.T) {
+	configDir := t.TempDir()
+	mgr := state.NewManager(filepath.Join(configDir, configStateFile))
+	_ = mgr.Save(state.Sentinel{SchemaVersion: 1})
+
+	cfg := runConfig{ConfigDir: configDir}
+	err := runUpdate(cfg, true)
+	if err == nil {
+		t.Fatal("expected error when repo_url is missing")
 	}
 }
 

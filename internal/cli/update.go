@@ -78,8 +78,12 @@ func runUpdate(cfg runConfig, yes bool) error {
 	}
 
 	// 5. Prompt and apply.
-	if err := promptAndApply(changes, stagingDir, configDir, yes); err != nil {
+	applied, err := promptAndApply(changes, stagingDir, configDir, yes)
+	if err != nil {
 		return err
+	}
+	if !applied {
+		return nil
 	}
 
 	// 6. Run dep sync if deps.mod changed.
@@ -98,26 +102,27 @@ func fetchAndDiff(configDir, repoURL string) (string, []change, error) {
 	url := tarballURL(repoURL)
 	fmt.Printf("meowctl: downloading %s\n", url)
 
+	stagingDir := filepath.Join(configDir, ".update-staging")
+	_ = os.RemoveAll(stagingDir) // Clean up any leftover staging dir.
+
 	tmpPath, err := downloadTarball(url)
 	if err != nil {
-		return "", nil, fmt.Errorf("update: download: %w", err)
+		return stagingDir, nil, fmt.Errorf("update: download: %w", err)
 	}
 	defer func() { _ = os.Remove(tmpPath) }()
 
-	stagingDir := filepath.Join(configDir, ".update-staging")
-	_ = os.RemoveAll(stagingDir) // Clean up any leftover staging dir.
 	if err := os.MkdirAll(stagingDir, 0o700); err != nil {
-		return "", nil, fmt.Errorf("update: create staging dir: %w", err)
+		return stagingDir, nil, fmt.Errorf("update: create staging dir: %w", err)
 	}
 
 	fmt.Printf("meowctl: extracting to %s\n", stagingDir)
 	if err := extractTarball(tmpPath, stagingDir); err != nil {
-		return "", nil, fmt.Errorf("update: extract: %w", err)
+		return stagingDir, nil, fmt.Errorf("update: extract: %w", err)
 	}
 
 	changes, err := diffConfigDirs(stagingDir, configDir)
 	if err != nil {
-		return "", nil, fmt.Errorf("update: diff: %w", err)
+		return stagingDir, nil, fmt.Errorf("update: diff: %w", err)
 	}
 
 	return stagingDir, changes, nil
@@ -125,25 +130,26 @@ func fetchAndDiff(configDir, repoURL string) (string, []change, error) {
 
 // promptAndApply asks the user for confirmation (unless yes is true) and then
 // copies each changed file from the staging directory into the config directory.
-func promptAndApply(changes []change, stagingDir, configDir string, yes bool) error {
+// It returns true if changes were applied, false if the user cancelled.
+func promptAndApply(changes []change, stagingDir, configDir string, yes bool) (bool, error) {
 	if !yes {
 		fmt.Print("Apply changes? [y/N] ")
 		var resp string
 		if _, err := fmt.Scanln(&resp); err != nil {
-			return fmt.Errorf("update: read confirmation: %w", err)
+			return false, fmt.Errorf("update: read confirmation: %w", err)
 		}
 		if strings.ToLower(resp) != "y" && strings.ToLower(resp) != "yes" {
 			fmt.Println("meowctl: update cancelled")
-			return nil
+			return false, nil
 		}
 	}
 
 	for _, c := range changes {
 		if err := applyChange(c, stagingDir, configDir); err != nil {
-			return fmt.Errorf("update: apply %s: %w", c.path, err)
+			return false, fmt.Errorf("update: apply %s: %w", c.path, err)
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // maybeRunDepSync checks whether deps.mod was among the changed files and, if
@@ -161,11 +167,13 @@ func maybeRunDepSync(changes []change, configDir string) error {
 	return nil
 }
 
-// changeOp describes what happened to a file.
+// changeOp describes what happened to a file during an update.
 type changeOp string
 
 const (
-	opAdd    changeOp = "+"
+	// opAdd means the file exists in the upstream tarball but not locally.
+	opAdd changeOp = "+"
+	// opModify means the file exists in both places but content differs.
 	opModify changeOp = "~"
 )
 
