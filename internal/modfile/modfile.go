@@ -98,7 +98,8 @@ func builtinDep(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlar
 	var name, version, source gostarlark.String
 	// version and source are both optional at the Starlark level; we validate the
 	// mutual-exclusivity constraint below in Go.
-	if err := gostarlark.UnpackArgs("dep", args, kwargs,
+	if err := gostarlark.UnpackArgs(
+		"dep", args, kwargs,
 		"name", &name,
 		"version?", &version,
 		"source?", &source,
@@ -119,7 +120,8 @@ func builtinDep(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlar
 
 func builtinReplace(thread *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
 	var name, path, source gostarlark.String
-	if err := gostarlark.UnpackArgs("replace", args, kwargs,
+	if err := gostarlark.UnpackArgs(
+		"replace", args, kwargs,
 		"name", &name,
 		"path?", &path,
 		"source?", &source,
