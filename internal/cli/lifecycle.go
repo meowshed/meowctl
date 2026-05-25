@@ -173,22 +173,19 @@ type starlarkHookCaller struct {
 
 // CallHook evaluates the component's Starlark file and calls the named hook.
 func (h *starlarkHookCaller) CallHook(componentID, hookName string) error {
-	// Resolve component file: <configDir>/components/<componentID>.star
-	componentFile := filepath.Join(h.configDir, "components", componentID+".star")
-	localExists := true
+	// Resolve component file using the init.star convention:
+	//   <configDir>/components/<componentID>/init.star
+	componentFile := filepath.Join(h.configDir, "components", componentID, "init.star")
 	if _, err := os.Lstat(componentFile); os.IsNotExist(err) {
-		localExists = false
-	}
-
-	// If no local file, check whether this component is URL-named (e.g. @stdlib//components/mise).
-	// If so, load it via the CompositeLoader instead of returning nil.
-	if !localExists {
+		// No local file — check whether this component is URL-named
+		// (e.g. @stdlib//components/mise). If so, load it via the
+		// CompositeLoader instead of returning nil.
 		if h.loader != nil {
 			if origURL, ok := h.urlComponents[componentID]; ok {
 				return h.callHookFromURL(componentID, origURL, hookName)
 			}
 		}
-		// No component file and no URL mapping — skip silently (component may have no hooks).
+		// No component file and no URL mapping — skip silently.
 		return nil
 	}
 
@@ -521,6 +518,15 @@ func expandWithFileDeps(configDir string, eval *starlarkpkg.Evaluator, cl *loade
 
 		// Walk all after deps (from declaration kwargs + file globals).
 		allDeps := mergeUniq(c.After, fileDeps)
+		// URL-named components may declare bare-string deps for sibling
+		// components in the same module (e.g. "fish-config" inside
+		// "@dotmeow" or "@dotmeow//dotmeow"). Prefix them so they become
+		// resolvable URLs.
+		if strings.HasPrefix(c.Name, "@") {
+			for i, dep := range allDeps {
+				allDeps[i] = resolveBareDep(c.Name, dep)
+			}
+		}
 		for _, dep := range allDeps {
 			depLN := starlarkpkg.LogicalNameOf(dep)
 			if !included[depLN] {
@@ -543,6 +549,37 @@ func expandWithFileDeps(configDir string, eval *starlarkpkg.Evaluator, cl *loade
 		walk(c)
 	}
 	return result, globalsCache
+}
+
+// modulePrefix extracts the module prefix from a component URL.
+// For "@dotmeow//dotmeow" it returns "@dotmeow//".
+// For "@dotmeow" (root component) it returns "@dotmeow//".
+// For "self//components/mycomp" it returns "self//".
+// For local names (no "@") it returns "".
+func modulePrefix(url string) string {
+	if idx := strings.Index(url, "//"); idx >= 0 {
+		return url[:idx+2]
+	}
+	// @name without // — treat as a module prefix for component resolution.
+	if strings.HasPrefix(url, "@") {
+		return url + "//"
+	}
+	return ""
+}
+
+// resolveBareDep converts a bare-string dependency discovered inside a URL-named
+// component into a fully-qualified module URL. If dep already contains "//" it is
+// returned unchanged. For local components (parentURL has no "@") dep is also
+// returned unchanged.
+func resolveBareDep(parentURL, dep string) string {
+	if strings.Contains(dep, "//") {
+		return dep
+	}
+	prefix := modulePrefix(parentURL)
+	if prefix == "" {
+		return dep
+	}
+	return prefix + "components/" + dep
 }
 
 // mergeUniq returns a deduplicated union of a and b, preserving order.
@@ -682,14 +719,14 @@ func buildDepsAndRegistry(eval *starlarkpkg.Evaluator, decls []starlarkpkg.Compo
 }
 
 // readComponentGlobals returns the merged after list and the raw globals dict for a single
-// component declaration. For URL-named components (containing "//"), cl is used to load
+// component declaration. For registry components (starting with "@"), cl is used to load
 // and evaluate the remote/replaced module. For bare-name local components, the file is
-// read from <configDir>/components/<name>.star. globals is nil on failure (non-fatal).
+// read from <configDir>/components/<name>/init.star. globals is nil on failure (non-fatal).
 func readComponentGlobals(configDir string, eval *starlarkpkg.Evaluator, c starlarkpkg.ComponentDecl, cl *loader.CompositeLoader) ([]string, gostarlark.StringDict) {
 	merged := make([]string, len(c.After))
 	copy(merged, c.After)
-	if strings.Contains(c.Name, "//") {
-		// URL-named component: load via CompositeLoader to get globals (pm_name, after, platforms).
+	if strings.HasPrefix(c.Name, "@") {
+		// Registry component: load via CompositeLoader to get globals (pm_name, after, platforms).
 		if cl == nil {
 			return merged, nil
 		}
@@ -707,7 +744,7 @@ func readComponentGlobals(configDir string, eval *starlarkpkg.Evaluator, c starl
 		}
 		return mergeAfterFromGlobals(merged, globals, eval), globals
 	}
-	componentFile := filepath.Join(configDir, "components", c.Name+".star")
+	componentFile := filepath.Join(configDir, "components", c.Name, "init.star")
 	if _, statErr := os.Lstat(componentFile); statErr != nil {
 		return merged, nil
 	}

@@ -123,7 +123,7 @@ func (c *CompositeLoader) Load(thread *gostarlark.Thread, moduleURL string, pred
 				gh.rawBase = c.githubRawBase
 			}
 			sub = gh
-		case len(moduleURL) > 1 && moduleURL[0] == '@' && strings.Contains(moduleURL, "//"):
+		case len(moduleURL) > 1 && moduleURL[0] == '@':
 			sub = &RegistryLoader{
 				RegistryURL:   c.registryURL,
 				CacheDir:      filepath.Join(c.cacheDir, "modules"),
@@ -199,9 +199,23 @@ func (c *CompositeLoader) resolveDir(moduleURL string) string {
 		}
 		cachePath := filepath.Join(c.cacheDir, "github", u.owner, u.repo, commit, filepath.FromSlash(u.path))
 		return filepath.Dir(cachePath)
-	case len(moduleURL) > 1 && moduleURL[0] == '@' && strings.Contains(moduleURL, "//"):
-		// @name//path/to/file.star
+	case len(moduleURL) > 1 && moduleURL[0] == '@':
 		withoutAt := moduleURL[1:]
+		if !strings.Contains(withoutAt, "//") {
+			// @name — root component, ComponentDir is module root.
+			name := withoutAt
+			if localRoot, ok := c.replaces[name]; ok {
+				return localRoot
+			}
+			version := "latest"
+			if c.lockPath != "" {
+				if v, err := readLockForRegistry(c.lockPath, name); err == nil && v != "" {
+					version = v
+				}
+			}
+			return filepath.Join(c.cacheDir, "modules", name, version)
+		}
+		// @name//path/to/file.star
 		parts := strings.SplitN(withoutAt, "//", 2)
 		if len(parts) != 2 {
 			return ""
