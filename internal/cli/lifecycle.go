@@ -568,11 +568,11 @@ func modulePrefix(url string) string {
 }
 
 // resolveBareDep converts a bare-string dependency discovered inside a URL-named
-// component into a fully-qualified module URL. If dep already contains "//" it is
-// returned unchanged. For local components (parentURL has no "@") dep is also
-// returned unchanged.
+// component into a fully-qualified module URL. If dep already contains "//" or starts
+// with "@" it is returned unchanged. For local components (parentURL has no "@") dep
+// is also returned unchanged.
 func resolveBareDep(parentURL, dep string) string {
-	if strings.Contains(dep, "//") {
+	if strings.Contains(dep, "//") || strings.HasPrefix(dep, "@") {
 		return dep
 	}
 	prefix := modulePrefix(parentURL)

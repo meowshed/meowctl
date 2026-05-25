@@ -783,7 +783,9 @@ type ModfileReplace struct {
 // buildSourceURL substitutes {name} and {version} in the source URL template.
 func buildSourceURL(sourceTmpl, name, version string) string {
 	s := strings.ReplaceAll(sourceTmpl, "{name}", name)
-	return strings.ReplaceAll(s, "{version}", version)
+	// Normalise version: strip leading "v" so templates can safely prefix "v{version}".
+	v := strings.TrimPrefix(version, "v")
+	return strings.ReplaceAll(s, "{version}", v)
 }
 
 // githubSource holds the parsed components of a "github:owner/repo@ref" source string.
