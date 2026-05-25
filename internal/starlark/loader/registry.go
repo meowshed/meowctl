@@ -781,9 +781,14 @@ type ModfileReplace struct {
 }
 
 // buildSourceURL substitutes {name}, {version}, and {version_no_v} in the source URL template.
+// {version} always includes a leading "v"; {version_no_v} never does.
 func buildSourceURL(sourceTmpl, name, version string) string {
 	s := strings.ReplaceAll(sourceTmpl, "{name}", name)
-	s = strings.ReplaceAll(s, "{version}", version)
+	vNormalized := version
+	if !strings.HasPrefix(vNormalized, "v") {
+		vNormalized = "v" + vNormalized
+	}
+	s = strings.ReplaceAll(s, "{version}", vNormalized)
 	vNoV := strings.TrimPrefix(version, "v")
 	return strings.ReplaceAll(s, "{version_no_v}", vNoV)
 }
