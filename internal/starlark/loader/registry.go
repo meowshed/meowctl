@@ -93,32 +93,36 @@ type RegistryLoader struct {
 	GitHubTarballBase string
 }
 
-// registryURL is the parsed form of a @name// module URL.
+// registryURL is the parsed form of a @name or @name// module URL.
 type registryURL struct {
 	module string
 	path   string
 }
 
-// parseRegistryURL decomposes a @name// URL into module name and file path.
+// parseRegistryURL decomposes a @name or @name// URL into module name and file path.
+// @name resolves to the module root init.star.
+// @name//path resolves to path/init.star inside the module.
 func parseRegistryURL(raw string) (registryURL, error) {
-	// Must start with '@' and contain '//'.
 	if len(raw) < 2 || raw[0] != '@' {
 		return registryURL{}, fmt.Errorf("registry loader: invalid URL %q: must start with @", raw)
 	}
 	s := raw[1:] // strip '@'
 	idx := strings.Index(s, "//")
-	if idx < 0 || idx == 0 {
-		return registryURL{}, fmt.Errorf("registry loader: invalid URL %q: missing // separator", raw)
+	if idx < 0 {
+		// @name — root component, resolves to init.star at module root.
+		return registryURL{module: s, path: "init.star"}, nil
+	}
+	if idx == 0 {
+		return registryURL{}, fmt.Errorf("registry loader: invalid URL %q: missing module name before //", raw)
 	}
 	filePath := s[idx+2:]
 	if filePath == "" {
 		return registryURL{}, fmt.Errorf("registry loader: invalid URL %q: empty path after //", raw)
 	}
 	modName := s[:idx]
-	// Normalise: if the path has no extension, append .star so callers can
-	// omit it (e.g. @stdlib//components/apt resolves to components/apt.star).
+	// Normalise: path without extension resolves to path/init.star.
 	if !strings.Contains(filepath.Base(filePath), ".") {
-		filePath += ".star"
+		filePath += "/init.star"
 	}
 	return registryURL{module: modName, path: filePath}, nil
 }
