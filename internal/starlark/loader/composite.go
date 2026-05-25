@@ -227,6 +227,9 @@ func (c *CompositeLoader) resolveRegistryRoot(name string) string {
 }
 
 // resolveRegistryPath resolves the directory for an @name//path URL.
+// If the path has no extension it is treated as a component directory
+// (e.g. components/fish-config → …/components/fish-config).
+// If it has an extension it is treated as a file and its parent is returned.
 func (c *CompositeLoader) resolveRegistryPath(withoutAt string) string {
 	parts := strings.SplitN(withoutAt, "//", 2)
 	if len(parts) != 2 {
@@ -239,6 +242,10 @@ func (c *CompositeLoader) resolveRegistryPath(withoutAt string) string {
 		return filepath.Dir(abs)
 	}
 	abs := filepath.Join(c.cacheDir, "modules", name, c.lookupVersion(name), filepath.FromSlash(filePath))
+	// Path without extension is a component directory (init.star lives inside).
+	if filepath.Ext(filePath) == "" {
+		return abs
+	}
 	return filepath.Dir(abs)
 }
 
