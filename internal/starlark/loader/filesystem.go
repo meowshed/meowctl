@@ -54,6 +54,11 @@ func (l *FileSystemLoader) Load(thread *gostarlark.Thread, moduleURL string, pre
 		return nil, fmt.Errorf("FileSystemLoader: module path %q escapes root %q", moduleURL, l.Root)
 	}
 
+	// init.star convention: if abs has no extension, resolve to <dir>/init.star.
+	if !strings.Contains(filepath.Base(abs), ".") {
+		abs = filepath.Join(abs, "init.star")
+	}
+
 	src, err := os.ReadFile(abs) // #nosec G304 -- path verified to be within l.Root by HasPrefix check above
 	if err != nil {
 		return nil, fmt.Errorf("FileSystemLoader: cannot read %q: %w", abs, err)
