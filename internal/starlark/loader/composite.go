@@ -186,58 +186,70 @@ func (c *CompositeLoader) resolveDir(moduleURL string) string {
 		abs := filepath.Join(c.userRoot, filepath.FromSlash(rel))
 		return filepath.Dir(abs)
 	case strings.HasPrefix(moduleURL, githubScheme):
-		u, err := parseGitHubURL(moduleURL)
-		if err != nil {
-			return ""
-		}
-		// Look up commit from lock file; fall back to ref if not locked.
-		commit := u.ref
-		if c.lockPath != "" {
-			if lf, readErr := readLockForGitHub(c.lockPath, u.owner, u.repo); readErr == nil {
-				commit = lf
-			}
-		}
-		cachePath := filepath.Join(c.cacheDir, "github", u.owner, u.repo, commit, filepath.FromSlash(u.path))
-		return filepath.Dir(cachePath)
+		return c.resolveGitHubDir(moduleURL)
 	case len(moduleURL) > 1 && moduleURL[0] == '@':
-		withoutAt := moduleURL[1:]
-		if !strings.Contains(withoutAt, "//") {
-			// @name — root component, ComponentDir is module root.
-			name := withoutAt
-			if localRoot, ok := c.replaces[name]; ok {
-				return localRoot
-			}
-			version := "latest"
-			if c.lockPath != "" {
-				if v, err := readLockForRegistry(c.lockPath, name); err == nil && v != "" {
-					version = v
-				}
-			}
-			return filepath.Join(c.cacheDir, "modules", name, version)
-		}
-		// @name//path/to/file.star
-		parts := strings.SplitN(withoutAt, "//", 2)
-		if len(parts) != 2 {
-			return ""
-		}
-		name := parts[0]
-		filePath := parts[1]
-		// If a local replace is active, resolve against the local root.
-		if localRoot, ok := c.replaces[name]; ok {
-			abs := filepath.Join(localRoot, filepath.FromSlash(filePath))
-			return filepath.Dir(abs)
-		}
-		// Otherwise resolve against the module cache.
-		version := "latest"
-		if c.lockPath != "" {
-			if v, err := readLockForRegistry(c.lockPath, name); err == nil && v != "" {
-				version = v
-			}
-		}
-		abs := filepath.Join(c.cacheDir, "modules", name, version, filepath.FromSlash(filePath))
-		return filepath.Dir(abs)
+		return c.resolveRegistryDir(moduleURL)
 	}
 	return ""
+}
+
+// resolveGitHubDir resolves the directory for a github:// URL.
+func (c *CompositeLoader) resolveGitHubDir(moduleURL string) string {
+	u, err := parseGitHubURL(moduleURL)
+	if err != nil {
+		return ""
+	}
+	commit := u.ref
+	if c.lockPath != "" {
+		if lf, readErr := readLockForGitHub(c.lockPath, u.owner, u.repo); readErr == nil {
+			commit = lf
+		}
+	}
+	cachePath := filepath.Join(c.cacheDir, "github", u.owner, u.repo, commit, filepath.FromSlash(u.path))
+	return filepath.Dir(cachePath)
+}
+
+// resolveRegistryDir resolves the directory for an @name or @name//path URL.
+func (c *CompositeLoader) resolveRegistryDir(moduleURL string) string {
+	withoutAt := moduleURL[1:]
+	if !strings.Contains(withoutAt, "//") {
+		return c.resolveRegistryRoot(withoutAt)
+	}
+	return c.resolveRegistryPath(withoutAt)
+}
+
+// resolveRegistryRoot resolves the root directory for an @name URL.
+func (c *CompositeLoader) resolveRegistryRoot(name string) string {
+	if localRoot, ok := c.replaces[name]; ok {
+		return localRoot
+	}
+	return filepath.Join(c.cacheDir, "modules", name, c.lookupVersion(name))
+}
+
+// resolveRegistryPath resolves the directory for an @name//path URL.
+func (c *CompositeLoader) resolveRegistryPath(withoutAt string) string {
+	parts := strings.SplitN(withoutAt, "//", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	name := parts[0]
+	filePath := parts[1]
+	if localRoot, ok := c.replaces[name]; ok {
+		abs := filepath.Join(localRoot, filepath.FromSlash(filePath))
+		return filepath.Dir(abs)
+	}
+	abs := filepath.Join(c.cacheDir, "modules", name, c.lookupVersion(name), filepath.FromSlash(filePath))
+	return filepath.Dir(abs)
+}
+
+// lookupVersion returns the locked version for a registry module, or "latest".
+func (c *CompositeLoader) lookupVersion(name string) string {
+	if c.lockPath != "" {
+		if v, err := readLockForRegistry(c.lockPath, name); err == nil && v != "" {
+			return v
+		}
+	}
+	return "latest"
 }
 
 // readLockForGitHub reads the lock file and returns the pinned commit SHA for a GitHub file
