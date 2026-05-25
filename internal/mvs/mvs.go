@@ -55,7 +55,7 @@ func BuildList(root Module, reqs Reqs) ([]Module, error) {
 		}
 
 		for _, dep := range deps {
-			if dep.Version != "none" && !semver.IsValid(dep.Version) {
+			if !isValidSemver(dep.Version) {
 				return nil, fmt.Errorf("mvs: invalid semver %q required by %s@%s", dep.Version, m.Name, m.Version)
 			}
 			cur, ok := selected[dep.Name]
@@ -97,8 +97,37 @@ func Max(v1, v2 string) string {
 	if v2 == "none" {
 		return v1
 	}
-	if semver.Compare(v1, v2) >= 0 {
+	if semverCompare(v1, v2) >= 0 {
 		return v1
 	}
 	return v2
+}
+
+// isValidSemver reports whether v is a valid semver string, accepting both
+// "v1.2.3" and "1.2.3" forms. The special values "none" and "latest" are
+// always valid.
+func isValidSemver(v string) bool {
+	if v == "none" || v == "latest" {
+		return true
+	}
+	return semver.IsValid(normalizeVersion(v))
+}
+
+// semverCompare compares two semver strings, normalising them first so that
+// both "v1.2.3" and "1.2.3" are accepted.
+func semverCompare(v1, v2 string) int {
+	return semver.Compare(normalizeVersion(v1), normalizeVersion(v2))
+}
+
+// normalizeVersion ensures a semver string has a leading "v" prefix, which
+// golang.org/x/mod/semver requires. Versions "none" and "latest" are returned
+// unchanged.
+func normalizeVersion(v string) string {
+	if v == "none" || v == "latest" {
+		return v
+	}
+	if v != "" && v[0] != 'v' && v[0] != 'V' {
+		return "v" + v
+	}
+	return v
 }

@@ -503,11 +503,11 @@ func TestRegistryLoader_CompatNoWarn(t *testing.T) {
 }
 
 // TestRegistryLoader_NoExtensionNormalised verifies that a URL path without a
-// file extension resolves to the same file as the same path with .star appended.
-// @mymod//lib and @mymod//lib.star must be equivalent.
+// file extension resolves to init.star inside the named directory.
+// @mymod//lib resolves to lib/init.star.
 func TestRegistryLoader_NoExtensionNormalised(t *testing.T) {
 	modContent := []byte(`norm = True`)
-	tarball := buildTarGz(t, map[string][]byte{"lib.star": modContent})
+	tarball := buildTarGz(t, map[string][]byte{"lib/init.star": modContent})
 
 	tarballServer := testServer(t, map[string][]byte{
 		"/mymod-v1.0.0.tar.gz": tarball,
@@ -731,14 +731,14 @@ func TestSyncModules_ReplaceWithSource(t *testing.T) {
 }
 
 // TestRegistryLoader_ReplaceLocal verifies that a Replaces entry serves files
-// from the local filesystem root, both with and without the .star extension.
+// from the local filesystem root using the init.star convention.
 func TestRegistryLoader_ReplaceLocal(t *testing.T) {
 	localRoot := t.TempDir()
-	compDir := filepath.Join(localRoot, "components")
-	if err := os.MkdirAll(compDir, 0o750); err != nil {
+	aptDir := filepath.Join(localRoot, "components", "apt")
+	if err := os.MkdirAll(aptDir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(compDir, "apt.star"), []byte(`pm_name = "apt"`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(aptDir, "init.star"), []byte(`pm_name = "apt"`), 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -757,22 +757,22 @@ func TestRegistryLoader_ReplaceLocal(t *testing.T) {
 	)
 	thread := &gostarlark.Thread{Name: "test"}
 
-	// With explicit .star extension.
-	globals, err := cl.Load(thread, "@stdlib//components/apt.star", gostarlark.StringDict{})
+	// With explicit init.star extension.
+	globals, err := cl.Load(thread, "@stdlib//components/apt/init.star", gostarlark.StringDict{})
 	if err != nil {
-		t.Fatalf("Load with .star: %v", err)
+		t.Fatalf("Load with init.star: %v", err)
 	}
 	if _, ok := globals["pm_name"]; !ok {
-		t.Error("expected 'pm_name' in globals (with .star)")
+		t.Error("expected 'pm_name' in globals (with init.star)")
 	}
 
-	// Without .star extension — must resolve identically.
+	// Without extension — resolves to init.star inside the directory.
 	globals2, err := cl.Load(thread, "@stdlib//components/apt", gostarlark.StringDict{})
 	if err != nil {
-		t.Fatalf("Load without .star: %v", err)
+		t.Fatalf("Load without extension: %v", err)
 	}
 	if _, ok := globals2["pm_name"]; !ok {
-		t.Error("expected 'pm_name' in globals (without .star)")
+		t.Error("expected 'pm_name' in globals (without extension)")
 	}
 }
 
