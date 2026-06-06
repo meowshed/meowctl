@@ -76,7 +76,7 @@ func runBootstrap(configDir, repoURL string, force bool) error {
 
 	// Run apply.
 	fmt.Println("meowctl: running apply")
-	if err := runApply(runConfig{ConfigDir: configDir}, nil); err != nil {
+	if err := runApply(runConfig{ConfigDir: configDir, Force: true}, nil); err != nil {
 		return err
 	}
 
