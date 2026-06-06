@@ -474,9 +474,10 @@ func loadComponentsWithDeps(configDir string, filter []string, runSyntheticHooks
 
 	// Build logical-name → original-URL map for URL-named components so that
 	// CallHook can load them via CompositeLoader when no local file exists.
+	// This includes registry components (@name) and URL-path components (@name//path).
 	urlMap := make(map[string]string)
 	for _, c := range allDecls {
-		if strings.Contains(c.Name, "//") {
+		if strings.Contains(c.Name, "//") || strings.HasPrefix(c.Name, "@") {
 			urlMap[c.LogicalName()] = c.Name
 		}
 	}
