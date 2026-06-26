@@ -151,6 +151,34 @@ func (m *Manager) IsCompleted(phase, component string) bool {
 	return false
 }
 
+// ClearComponent removes every completed-phase record for a component, so the
+// next run re-executes all of its phases. apply calls this when a component's
+// resolved module version changed, since the on-disk artifacts (symlinks, copied
+// files) still point at the previous version and must be refreshed even though
+// the sentinel would otherwise report the component as already completed.
+func (m *Manager) ClearComponent(component string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, err := m.Load()
+	if err != nil {
+		return err
+	}
+	filtered := s.CompletedComponents[:0]
+	changed := false
+	for _, cc := range s.CompletedComponents {
+		if cc.Component == component {
+			changed = true
+			continue
+		}
+		filtered = append(filtered, cc)
+	}
+	if !changed {
+		return nil
+	}
+	s.CompletedComponents = filtered
+	return m.Save(s)
+}
+
 // RecordComponent appends a completed component entry, de-duplicating by
 // phase+component (last write wins).
 func (m *Manager) RecordComponent(phase, component string) error {
