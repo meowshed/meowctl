@@ -115,6 +115,62 @@ func TestExtractTarball_Basic(t *testing.T) {
 	}
 }
 
+// TestExtractTarball_PreservesExecBit verifies that the executable bit from tar
+// headers survives extraction (normalized to 0644/0755), so distributed scripts
+// remain runnable.
+func TestExtractTarball_PreservesExecBit(t *testing.T) {
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+	_ = tw.WriteHeader(&tar.Header{Typeflag: tar.TypeDir, Name: "repo-main/"})
+	entries := []struct {
+		name string
+		mode int64
+	}{
+		{"scripts/run.sh", 0o755},
+		{"README.md", 0o644},
+	}
+	for _, e := range entries {
+		_ = tw.WriteHeader(&tar.Header{
+			Typeflag: tar.TypeReg,
+			Name:     "repo-main/" + e.name,
+			Size:     int64(len("x")),
+			Mode:     e.mode,
+		})
+		_, _ = tw.Write([]byte("x"))
+	}
+	_ = tw.Close()
+	_ = gw.Close()
+
+	tmp, err := os.CreateTemp(t.TempDir(), "*.tar.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tmp.Write(buf.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	_ = tmp.Close()
+
+	destDir := t.TempDir()
+	if err := extractTarball(tmp.Name(), destDir); err != nil {
+		t.Fatalf("extractTarball: %v", err)
+	}
+
+	cases := map[string]os.FileMode{
+		"scripts/run.sh": 0o755,
+		"README.md":      0o644,
+	}
+	for rel, want := range cases {
+		info, statErr := os.Stat(filepath.Join(destDir, filepath.FromSlash(rel)))
+		if statErr != nil {
+			t.Fatalf("stat %s: %v", rel, statErr)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Errorf("%s perm: got %o, want %o", rel, got, want)
+		}
+	}
+}
+
 // TestExtractTarball_PathTraversal verifies that a tarball with ".." entries is rejected.
 func TestExtractTarball_PathTraversal(t *testing.T) {
 	var buf bytes.Buffer

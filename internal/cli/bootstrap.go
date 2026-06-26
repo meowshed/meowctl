@@ -229,7 +229,7 @@ func writeEntry(hdr *tar.Header, destPath string, r io.Reader) error {
 		if err := os.MkdirAll(filepath.Dir(destPath), 0o700); err != nil {
 			return fmt.Errorf("init: create parent for %s: %w", destPath, err)
 		}
-		if err := writeExtractedFile(destPath, r); err != nil {
+		if err := writeExtractedFile(destPath, hdr, r); err != nil {
 			return err
 		}
 	default:
@@ -238,9 +238,12 @@ func writeEntry(hdr *tar.Header, destPath string, r io.Reader) error {
 	return nil
 }
 
-// writeExtractedFile writes the current tar entry to path.
-func writeExtractedFile(path string, r io.Reader) error {
-	out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) // #nosec G304
+// writeExtractedFile writes the current tar entry to path, preserving the entry's
+// executable bit (normalized to 0644/0755) so scripts in a bootstrapped module
+// stay runnable after extraction.
+func writeExtractedFile(path string, hdr *tar.Header, r io.Reader) error {
+	perm := tarEntryPerm(hdr)
+	out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm) // #nosec G304
 	if err != nil {
 		return fmt.Errorf("init: create %s: %w", path, err)
 	}
@@ -248,7 +251,24 @@ func writeExtractedFile(path string, r io.Reader) error {
 		_ = out.Close()
 		return fmt.Errorf("init: write %s: %w", path, err)
 	}
-	return out.Close()
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("init: close %s: %w", path, err)
+	}
+	// O_TRUNC leaves a pre-existing file's mode untouched; chmod enforces the bits.
+	if err := os.Chmod(path, perm); err != nil {
+		return fmt.Errorf("init: chmod %s: %w", path, err)
+	}
+	return nil
+}
+
+// tarEntryPerm maps a tar entry to its on-disk permission, preserving the
+// executable bit but normalizing to 0644/0755 so extracted files land with
+// predictable, non-world-writable modes regardless of the archive's exact bits.
+func tarEntryPerm(hdr *tar.Header) os.FileMode {
+	if hdr.FileInfo().Mode().Perm()&0o111 != 0 {
+		return 0o755
+	}
+	return 0o644
 }
 
 // containsDotDot reports whether p contains a ".." path component.
