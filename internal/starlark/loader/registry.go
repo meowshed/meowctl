@@ -440,7 +440,7 @@ func extractTarEntry(hdr *tar.Header, tr *tar.Reader, destDir string) error {
 		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 			return fmt.Errorf("mkdir parent %q: %w", target, err)
 		}
-		if err := writeTarFile(target, tr); err != nil {
+		if err := writeTarFile(target, hdr, tr); err != nil {
 			return err
 		}
 	default:
@@ -449,9 +449,13 @@ func extractTarEntry(hdr *tar.Header, tr *tar.Reader, destDir string) error {
 	return nil
 }
 
-// writeTarFile creates or truncates target and copies the current tar entry into it.
-func writeTarFile(target string, tr *tar.Reader) error {
-	f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) // #nosec G304 -- target validated against destDir in extractTarEntry
+// writeTarFile creates or truncates target and copies the current tar entry into
+// it, preserving the entry's executable bit (normalized to 0644/0755) so scripts
+// distributed in a module stay runnable after extraction. meowctl execve()s some
+// of these directly (e.g. tmux status scripts), so a dropped +x renders them unusable.
+func writeTarFile(target string, hdr *tar.Header, tr *tar.Reader) error {
+	perm := tarEntryPerm(hdr)
+	f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm) // #nosec G304 -- target validated against destDir in extractTarEntry
 	if err != nil {
 		return fmt.Errorf("create file %q: %w", target, err)
 	}
@@ -462,7 +466,22 @@ func writeTarFile(target string, tr *tar.Reader) error {
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("close file %q: %w", target, err)
 	}
+	// O_CREATE applies perm masked by umask and leaves a pre-existing file's mode
+	// untouched under O_TRUNC; chmod enforces the intended bits on re-extraction too.
+	if err := os.Chmod(target, perm); err != nil {
+		return fmt.Errorf("chmod %q: %w", target, err)
+	}
 	return nil
+}
+
+// tarEntryPerm maps a tar entry to its on-disk permission, preserving the
+// executable bit but normalizing to 0644/0755 so module files land with
+// predictable, non-world-writable modes regardless of the archive's exact bits.
+func tarEntryPerm(hdr *tar.Header) os.FileMode {
+	if hdr.FileInfo().Mode().Perm()&0o111 != 0 {
+		return 0o755
+	}
+	return 0o644
 }
 
 // moduleCacheDir returns the local cache directory for a specific module version.
