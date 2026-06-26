@@ -7,6 +7,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// InstalledComponent exposes installedComponent for tests.
+type InstalledComponent = installedComponent
+
+// ExportComputeStaleComponents exposes computeStaleComponents for tests.
+var ExportComputeStaleComponents = computeStaleComponents
+
+// ExportResolveComponentVersions exposes resolveComponentVersions for tests.
+var ExportResolveComponentVersions = resolveComponentVersions
+
 // ExportComputeToInstall exposes computeToInstall for tests.
 var ExportComputeToInstall = computeToInstall
 
