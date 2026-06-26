@@ -15,13 +15,56 @@ import (
 	"github.com/meowshed/meowctl/internal/pkg"
 	"github.com/meowshed/meowctl/internal/rewrite"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
+	"github.com/meowshed/meowctl/internal/state"
 	"github.com/spf13/cobra"
 )
 
+// installedComponent records one installed component and the resolved module
+// version it was installed from. Version is empty for bare/local components that
+// belong to no module.
+type installedComponent struct {
+	Name    string `toml:"name"`
+	Version string `toml:"version,omitempty"`
+}
+
 // installedLock is the TOML structure for installed.lock.
+//
+// schema_version 2 records a per-component resolved module version under
+// [[installed]] so apply can detect when a module was bumped and re-link the
+// affected components. The legacy schema_version 1 `components = [names...]`
+// array is still read (versions treated as unknown) for backward compatibility.
 type installedLock struct {
-	SchemaVersion int      `toml:"schema_version"`
-	Components    []string `toml:"components"`
+	SchemaVersion int                  `toml:"schema_version"`
+	Components    []string             `toml:"components,omitempty"` // legacy v1 (read-only)
+	Installed     []installedComponent `toml:"installed,omitempty"`  // v2
+}
+
+// versionMap returns a name → recorded-version map, transparently handling both
+// the v2 [[installed]] form and the legacy v1 string-list form (version "").
+func (il installedLock) versionMap() map[string]string {
+	m := make(map[string]string, len(il.Installed)+len(il.Components))
+	if len(il.Installed) > 0 {
+		for _, c := range il.Installed {
+			m[c.Name] = c.Version
+		}
+		return m
+	}
+	for _, n := range il.Components {
+		m[n] = ""
+	}
+	return m
+}
+
+// names returns the installed component names, from either schema form.
+func (il installedLock) names() []string {
+	if len(il.Installed) > 0 {
+		out := make([]string, len(il.Installed))
+		for i, c := range il.Installed {
+			out[i] = c.Name
+		}
+		return out
+	}
+	return il.Components
 }
 
 // readInstalledLock reads <configDir>/installed.lock.
@@ -38,15 +81,16 @@ func readInstalledLock(configDir string) (installedLock, error) {
 	return il, nil
 }
 
-// writeInstalledLock atomically writes installed.lock with the given component names.
-func writeInstalledLock(configDir string, components []string) error {
-	sorted := make([]string, len(components))
+// writeInstalledLock atomically writes installed.lock (schema v2) with the given
+// components and their resolved module versions, sorted by name.
+func writeInstalledLock(configDir string, components []installedComponent) error {
+	sorted := make([]installedComponent, len(components))
 	copy(sorted, components)
-	sort.Strings(sorted)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
 
 	il := installedLock{
-		SchemaVersion: 1,
-		Components:    sorted,
+		SchemaVersion: 2,
+		Installed:     sorted,
 	}
 
 	path := filepath.Join(configDir, configInstalledFile)
@@ -68,6 +112,100 @@ func writeInstalledLock(configDir string, components []string) error {
 	if err := os.Rename(tmpPath, path); err != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("write installed.lock: rename: %w", err)
+	}
+	return nil
+}
+
+// moduleKeyFromComponentURL extracts the lock-file module key from a component's
+// source reference. Registry components look like "@dotmeow//path" (key
+// "dotmeow"); GitHub components like "github.com/o/r//path" (key
+// "github.com/o/r"). Bare/local component names contain no "//" and yield
+// themselves, which never matches a module entry.
+func moduleKeyFromComponentURL(u string) string {
+	s := strings.TrimPrefix(u, "@")
+	if i := strings.Index(s, "//"); i >= 0 {
+		s = s[:i]
+	}
+	return s
+}
+
+// moduleFingerprint returns a compact identity for a resolved module that changes
+// whenever its content does: the semver version for registry deps, the commit SHA
+// for GitHub deps, falling back to the SRI integrity hash.
+func moduleFingerprint(e lock.ModuleEntry) string {
+	switch {
+	case e.Version != "":
+		return e.Version
+	case e.CommitSHA != "":
+		return e.CommitSHA
+	default:
+		return e.Integrity
+	}
+}
+
+// resolveComponentVersions maps each component (by logical name) to the
+// fingerprint of the module it resolves from, read from deps.lock and
+// deps.local.lock. Components with no module (bare/local) are absent from the map.
+func resolveComponentVersions(configDir string, urlMap map[string]string) (map[string]string, error) {
+	modules := map[string]lock.ModuleEntry{}
+	for _, fn := range []string{configLockFile, configLocalLockFile} {
+		lf, err := readPkgsLock(configDir, fn)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range lf.Modules {
+			modules[k] = v
+		}
+	}
+	versions := make(map[string]string, len(urlMap))
+	for name, url := range urlMap {
+		if e, ok := modules[moduleKeyFromComponentURL(url)]; ok {
+			versions[name] = moduleFingerprint(e)
+		}
+	}
+	return versions, nil
+}
+
+// computeStaleComponents returns the set of components whose resolved module
+// version differs from what installed.lock recorded — i.e. a module was bumped
+// (or sync'd) since the last apply. Every component belonging to a changed module
+// is returned, including transitive ones not tracked in installed.lock directly,
+// so that bumping an aggregate module re-links all of its config components.
+func computeStaleComponents(allOrder []lifecycle.ComponentID, urlMap, recordedVersions, currentVersions map[string]string) map[string]bool {
+	changedModules := make(map[string]bool)
+	for name, recorded := range recordedVersions {
+		current, tracked := currentVersions[name]
+		if !tracked {
+			continue // component no longer declared, or has no module
+		}
+		if recorded != current {
+			changedModules[moduleKeyFromComponentURL(urlMap[name])] = true
+		}
+	}
+	if len(changedModules) == 0 {
+		return nil
+	}
+	stale := make(map[string]bool)
+	for _, id := range allOrder {
+		if changedModules[moduleKeyFromComponentURL(urlMap[id])] {
+			stale[id] = true
+		}
+	}
+	return stale
+}
+
+// clearStaleSentinels removes completion records for components whose module
+// version changed, so the lifecycle runner re-executes (re-links) them this run
+// instead of skipping them as already completed.
+func clearStaleSentinels(configDir string, staleSet map[string]bool) error {
+	if len(staleSet) == 0 {
+		return nil
+	}
+	sm := state.NewManager(filepath.Join(configDir, configStateFile))
+	for id := range staleSet {
+		if err := sm.ClearComponent(id); err != nil {
+			return fmt.Errorf("apply: clear stale component state %q: %w", id, err)
+		}
 	}
 	return nil
 }
@@ -188,14 +326,34 @@ installs them if missing, never auto-uninstalls in scoped mode.`,
 	return cmd
 }
 
-// computeToInstall returns the components to install: declared \ installed, in topo order.
-func computeToInstall(allOrder []lifecycle.ComponentID, installedSet, scopeSet map[string]bool, scoped bool) []lifecycle.ComponentID {
+// buildScopeSet expands a scope filter to the dependency-closed set of component
+// IDs it covers, so a scoped apply also (re)installs transitive deps of the named
+// components. Returns nil when no filter is given.
+func buildScopeSet(configDir string, scopeFilter []string) (map[string]bool, error) {
+	if len(scopeFilter) == 0 {
+		return nil, nil
+	}
+	scopedOrder, _, _, err := loadComponentsWithDeps(configDir, scopeFilter, true)
+	if err != nil {
+		return nil, err
+	}
+	scopeSet := make(map[string]bool, len(scopedOrder))
+	for _, id := range scopedOrder {
+		scopeSet[id] = true
+	}
+	return scopeSet, nil
+}
+
+// computeToInstall returns the components to install in topo order: those not yet
+// installed (declared \ installed) plus any whose resolved module version changed
+// (staleSet), so a module bump re-links its components.
+func computeToInstall(allOrder []lifecycle.ComponentID, installedSet, scopeSet, staleSet map[string]bool, scoped bool) []lifecycle.ComponentID {
 	var toInstall []lifecycle.ComponentID
 	for _, id := range allOrder {
 		if scoped && !scopeSet[id] {
 			continue
 		}
-		if !installedSet[id] {
+		if !installedSet[id] || staleSet[id] {
 			toInstall = append(toInstall, id)
 		}
 	}
@@ -216,18 +374,21 @@ func computeToUninstall(_ []lifecycle.ComponentID, declaredSet, _ map[string]boo
 	return toUninstall
 }
 
-// mergeInstalledAfterApply computes the new installed component list after a scoped apply.
-func mergeInstalledAfterApply(installedSet map[string]bool, toInstall []lifecycle.ComponentID) []string {
-	merged := make(map[string]bool, len(installedSet)+len(toInstall))
-	for name := range installedSet {
-		merged[name] = true
+// mergeInstalledAfterApply computes the new installed component list after a
+// scoped apply: the previously-installed components (with their recorded
+// versions) plus the just-installed ones (with their current versions). Current
+// versions win for any overlap so a scoped re-link refreshes the stored version.
+func mergeInstalledAfterApply(recordedVersions map[string]string, toInstall []lifecycle.ComponentID, currentVersions map[string]string) []installedComponent {
+	merged := make(map[string]string, len(recordedVersions)+len(toInstall))
+	for name, v := range recordedVersions {
+		merged[name] = v
 	}
 	for _, id := range toInstall {
-		merged[id] = true
+		merged[id] = currentVersions[id]
 	}
-	result := make([]string, 0, len(merged))
-	for name := range merged {
-		result = append(result, name)
+	result := make([]installedComponent, 0, len(merged))
+	for name, v := range merged {
+		result = append(result, installedComponent{Name: name, Version: v})
 	}
 	return result
 }
@@ -251,13 +412,16 @@ func execApplyPhases(cfg runConfig, toInstall, toUninstall []lifecycle.Component
 	return installCaller, nil
 }
 
-// computeNewInstalled returns the component list to write to installed.lock after apply.
-func computeNewInstalled(scoped bool, allOrder []lifecycle.ComponentID, installedSet map[string]bool, toInstall []lifecycle.ComponentID) []string {
+// computeNewInstalled returns the components (with resolved versions) to write to
+// installed.lock after apply.
+func computeNewInstalled(scoped bool, allOrder []lifecycle.ComponentID, recordedVersions map[string]string, toInstall []lifecycle.ComponentID, currentVersions map[string]string) []installedComponent {
 	if scoped {
-		return mergeInstalledAfterApply(installedSet, toInstall)
+		return mergeInstalledAfterApply(recordedVersions, toInstall, currentVersions)
 	}
-	newInstalled := make([]string, 0, len(allOrder))
-	newInstalled = append(newInstalled, allOrder...)
+	newInstalled := make([]installedComponent, 0, len(allOrder))
+	for _, id := range allOrder {
+		newInstalled = append(newInstalled, installedComponent{Name: id, Version: currentVersions[id]})
+	}
 	return newInstalled
 }
 
@@ -287,31 +451,31 @@ func runApply(cfg runConfig, scopeFilter []string) error {
 	if err != nil {
 		return err
 	}
-	installedSet := make(map[string]bool, len(il.Components))
-	for _, name := range il.Components {
+	recordedVersions := il.versionMap()
+	installedSet := make(map[string]bool, len(recordedVersions))
+	for name := range recordedVersions {
 		installedSet[name] = true
 	}
 
+	// Map every declared component to the fingerprint of the module it resolves
+	// from, so apply can detect modules bumped since the last run.
+	currentVersions, err := resolveComponentVersions(cfg.ConfigDir, urlMap)
+	if err != nil {
+		return err
+	}
+	staleSet := computeStaleComponents(allOrder, urlMap, recordedVersions, currentVersions)
+
 	scoped := len(scopeFilter) > 0
-	// When scoped, expand the scope set to include transitive dependencies of
-	// the requested components. A filtered loadComponentsWithDeps call returns
-	// only the dep-expanded subgraph for the requested names.
-	scopeSet := make(map[string]bool, len(scopeFilter))
-	if scoped {
-		scopedOrder, _, _, scopeErr := loadComponentsWithDeps(cfg.ConfigDir, scopeFilter, true)
-		if scopeErr != nil {
-			return scopeErr
-		}
-		for _, id := range scopedOrder {
-			scopeSet[id] = true
-		}
+	scopeSet, err := buildScopeSet(cfg.ConfigDir, scopeFilter)
+	if err != nil {
+		return err
 	}
 
-	toInstall := computeToInstall(allOrder, installedSet, scopeSet, scoped)
+	toInstall := computeToInstall(allOrder, installedSet, scopeSet, staleSet, scoped)
 
 	var toUninstall []lifecycle.ComponentID
 	if !scoped {
-		toUninstall = computeToUninstall(allOrder, declaredSet, installedSet, il.Components)
+		toUninstall = computeToUninstall(allOrder, declaredSet, installedSet, il.names())
 	}
 
 	// Components to uninstall may no longer be declared, so their PM handlers
@@ -328,12 +492,19 @@ func runApply(cfg runConfig, scopeFilter []string) error {
 		return printApplyDryRun(toInstall, toUninstall)
 	}
 
+	// A changed module version means the component's on-disk artifacts still point
+	// at the old version; clear its completion sentinels so the runner re-links it
+	// rather than skipping it as "already installed".
+	if err := clearStaleSentinels(cfg.ConfigDir, staleSet); err != nil {
+		return err
+	}
+
 	installCaller, err := execApplyPhases(cfg, toInstall, toUninstall, pmReg, urlMap)
 	if err != nil {
 		return err
 	}
 
-	newInstalled := computeNewInstalled(scoped, explicitOrder, installedSet, toInstall)
+	newInstalled := computeNewInstalled(scoped, explicitOrder, recordedVersions, toInstall, currentVersions)
 	if err := writeInstalledLock(cfg.ConfigDir, newInstalled); err != nil {
 		return err
 	}

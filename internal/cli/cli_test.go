@@ -261,7 +261,7 @@ func TestComputeToInstall_FullSet(t *testing.T) {
 	order := []string{"brew", "shell", "git"}
 	installed := map[string]bool{}
 	scope := map[string]bool{}
-	result := cli.ExportComputeToInstall(order, installed, scope, false)
+	result := cli.ExportComputeToInstall(order, installed, scope, nil, false)
 	if len(result) != 3 {
 		t.Fatalf("want 3 to install, got %d: %v", len(result), result)
 	}
@@ -272,7 +272,7 @@ func TestComputeToInstall_NothingNew(t *testing.T) {
 	order := []string{"brew", "shell"}
 	installed := map[string]bool{"brew": true, "shell": true}
 	scope := map[string]bool{}
-	result := cli.ExportComputeToInstall(order, installed, scope, false)
+	result := cli.ExportComputeToInstall(order, installed, scope, nil, false)
 	if len(result) != 0 {
 		t.Fatalf("want nothing to install, got %v", result)
 	}
@@ -283,9 +283,21 @@ func TestComputeToInstall_Scoped(t *testing.T) {
 	order := []string{"brew", "shell", "git"}
 	installed := map[string]bool{}
 	scope := map[string]bool{"git": true}
-	result := cli.ExportComputeToInstall(order, installed, scope, true)
+	result := cli.ExportComputeToInstall(order, installed, scope, nil, true)
 	if len(result) != 1 || result[0] != "git" {
 		t.Fatalf("want [git], got %v", result)
+	}
+}
+
+// TestComputeToInstall_StaleReinstalled re-installs an already-installed component
+// whose module version changed (in staleSet), even though it is in installedSet.
+func TestComputeToInstall_StaleReinstalled(t *testing.T) {
+	order := []string{"brew", "shell", "git"}
+	installed := map[string]bool{"brew": true, "shell": true, "git": true}
+	stale := map[string]bool{"shell": true}
+	result := cli.ExportComputeToInstall(order, installed, nil, stale, false)
+	if len(result) != 1 || result[0] != "shell" {
+		t.Fatalf("want [shell] (stale), got %v", result)
 	}
 }
 
@@ -312,40 +324,129 @@ func TestComputeToUninstall_NothingToRemove(t *testing.T) {
 	}
 }
 
-// TestComputeNewInstalled_FullApply returns allOrder as the new installed list.
+// TestComputeStaleComponents_ModuleBump marks every component of a bumped module
+// stale — including transitive ones not tracked in installed.lock — while leaving
+// unchanged modules alone.
+func TestComputeStaleComponents_ModuleBump(t *testing.T) {
+	allOrder := []string{"@dotmeow", "tmux-config", "ssh-config", "other"}
+	urlMap := map[string]string{
+		"@dotmeow":    "@dotmeow//dotmeow",
+		"tmux-config": "@dotmeow//components/tmux-config",
+		"ssh-config":  "@dotmeow//components/ssh-config",
+		"other":       "@stdlib//components/other",
+	}
+	// Only the explicit aggregate + "other" are recorded in installed.lock.
+	recorded := map[string]string{"@dotmeow": "0.3.2", "other": "1.0.0"}
+	current := map[string]string{
+		"@dotmeow": "0.3.3", "tmux-config": "0.3.3", "ssh-config": "0.3.3", "other": "1.0.0",
+	}
+	stale := cli.ExportComputeStaleComponents(allOrder, urlMap, recorded, current)
+	for _, want := range []string{"@dotmeow", "tmux-config", "ssh-config"} {
+		if !stale[want] {
+			t.Errorf("expected %q to be stale (dotmeow bumped 0.3.2→0.3.3)", want)
+		}
+	}
+	if stale["other"] {
+		t.Error("other should not be stale (stdlib unchanged)")
+	}
+}
+
+// TestComputeStaleComponents_NoChange returns nil when nothing was bumped.
+func TestComputeStaleComponents_NoChange(t *testing.T) {
+	allOrder := []string{"@dotmeow", "tmux-config"}
+	urlMap := map[string]string{
+		"@dotmeow":    "@dotmeow//dotmeow",
+		"tmux-config": "@dotmeow//components/tmux-config",
+	}
+	recorded := map[string]string{"@dotmeow": "0.3.3"}
+	current := map[string]string{"@dotmeow": "0.3.3", "tmux-config": "0.3.3"}
+	if stale := cli.ExportComputeStaleComponents(allOrder, urlMap, recorded, current); len(stale) != 0 {
+		t.Errorf("want no stale components, got %v", stale)
+	}
+}
+
+// TestComputeStaleComponents_LegacyMigration treats a recorded empty version
+// (legacy v1 installed.lock) against a known current version as a change, so the
+// first apply after upgrade re-links module components once.
+func TestComputeStaleComponents_LegacyMigration(t *testing.T) {
+	allOrder := []string{"@dotmeow", "tmux-config"}
+	urlMap := map[string]string{
+		"@dotmeow":    "@dotmeow//dotmeow",
+		"tmux-config": "@dotmeow//components/tmux-config",
+	}
+	recorded := map[string]string{"@dotmeow": ""} // v1: version unknown
+	current := map[string]string{"@dotmeow": "0.3.3", "tmux-config": "0.3.3"}
+	stale := cli.ExportComputeStaleComponents(allOrder, urlMap, recorded, current)
+	if !stale["@dotmeow"] || !stale["tmux-config"] {
+		t.Errorf("legacy migration should mark dotmeow components stale, got %v", stale)
+	}
+}
+
+// TestInstalledLock_ReadsLegacyV1 verifies a schema_version 1 installed.lock
+// (string list) is still read, with versions reported empty.
+func TestInstalledLock_ReadsLegacyV1(t *testing.T) {
+	tmp := t.TempDir()
+	raw := "schema_version = 1\ncomponents = [\"brew\", \"git\"]\n"
+	if err := os.WriteFile(filepath.Join(tmp, "installed.lock"), []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	il, err := cli.ExportReadInstalledLock(tmp)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(il.Components) != 2 {
+		t.Fatalf("want 2 legacy components, got %v", il.Components)
+	}
+}
+
+// TestComputeNewInstalled_FullApply returns allOrder (with versions) as the new installed list.
 func TestComputeNewInstalled_FullApply(t *testing.T) {
 	allOrder := []string{"brew", "shell", "git"}
-	installed := map[string]bool{"brew": true}
+	recorded := map[string]string{"brew": "1.0.0"}
 	toInstall := []string{"shell", "git"}
-	result := cli.ExportComputeNewInstalled(false, allOrder, installed, toInstall)
+	current := map[string]string{"brew": "1.0.0", "shell": "2.0.0", "git": "3.0.0"}
+	result := cli.ExportComputeNewInstalled(false, allOrder, recorded, toInstall, current)
 	if len(result) != 3 {
 		t.Fatalf("want 3 installed, got %d: %v", len(result), result)
+	}
+	for _, c := range result {
+		if c.Version != current[c.Name] {
+			t.Errorf("component %s: recorded version %q, want %q", c.Name, c.Version, current[c.Name])
+		}
 	}
 }
 
 // TestComputeNewInstalled_ScopedApply merges newly installed into existing installed set.
 func TestComputeNewInstalled_ScopedApply(t *testing.T) {
 	allOrder := []string{"brew", "shell", "git"}
-	installed := map[string]bool{"brew": true}
+	recorded := map[string]string{"brew": "1.0.0"}
 	toInstall := []string{"shell"}
-	result := cli.ExportComputeNewInstalled(true, allOrder, installed, toInstall)
+	current := map[string]string{"shell": "2.0.0"}
+	result := cli.ExportComputeNewInstalled(true, allOrder, recorded, toInstall, current)
 	// brew + shell; git not included (not in toInstall and not scoped)
-	resultSet := make(map[string]bool, len(result))
+	resultSet := make(map[string]string, len(result))
 	for _, r := range result {
-		resultSet[r] = true
+		resultSet[r.Name] = r.Version
 	}
-	if !resultSet["brew"] || !resultSet["shell"] {
-		t.Fatalf("want brew and shell in result, got %v", result)
+	if _, ok := resultSet["brew"]; !ok {
+		t.Fatalf("want brew in result, got %v", result)
 	}
-	if resultSet["git"] {
+	if resultSet["shell"] != "2.0.0" {
+		t.Fatalf("want shell@2.0.0 in result, got %v", result)
+	}
+	if _, ok := resultSet["git"]; ok {
 		t.Fatalf("git should not be in result, got %v", result)
 	}
 }
 
-// TestInstalledLock_RoundTrip verifies write then read produces the same components.
+// TestInstalledLock_RoundTrip verifies write then read produces the same components and versions.
 func TestInstalledLock_RoundTrip(t *testing.T) {
 	tmp := t.TempDir()
-	components := []string{"git", "brew", "shell"}
+	components := []cli.InstalledComponent{
+		{Name: "git", Version: "1.0.0"},
+		{Name: "brew", Version: ""},
+		{Name: "shell", Version: "2.0.0"},
+	}
 	if err := cli.ExportWriteInstalledLock(tmp, components); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -353,17 +454,20 @@ func TestInstalledLock_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	// writeInstalledLock sorts; verify all names present
-	if len(il.Components) != 3 {
-		t.Fatalf("want 3 components, got %d: %v", len(il.Components), il.Components)
+	if len(il.Installed) != 3 {
+		t.Fatalf("want 3 components, got %d: %v", len(il.Installed), il.Installed)
 	}
-	got := make(map[string]bool, len(il.Components))
-	for _, c := range il.Components {
-		got[c] = true
+	got := make(map[string]string, len(il.Installed))
+	for _, c := range il.Installed {
+		got[c.Name] = c.Version
 	}
 	for _, want := range components {
-		if !got[want] {
-			t.Fatalf("missing component %q in lock: %v", want, il.Components)
+		v, ok := got[want.Name]
+		if !ok {
+			t.Fatalf("missing component %q in lock: %v", want.Name, il.Installed)
+		}
+		if v != want.Version {
+			t.Errorf("component %q version: got %q, want %q", want.Name, v, want.Version)
 		}
 	}
 }
@@ -375,8 +479,8 @@ func TestInstalledLock_MissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error for missing file: %v", err)
 	}
-	if len(il.Components) != 0 {
-		t.Fatalf("want empty components, got %v", il.Components)
+	if len(il.Installed) != 0 || len(il.Components) != 0 {
+		t.Fatalf("want empty components, got %v / %v", il.Installed, il.Components)
 	}
 }
 
