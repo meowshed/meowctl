@@ -52,6 +52,31 @@ func TestSentinel_DeduplicateComponents(t *testing.T) {
 	}
 }
 
+func TestSentinel_ClearComponent(t *testing.T) {
+	dir := t.TempDir()
+	m := state.NewManager(filepath.Join(dir, "state.toml"))
+
+	_ = m.RecordComponent("install_check", "tmux-config")
+	_ = m.RecordComponent("install", "tmux-config")
+	_ = m.RecordComponent("install", "git-config")
+
+	if err := m.ClearComponent("tmux-config"); err != nil {
+		t.Fatalf("ClearComponent: %v", err)
+	}
+
+	if m.IsCompleted("install", "tmux-config") || m.IsCompleted("install_check", "tmux-config") {
+		t.Error("tmux-config records should have been cleared from all phases")
+	}
+	if !m.IsCompleted("install", "git-config") {
+		t.Error("git-config should remain completed")
+	}
+
+	// Clearing a component with no records is a no-op (no error).
+	if err := m.ClearComponent("absent"); err != nil {
+		t.Fatalf("ClearComponent(absent): %v", err)
+	}
+}
+
 func TestSentinel_MissingFile(t *testing.T) {
 	dir := t.TempDir()
 	m := state.NewManager(filepath.Join(dir, "no-such.toml"))

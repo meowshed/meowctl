@@ -140,6 +140,74 @@ func TestRegistryLoader_HappyPath(t *testing.T) {
 	}
 }
 
+// TestRegistryLoader_PreservesExecBit verifies that an executable file in a
+// module tarball keeps its exec bit (normalized to 0755) after extraction to the
+// module cache, while a non-executable file lands 0644.
+func TestRegistryLoader_PreservesExecBit(t *testing.T) {
+	// Build a tarball with mixed modes (buildTarGz forces 0600, so build inline).
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+	for _, e := range []struct {
+		name string
+		mode int64
+	}{
+		{"lib.star", 0o644},
+		{"scripts/run.sh", 0o755},
+	} {
+		body := []byte("answer = 42\n")
+		if err := tw.WriteHeader(&tar.Header{Name: e.name, Typeflag: tar.TypeReg, Size: int64(len(body)), Mode: e.mode}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write(body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	tarball := buf.Bytes()
+
+	tarballServer := testServer(t, map[string][]byte{"/mymod-v1.0.0.tar.gz": tarball})
+	defer tarballServer.Close()
+
+	indexBody := registryIndexTOML(t, map[string]map[string]interface{}{
+		"mymod": {
+			"versions": []string{"v1.0.0"},
+			"source":   tarballServer.URL + "/mymod-{version}.tar.gz",
+		},
+	})
+	indexServer := testServer(t, map[string][]byte{"/": indexBody})
+	defer indexServer.Close()
+
+	cacheDir := t.TempDir()
+	lockPath := filepath.Join(t.TempDir(), "meowctl.lock")
+	cl := newTestRegistryLoader(t, indexServer, cacheDir, lockPath)
+	thread := &gostarlark.Thread{Name: "test"}
+
+	if _, err := cl.Load(thread, "@mymod//lib.star", gostarlark.StringDict{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	base := filepath.Join(cacheDir, "modules", "mymod", "v1.0.0")
+	cases := map[string]os.FileMode{
+		"scripts/run.sh": 0o755,
+		"lib.star":       0o644,
+	}
+	for rel, want := range cases {
+		info, statErr := os.Stat(filepath.Join(base, filepath.FromSlash(rel)))
+		if statErr != nil {
+			t.Fatalf("stat %s: %v", rel, statErr)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Errorf("%s perm: got %o, want %o", rel, got, want)
+		}
+	}
+}
+
 // TestRegistryLoader_UnknownModule verifies that a module not listed in the
 // registry index produces a clear error.
 func TestRegistryLoader_UnknownModule(t *testing.T) {
