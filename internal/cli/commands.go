@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/meowshed/meowctl/internal/modfile"
+	"github.com/meowshed/meowctl/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -104,8 +105,9 @@ func runInit(configDir string, force bool) error {
 		}
 	}
 
-	fmt.Printf("Dotfiles initialized at %s\n", configDir)
-	fmt.Printf("Edit init.star to declare components, then run 'meowctl apply'.\n")
+	pr := tui.NewPrinter(nil, nil)
+	pr.Success("dotfiles initialized", configDir)
+	pr.Note("Edit init.star to declare components, then run 'meowctl apply'.")
 	return nil
 }
 
@@ -116,13 +118,7 @@ func checkLegacyConfigForInit(configDir string) error {
 	newEntryPath := filepath.Join(configDir, configEntryFile)
 	if _, legacyErr := os.Lstat(legacyPath); legacyErr == nil {
 		if _, newErr := os.Lstat(newEntryPath); os.IsNotExist(newErr) {
-			fmt.Fprintf(os.Stderr, "meowctl: found legacy config — rename files to continue:\n")
-			fmt.Fprintf(os.Stderr, "  mv %s %s\n", legacyPath, newEntryPath)
-			fmt.Fprintf(os.Stderr, "  mv %s %s\n",
-				filepath.Join(configDir, "meowctl.mod"), filepath.Join(configDir, configModFile))
-			fmt.Fprintf(os.Stderr, "  mv %s %s\n",
-				filepath.Join(configDir, "meowctl.lock"), filepath.Join(configDir, configLockFile))
-			return exitErrorf(ExitConfig, "legacy config found — see instructions above")
+			return reportLegacyConfig(configDir, legacyPath, newEntryPath)
 		}
 	}
 	return nil
@@ -223,4 +219,17 @@ func splitLines(s string) []string {
 		return nil
 	}
 	return strings.Split(strings.TrimSuffix(s, "\n"), "\n")
+}
+
+// reportLegacyConfig prints the rename instructions for a pre-rename config
+// layout and returns the error to surface. Both the lifecycle path and the
+// command path hit this, and they had drifted into two copies of the same
+// six lines.
+func reportLegacyConfig(configDir, legacyPath, entryPath string) error {
+	p := tui.NewPrinter(nil, nil)
+	p.Warn("found legacy config — rename files to continue:")
+	p.Hint("mv %s %s", legacyPath, entryPath)
+	p.Hint("mv %s %s", filepath.Join(configDir, "meowctl.mod"), filepath.Join(configDir, configModFile))
+	p.Hint("mv %s %s", filepath.Join(configDir, "meowctl.lock"), filepath.Join(configDir, configLockFile))
+	return exitErrorf(ExitConfig, "legacy config found — see instructions above")
 }

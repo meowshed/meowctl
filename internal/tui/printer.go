@@ -126,6 +126,12 @@ func (p *Printer) Error(format string, args ...any) {
 	p.writeln(p.err, "  "+p.theme.Mark(StatusFailure)+" "+fmt.Sprintf(format, args...))
 }
 
+// Hint prints an indented, copy-pasteable command on stderr. It accompanies an
+// error, so it must not land on stdout where a caller is capturing results.
+func (p *Printer) Hint(format string, args ...any) {
+	p.writeln(p.err, "  "+p.theme.Muted(fmt.Sprintf(format, args...)))
+}
+
 // Blank prints a separating blank line.
 func (p *Printer) Blank() { p.writeln(p.out, "") }
 
