@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/meowshed/meowctl/internal/state"
+	"github.com/meowshed/meowctl/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -61,19 +62,19 @@ func runUpdate(cfg runConfig, yes bool) error {
 	defer func() { _ = os.RemoveAll(stagingDir) }()
 
 	if len(changes) == 0 {
-		fmt.Println("meowctl: no changes from upstream")
+		tui.Note("No changes from upstream.")
 		return nil
 	}
 
 	// 3. Present changes.
-	fmt.Printf("meowctl: %d file(s) changed:\n", len(changes))
+	tui.Heading("%d file(s) changed", len(changes))
 	for _, c := range changes {
 		fmt.Printf("  %s  %s\n", c.op, c.path)
 	}
 
 	// 4. If dry-run, stop here.
 	if cfg.DryRun {
-		fmt.Println("meowctl: --dry-run — no changes made")
+		tui.Note("Dry run: no changes made.")
 		return nil
 	}
 
@@ -92,7 +93,7 @@ func runUpdate(cfg runConfig, yes bool) error {
 	}
 
 	// 7. Run apply.
-	fmt.Println("meowctl: running apply")
+	tui.Heading("Apply")
 	return runApply(cfg, nil)
 }
 
@@ -100,7 +101,7 @@ func runUpdate(cfg runConfig, yes bool) error {
 // directory inside configDir, and returns the list of changed files.
 func fetchAndDiff(configDir, repoURL string) (string, []change, error) {
 	url := tarballURL(repoURL)
-	fmt.Printf("meowctl: downloading %s\n", url)
+	tui.Note("Downloading %s", url)
 
 	stagingDir := filepath.Join(configDir, ".update-staging")
 	_ = os.RemoveAll(stagingDir) // Clean up any leftover staging dir.
@@ -115,7 +116,7 @@ func fetchAndDiff(configDir, repoURL string) (string, []change, error) {
 		return stagingDir, nil, fmt.Errorf("update: create staging dir: %w", err)
 	}
 
-	fmt.Printf("meowctl: extracting to %s\n", stagingDir)
+	tui.Note("Extracting to %s", stagingDir)
 	if err := extractTarball(tmpPath, stagingDir); err != nil {
 		return stagingDir, nil, fmt.Errorf("update: extract: %w", err)
 	}
@@ -139,7 +140,7 @@ func promptAndApply(changes []change, stagingDir, configDir string, yes bool) (b
 			return false, fmt.Errorf("update: read confirmation: %w", err)
 		}
 		if strings.ToLower(resp) != "y" && strings.ToLower(resp) != "yes" {
-			fmt.Println("meowctl: update cancelled")
+			tui.Note("Update cancelled.")
 			return false, nil
 		}
 	}
@@ -157,7 +158,7 @@ func promptAndApply(changes []change, stagingDir, configDir string, yes bool) (b
 func maybeRunDepSync(changes []change, configDir string) error {
 	for _, c := range changes {
 		if c.path == configModFile {
-			fmt.Println("meowctl: deps.mod changed — running dep sync")
+			tui.Note("deps.mod changed, syncing dependencies.")
 			if err := runSync(configDir); err != nil {
 				return fmt.Errorf("update: dep sync: %w", err)
 			}
