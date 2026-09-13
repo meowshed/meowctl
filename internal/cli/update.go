@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/meowshed/meowctl/internal/state"
 	"github.com/meowshed/meowctl/internal/tui"
@@ -139,12 +138,11 @@ func fetchAndDiff(configDir, repoURL string) (string, []change, error) {
 // It returns true if changes were applied, false if the user cancelled.
 func promptAndApply(changes []change, stagingDir, configDir string, yes bool) (bool, error) {
 	if !yes {
-		fmt.Print("Apply changes? [y/N] ")
-		var resp string
-		if _, err := fmt.Scanln(&resp); err != nil {
+		ok, err := tui.Default.Confirm("Apply changes?")
+		if err != nil {
 			return false, fmt.Errorf("update: read confirmation: %w", err)
 		}
-		if strings.ToLower(resp) != "y" && strings.ToLower(resp) != "yes" {
+		if !ok {
 			tui.Note("Update cancelled.")
 			return false, nil
 		}
