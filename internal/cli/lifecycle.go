@@ -383,13 +383,7 @@ func checkLegacyConfig(configDir, starPath string) error {
 	legacyPath := filepath.Join(configDir, "meowctl.star")
 	if _, legacyErr := os.Lstat(legacyPath); legacyErr == nil {
 		if _, newErr := os.Lstat(starPath); os.IsNotExist(newErr) {
-			fmt.Fprintf(os.Stderr, "meowctl: found legacy config — rename files to continue:\n")
-			fmt.Fprintf(os.Stderr, "  mv %s %s\n", legacyPath, starPath)
-			fmt.Fprintf(os.Stderr, "  mv %s %s\n",
-				filepath.Join(configDir, "meowctl.mod"), filepath.Join(configDir, configModFile))
-			fmt.Fprintf(os.Stderr, "  mv %s %s\n",
-				filepath.Join(configDir, "meowctl.lock"), filepath.Join(configDir, configLockFile))
-			return exitErrorf(ExitConfig, "legacy config found — see instructions above")
+			return reportLegacyConfig(configDir, legacyPath, starPath)
 		}
 	}
 	return nil

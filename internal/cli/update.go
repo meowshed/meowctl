@@ -68,8 +68,13 @@ func runUpdate(cfg runConfig, yes bool) error {
 
 	// 3. Present changes.
 	tui.Heading("%d file(s) changed", len(changes))
+	pr := tui.NewPrinter(nil, nil)
 	for _, c := range changes {
-		fmt.Printf("  %s  %s\n", c.op, c.path)
+		if c.op == opAdd {
+			pr.Added(c.path)
+			continue
+		}
+		pr.Item(tui.StatusWarning, c.path, "modified")
 	}
 
 	// 4. If dry-run, stop here.
