@@ -561,19 +561,32 @@ func (c *CtxValue) starListDir(_ *gostarlark.Thread, _ *gostarlark.Builtin, args
 	return gostarlark.NewList(vals), nil
 }
 
-// starRun implements ctx.run(cmd, args=[], env={}, cwd=None).
+// starRun implements ctx.run(cmd, args=[], env={}, cwd=None, interactive=False).
 // Returns struct(stdout, stderr, exit_code).
+//
+// Output is captured, not streamed. A hook that installs fifty packages used
+// to interleave fifty tools' own progress bars with meowctl's, and the result
+// was unreadable and impossible to render over. Captured output surfaces where
+// it is useful instead: attached to the component's line when it fails, or
+// logged in full under --verbose.
+//
+// interactive=True is for commands that genuinely need the user: a cask that
+// prompts for an admin password, git asking for credentials, gpg driving
+// pinentry. Such a command inherits the real stdio and the renderer stands
+// down for its duration.
 func (c *CtxValue) starRun(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gostarlark.Tuple, kwargs []gostarlark.Tuple) (gostarlark.Value, error) {
 	var cmd gostarlark.String
 	runArgs := &gostarlark.List{}
 	runEnv := &gostarlark.Dict{}
 	var cwd gostarlark.Value = gostarlark.None
+	interactive := gostarlark.Bool(false)
 	if err := gostarlark.UnpackArgs(
 		"run", args, kwargs,
 		"cmd", &cmd,
 		"args?", &runArgs,
 		"env?", &runEnv,
 		"cwd?", &cwd,
+		"interactive?", &interactive,
 	); err != nil {
 		return nil, err
 	}
@@ -599,14 +612,58 @@ func (c *CtxValue) starRun(_ *gostarlark.Thread, _ *gostarlark.Builtin, args gos
 		}
 		return starlarkRunResult(stdout, "", 0), nil
 	}
-	stdout, stderr, exitCode, err := c.execRun(string(cmd), cmdArgs, mergedEnv, cwd)
+	stdout, stderr, exitCode, err := c.execRun(string(cmd), cmdArgs, mergedEnv, cwd, bool(interactive))
 	if err != nil {
 		return nil, err
 	}
 	if c.caps.Verbose {
 		c.verboseRunOutput(stdout, stderr, exitCode)
+	} else if exitCode != 0 && !bool(interactive) {
+		c.reportRunFailure(string(cmd), stdout, stderr, exitCode)
 	}
 	return starlarkRunResult(stdout, stderr, exitCode), nil
+}
+
+// probePhases exit non-zero as a matter of course — that is how a check asks
+// "is this already installed?" — so their failures are not reported.
+var probePhases = map[string]bool{
+	"install_check":   true,
+	"upgrade_check":   true,
+	"uninstall_check": true,
+	"verify":          true,
+}
+
+// maxFailureLines caps how much of a failed command's output is surfaced.
+// Enough to see the actual error; --verbose has the rest.
+const maxFailureLines = 10
+
+// reportRunFailure surfaces the output of a command that failed during a
+// mutating phase. Without it, capturing output would turn a broken install
+// into a bare non-zero exit code with no explanation anywhere.
+func (c *CtxValue) reportRunFailure(cmd, stdout, stderr string, exitCode int) {
+	if probePhases[c.caps.Phase] {
+		return
+	}
+	body := strings.TrimRight(stderr, "\n")
+	if body == "" {
+		body = strings.TrimRight(stdout, "\n")
+	}
+	c.logMsg(fmt.Sprintf("%s exited %d", cmd, exitCode))
+	if body == "" {
+		return
+	}
+	lines := strings.Split(body, "\n")
+	truncated := false
+	if len(lines) > maxFailureLines {
+		lines = lines[len(lines)-maxFailureLines:]
+		truncated = true
+	}
+	if truncated {
+		c.logMsg("  ... earlier output omitted; re-run with --verbose")
+	}
+	for _, line := range lines {
+		c.logMsg("  " + line)
+	}
 }
 
 // runArgsList converts a Starlark list to a []string of command arguments.
@@ -637,7 +694,17 @@ func mergeRunEnv(runEnv *gostarlark.Dict) ([]string, error) {
 }
 
 // execRun runs a command and returns stdout, stderr, exit code, and any non-exit error.
-func (c *CtxValue) execRun(cmd string, cmdArgs, mergedEnv []string, cwd gostarlark.Value) (string, string, int, error) {
+//
+// Stream wiring by mode:
+//
+//	default      captured only — nothing reaches the terminal
+//	verbose      captured, and echoed live so a long build shows progress
+//	interactive  inherited — the child owns stdio and the renderer stands down
+//
+// stdin is never inherited outside interactive mode. A child that unexpectedly
+// reads from it then gets EOF and fails fast, instead of blocking forever on a
+// prompt nobody can see — the classic way an unattended apply hangs in CI.
+func (c *CtxValue) execRun(cmd string, cmdArgs, mergedEnv []string, cwd gostarlark.Value, interactive bool) (string, string, int, error) {
 	c2 := exec.CommandContext(context.Background(), cmd, cmdArgs...) // #nosec G204 -- cmd/args from validated Starlark config; no ctx available in hooks
 	c2.Env = mergedEnv
 	if cwdStr, ok := cwd.(gostarlark.String); ok {
@@ -647,10 +714,29 @@ func (c *CtxValue) execRun(cmd string, cmdArgs, mergedEnv []string, cwd gostarla
 		}
 		c2.Dir = dir
 	}
+
 	var stdoutBuf, stderrBuf strings.Builder
-	c2.Stdout = io.MultiWriter(&stdoutBuf, os.Stdout)
-	c2.Stderr = io.MultiWriter(&stderrBuf, os.Stderr)
-	c2.Stdin = os.Stdin
+	switch {
+	case interactive:
+		c2.Stdout = io.MultiWriter(&stdoutBuf, os.Stdout)
+		c2.Stderr = io.MultiWriter(&stderrBuf, os.Stderr)
+		c2.Stdin = os.Stdin
+	case c.caps.Verbose:
+		c2.Stdout = io.MultiWriter(&stdoutBuf, os.Stdout)
+		c2.Stderr = io.MultiWriter(&stderrBuf, os.Stderr)
+	default:
+		c2.Stdout = &stdoutBuf
+		c2.Stderr = &stderrBuf
+	}
+
+	// Anything that writes to the terminal must not race the live region.
+	if (interactive || c.caps.Verbose) && c.caps.SuspendOutput != nil {
+		resume := c.caps.SuspendOutput()
+		if resume != nil {
+			defer resume()
+		}
+	}
+
 	runErr := c2.Run()
 	exitCode := 0
 	if runErr != nil {

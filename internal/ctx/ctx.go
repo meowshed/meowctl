@@ -24,6 +24,10 @@ type Capabilities struct {
 	DryRun bool
 	// Verbose enables debug-level output: commands, output, path changes.
 	Verbose bool
+	// SuspendOutput releases the terminal before a subprocess takes it over,
+	// and the returned function reclaims it. Supplied by the caller so the ctx
+	// layer never needs to know which renderer is active. May be nil.
+	SuspendOutput func() (resume func())
 	// ComponentDir is the absolute path to the component's source directory.
 	ComponentDir string
 	// StateDir is the per-component persistent state directory.

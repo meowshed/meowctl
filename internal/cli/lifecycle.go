@@ -169,6 +169,31 @@ type starlarkHookCaller struct {
 	// pkgsPins records packages dispatched during install/upgrade per component.
 	// Key is the component logical name; value is the list of PkgDecls dispatched.
 	pkgsPins map[string][]starlarkpkg.PkgDecl
+	// writer is the active renderer, used to hand the terminal to subprocesses
+	// that need it. May be nil, in which case suspension is a no-op.
+	writer tui.Writer
+}
+
+// logMsg routes ctx.log() output through the active renderer. Without this the
+// ctx layer falls back to fmt.Println, which writes straight past the live
+// region and tears the frame it is drawing.
+func (h *starlarkHookCaller) logMsg(msg string) {
+	if h.writer == nil {
+		fmt.Println(msg)
+		return
+	}
+	h.writer.Log("%s\n", msg)
+}
+
+// suspendOutput releases the terminal for a subprocess and returns the
+// function that reclaims it. Passed to ctx so the Starlark layer can hand off
+// the terminal without knowing which renderer is running.
+func (h *starlarkHookCaller) suspendOutput() func() {
+	if h.writer == nil {
+		return func() {}
+	}
+	h.writer.Suspend()
+	return h.writer.Resume
 }
 
 // CallHook evaluates the component's Starlark file and calls the named hook.
@@ -212,6 +237,8 @@ func (h *starlarkHookCaller) callHookFromFile(componentID, componentFile, hookNa
 		RollbackStack: h.stack,
 		PMRegistry:    h.pmRegistry,
 		Env:           envMap(),
+		SuspendOutput: h.suspendOutput,
+		Log:           h.logMsg,
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		caps.Home = home
@@ -257,6 +284,8 @@ func (h *starlarkHookCaller) callHookFromURL(componentID, moduleURL, hookName st
 		RollbackStack: h.stack,
 		PMRegistry:    h.pmRegistry,
 		Env:           envMap(),
+		SuspendOutput: h.suspendOutput,
+		Log:           h.logMsg,
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		caps.Home = home
@@ -705,7 +734,7 @@ func buildDepsAndRegistry(eval *starlarkpkg.Evaluator, decls []starlarkpkg.Compo
 
 		if globals != nil {
 			h := pkg.ScanGlobals(ln, globals, func(msg string) {
-				fmt.Fprintln(os.Stderr, "warning:", msg)
+				tui.Warn("%s", msg)
 			})
 			if h != nil {
 				if pmNameVal, ok := globals["pm_name"]; ok {
@@ -740,7 +769,7 @@ func readComponentGlobals(configDir string, eval *starlarkpkg.Evaluator, c starl
 		}
 		globals, err := cl.Load(thread, c.Name, predeclared)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "warning: reading URL component globals:", err)
+			tui.Warn("reading URL component globals: %v", err)
 			return merged, nil
 		}
 		return mergeAfterFromGlobals(merged, globals, eval), globals
@@ -751,7 +780,7 @@ func readComponentGlobals(configDir string, eval *starlarkpkg.Evaluator, c starl
 	}
 	fileResult, readErr := eval.ReadComponentGlobals(componentFile, nil)
 	if readErr != nil {
-		fmt.Fprintln(os.Stderr, "warning: reading component globals:", readErr)
+		tui.Warn("reading component globals: %v", readErr)
 		return merged, nil
 	}
 	return mergeAfterFromGlobals(merged, fileResult.Globals, eval), fileResult.Globals
@@ -798,7 +827,7 @@ func mergeAfterFromGlobals(existing []string, globals gostarlark.StringDict, eva
 	case gostarlark.Callable:
 		names, err := eval.CallAfterCallable(v)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "warning: after() callable failed:", err)
+			tui.Warn("after() callable failed: %v", err)
 			return existing
 		}
 		afterNames = names
@@ -924,6 +953,7 @@ func runLifecyclePhaseSetOrderedWithCaller(name string, phases []lifecycle.Phase
 	// Build hook caller with loader; replace directives come from deps.mod.
 	caller := buildHookCaller(cfg)
 	caller.urlComponents = urlMap
+	caller.writer = w
 
 	statePath := filepath.Join(cfg.ConfigDir, "state.toml")
 	sentinel := state.NewManager(statePath)
