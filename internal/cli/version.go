@@ -12,8 +12,10 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print version information",
 		Args:  cobra.NoArgs,
-		Run: func(_ *cobra.Command, _ []string) {
-			fmt.Println(version.String())
+		Run: func(cmd *cobra.Command, _ []string) {
+			// Uses the command's writer, not os.Stdout, so the output is
+			// redirectable like every other command's.
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), version.String())
 		},
 	}
 }
