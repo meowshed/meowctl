@@ -9,6 +9,7 @@ import (
 
 	"github.com/meowshed/meowctl/internal/pkg"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
+	"github.com/meowshed/meowctl/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -82,12 +83,13 @@ func newCheckCmd() *cobra.Command {
 			}
 
 			if len(errs) == 0 {
-				fmt.Printf("Checked %d files. 0 errors.\n", checked)
+				tui.Note("Checked %d file(s), no errors.", checked)
 				return nil
 			}
-			fmt.Printf("Checked %d files. %d errors:\n", checked, len(errs))
+			p := tui.NewPrinter(nil, nil)
+			p.Heading("Checked %d file(s), %d error(s)", checked, len(errs))
 			for _, e := range errs {
-				fmt.Printf("  %s: %s\n", e.file, e.reason)
+				p.Failure(e.file, e.reason)
 			}
 			return exitErrorf(ExitConfig, "check: %d error(s) found", len(errs))
 		},

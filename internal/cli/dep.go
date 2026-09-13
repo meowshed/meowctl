@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
@@ -87,10 +86,7 @@ func runDepList(cmd *cobra.Command, configDir string, jsonOut bool) error {
 		return enc.Encode(entries)
 	}
 
-	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprint(w, "NAME\tSOURCE/VERSION\tLOCKED\tLOCAL\n"); err != nil {
-		return err
-	}
+	rows := make([][]string, 0, len(entries))
 	for _, e := range entries {
 		sv := e.Version
 		if sv == "" {
@@ -100,11 +96,11 @@ func runDepList(cmd *cobra.Command, configDir string, jsonOut bool) error {
 		if e.Local {
 			local = "yes"
 		}
-		if _, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", e.Name, sv, e.Locked, local); err != nil {
-			return err
-		}
+		rows = append(rows, []string{e.Name, sv, e.Locked, local})
 	}
-	return w.Flush()
+	tui.NewPrinter(cmd.OutOrStdout(), cmd.ErrOrStderr()).
+		Table([]string{"name", "source/version", "locked", "local"}, rows)
+	return nil
 }
 
 func collectDepEntries(configDir string) []depEntry {
@@ -414,18 +410,18 @@ func applyOneUpgrade(d modfile.DepDecl, modfilePath string, modules map[string]l
 			return false, nil // SHA-pinned: skip.
 		}
 		if dryRun {
-			fmt.Printf("  would re-resolve %s (ref: %s)\n", d.Name, ref)
+			tui.Default.Pending(d.Name, "would re-resolve, ref "+ref)
 		} else {
-			fmt.Printf("  re-resolving %s (ref: %s)\n", d.Name, ref)
+			tui.Default.Success(d.Name, "re-resolving, ref "+ref)
 			delete(modules, d.Name)
 		}
 		return true, nil
 	}
 	// Registry dep: clear version pin to force latest resolution.
 	if dryRun {
-		fmt.Printf("  would upgrade %s (version: %s → latest)\n", d.Name, d.Version)
+		tui.Default.Pending(d.Name, "would upgrade from "+d.Version)
 	} else {
-		fmt.Printf("  upgrading %s (version: %s → latest)\n", d.Name, d.Version)
+		tui.Default.Change(d.Name, d.Version, "latest")
 		delete(modules, d.Name)
 		if err := rewriteDepVersion(modfilePath, d.Name, "latest"); err != nil {
 			return false, fmt.Errorf("dep upgrade: rewrite %s: %w", d.Name, err)
@@ -497,7 +493,7 @@ func runDepTidy(configDir string, dryRun bool) error {
 	// Note: deps.local.mod is not tidied — local overrides are user-managed.
 	kept, orphans := partitionDeps(mf.Deps, refs)
 	for _, name := range orphans {
-		fmt.Printf("  orphan %s (not referenced in any star file)\n", name)
+		tui.Default.Item(tui.StatusWarning, name, "orphan, not referenced in any star file")
 	}
 
 	if err := warnUnknownRefs(refs, mf.Deps, filepath.Join(configDir, configLocalModFile)); err != nil {
@@ -576,9 +572,7 @@ func warnUnknownRefs(refs map[string]bool, sharedDeps []modfile.DepDecl, localMo
 	}
 	for ref := range refs {
 		if !declared[ref] {
-			if _, err := fmt.Fprintf(os.Stderr, "meowctl: warning: @%s// referenced but not declared in any modfile\n", ref); err != nil {
-				return err
-			}
+			tui.Warn("@%s// referenced but not declared in any modfile", ref)
 		}
 	}
 	return nil
