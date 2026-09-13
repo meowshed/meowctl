@@ -144,9 +144,9 @@ func reportSyncResult(oldModules map[string]lock.ModuleEntry, result *loader.Syn
 			old = e.Version
 		}
 		if old != "" && old != ver {
-			fmt.Printf("  updated %s: %s → %s\n", mod, old, ver)
+			tui.Default.Change(mod, old, ver)
 		} else if old == "" {
-			fmt.Printf("  added   %s@%s\n", mod, ver)
+			tui.Default.Added(fmt.Sprintf("%s@%s", mod, ver))
 		}
 	}
 	for mod, path := range result.ReplacedPaths {

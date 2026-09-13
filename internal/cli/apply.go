@@ -653,7 +653,7 @@ func runAdd(cfg runConfig, names []string) error {
 
 	for _, name := range names {
 		if initSet[name] || localSet[name] {
-			fmt.Printf("meowctl: %s already declared, skipping\n", name)
+			tui.Default.Skipped(name, "already declared")
 			continue
 		}
 		// Check that the component's module is declared in a modfile.
@@ -718,21 +718,22 @@ func runRemove(cfg runConfig, names []string) error {
 			return exitErrorf(ExitUsage, "%s is declared in init.star — edit that file directly", name)
 		}
 		if !localSet[name] {
-			fmt.Printf("meowctl: %s not declared, skipping\n", name)
+			tui.Default.Skipped(name, "not declared")
 			continue
 		}
 		toRemove = append(toRemove, name)
 	}
 
 	if len(toRemove) == 0 {
-		fmt.Println("meowctl: nothing to do")
+		tui.Note("Nothing to do.")
 		return nil
 	}
 
 	if cfg.DryRun {
-		fmt.Println("will uninstall:")
+		pr := tui.NewPrinter(nil, nil)
+		pr.Heading("Uninstall")
 		for _, name := range toRemove {
-			fmt.Printf("  - %s\n", name)
+			pr.Removed(name)
 		}
 		return nil
 	}

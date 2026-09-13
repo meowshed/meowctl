@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/meowshed/meowctl/internal/tui"
 	"github.com/meowshed/meowctl/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -46,7 +47,7 @@ func fetchRelease(ctx context.Context) (*githubRelease, error) {
 	}
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
-			fmt.Fprintf(os.Stderr, "self-update: close response body: %v\n", cerr)
+			tui.Warn("self-update: close response body: %v", cerr)
 		}
 	}()
 	body, err := io.ReadAll(resp.Body)
@@ -71,7 +72,7 @@ func downloadBinary(ctx context.Context, url string) ([]byte, error) {
 	}
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
-			fmt.Fprintf(os.Stderr, "self-update: close download body: %v\n", cerr)
+			tui.Warn("self-update: close download body: %v", cerr)
 		}
 	}()
 	data, err := io.ReadAll(resp.Body)
@@ -111,7 +112,7 @@ func replaceBinary(data []byte) error {
 
 func runSelfUpdate() error {
 	ctx := context.Background()
-	fmt.Println("Checking for updates...")
+	tui.Note("Checking for updates.")
 
 	release, err := fetchRelease(ctx)
 	if err != nil {
@@ -126,7 +127,7 @@ func runSelfUpdate() error {
 	}
 
 	if current == latestVer || (current == "dev" && latestVer == "") {
-		fmt.Printf("Already up to date (%s).\n", current)
+		tui.Note("Already up to date (%s).", current)
 		return nil
 	}
 
@@ -143,7 +144,7 @@ func runSelfUpdate() error {
 			runtime.GOOS, runtime.GOARCH, latest, release.HTMLURL)
 	}
 
-	fmt.Printf("Downloading %s (%s/%s)...\n", latest, runtime.GOOS, runtime.GOARCH)
+	tui.Note("Downloading %s (%s/%s).", latest, runtime.GOOS, runtime.GOARCH)
 	data, err := downloadBinary(ctx, downloadURL)
 	if err != nil {
 		return err
@@ -154,6 +155,6 @@ func runSelfUpdate() error {
 		return err
 	}
 
-	fmt.Printf("Updated to %s. Run 'meowctl version' to confirm.\n", latest)
+	tui.Default.Success(fmt.Sprintf("updated to %s", latest), "run 'meowctl version' to confirm")
 	return nil
 }
