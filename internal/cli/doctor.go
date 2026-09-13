@@ -9,6 +9,7 @@ import (
 
 	"github.com/meowshed/meowctl/internal/lock"
 	"github.com/meowshed/meowctl/internal/state"
+	"github.com/meowshed/meowctl/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -81,22 +82,24 @@ func runDoctor(w io.Writer, configDir string, jsonOut bool) error {
 		return nil
 	}
 
+	// Hand-rolled glyphs here were the last holdout of the old per-command
+	// formatting; the shared theme now supplies them, so doctor degrades on a
+	// monochrome or non-UTF-8 terminal like everything else.
+	p := tui.NewPrinter(w, nil)
 	hasError := false
+	items := make([]tui.ItemSpec, 0, len(checks))
 	for _, c := range checks {
-		icon := "✓"
+		status := tui.StatusSuccess
 		switch c.Status {
 		case "warn":
-			icon = "!"
+			status = tui.StatusWarning
 		case "error":
-			icon = "✗"
+			status = tui.StatusFailure
 			hasError = true
 		}
-		if c.Detail != "" {
-			_, _ = fmt.Fprintf(w, "  %s %s: %s\n", icon, c.Name, c.Detail)
-		} else {
-			_, _ = fmt.Fprintf(w, "  %s %s\n", icon, c.Name)
-		}
+		items = append(items, tui.ItemSpec{Status: status, Label: c.Name, Note: c.Detail})
 	}
+	p.ItemList(items)
 	if hasError {
 		return exitErrorf(ExitConfig, "doctor: one or more checks failed")
 	}
