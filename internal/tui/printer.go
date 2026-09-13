@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -130,6 +132,32 @@ func (p *Printer) Error(format string, args ...any) {
 // error, so it must not land on stdout where a caller is capturing results.
 func (p *Printer) Hint(format string, args ...any) {
 	p.writeln(p.err, "  "+p.theme.Muted(fmt.Sprintf(format, args...)))
+}
+
+// Confirm asks a yes/no question and reports the answer.
+//
+// The prompt goes to stderr so stdout stays pipeable, and anything other than
+// an explicit yes is a no — including a bare Enter, which is what the "[y/N]"
+// default promises, and EOF, which is what a non-interactive caller supplies.
+// The previous implementation used fmt.Scanln, which returns "unexpected
+// newline" on an empty line, so pressing Enter to decline failed the command
+// instead of cancelling it.
+func (p *Printer) Confirm(question string) (bool, error) {
+	_, _ = io.WriteString(p.err, question+" "+p.theme.Muted("[y/N]")+" ")
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			_, _ = io.WriteString(p.err, "\n")
+			return false, nil
+		}
+		return false, err
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 // Blank prints a separating blank line.
