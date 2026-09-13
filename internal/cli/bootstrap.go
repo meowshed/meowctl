@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/meowshed/meowctl/internal/state"
+	"github.com/meowshed/meowctl/internal/tui"
 )
 
 // bootstrapMaxTarballBytes caps the tarball download at 256 MiB to avoid
@@ -44,7 +45,7 @@ func runBootstrap(configDir, repoURL string, force bool) error {
 
 	// Download tarball.
 	url := tarballURL(repoURL)
-	fmt.Printf("meowctl: downloading %s\n", url)
+	tui.Note("Downloading %s", url)
 	tmpPath, err := downloadTarball(url)
 	if err != nil {
 		return err
@@ -52,7 +53,7 @@ func runBootstrap(configDir, repoURL string, force bool) error {
 	defer func() { _ = os.Remove(tmpPath) }()
 
 	// Extract tarball to configDir.
-	fmt.Printf("meowctl: extracting to %s\n", configDir)
+	tui.Note("Extracting to %s", configDir)
 	if err := extractTarball(tmpPath, configDir); err != nil {
 		return err
 	}
@@ -66,16 +67,16 @@ func runBootstrap(configDir, repoURL string, force bool) error {
 	// Run dep sync (resolve deps.mod → deps.lock); skip if deps.lock already present.
 	lockPath := filepath.Join(configDir, configLockFile)
 	if _, err := os.Lstat(lockPath); errors.Is(err, os.ErrNotExist) {
-		fmt.Println("meowctl: running dep sync")
+		tui.Heading("Sync dependencies")
 		if err := runSync(configDir); err != nil {
 			return fmt.Errorf("init: dep sync: %w", err)
 		}
 	} else {
-		fmt.Println("meowctl: deps.lock present — skipping dep sync")
+		tui.Note("deps.lock present, skipping sync.")
 	}
 
 	// Run apply.
-	fmt.Println("meowctl: running apply")
+	tui.Heading("Apply")
 	if err := runApply(runConfig{ConfigDir: configDir, Force: true}, nil); err != nil {
 		return err
 	}

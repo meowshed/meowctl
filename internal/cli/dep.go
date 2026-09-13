@@ -15,6 +15,7 @@ import (
 
 	"github.com/meowshed/meowctl/internal/lock"
 	"github.com/meowshed/meowctl/internal/modfile"
+	"github.com/meowshed/meowctl/internal/tui"
 )
 
 // newDepCmd creates the "dep" command group.
@@ -192,7 +193,7 @@ func runDepAdd(configDir, name, version, source string, local bool) error {
 		if d.Name == name {
 			// Same version/source → no-op.
 			if d.Version == version && d.Source == source {
-				fmt.Printf("meowctl: dep %q already declared (no-op)\n", name)
+				tui.Note("Dep %q already declared.", name)
 				return nil
 			}
 			return fmt.Errorf("dep add: %q already declared with different version/source — run 'meowctl dep remove %s' first", name, name)
@@ -203,7 +204,7 @@ func runDepAdd(configDir, name, version, source string, local bool) error {
 	if err := modfile.Write(modPath, mf); err != nil {
 		return fmt.Errorf("dep add: write modfile: %w", err)
 	}
-	fmt.Printf("meowctl: added dep %q\n", name)
+	tui.Note("Added dep %q.", name)
 	return runSync(configDir)
 }
 
@@ -258,7 +259,7 @@ func runDepRemove(configDir, name string) error {
 	if err := modfile.Write(modPath, mf); err != nil {
 		return fmt.Errorf("dep remove: write modfile: %w", err)
 	}
-	fmt.Printf("meowctl: removed dep %q\n", name)
+	tui.Note("Removed dep %q.", name)
 	return runSync(configDir)
 }
 
@@ -390,7 +391,7 @@ func runDepUpgrade(configDir string, filter []string, dryRun bool) error {
 	}
 
 	if !changed {
-		fmt.Println("meowctl: nothing to upgrade")
+		tui.Note("Nothing to upgrade.")
 		return nil
 	}
 	if dryRun {
@@ -504,12 +505,12 @@ func runDepTidy(configDir string, dryRun bool) error {
 	}
 
 	if len(orphans) == 0 {
-		fmt.Println("meowctl: nothing to tidy")
+		tui.Note("Nothing to tidy.")
 		return nil
 	}
 
 	if dryRun {
-		fmt.Printf("meowctl: would remove %d orphan dep(s)\n", len(orphans))
+		tui.Note("Would remove %d orphan dep(s).", len(orphans))
 		return nil
 	}
 
@@ -517,7 +518,7 @@ func runDepTidy(configDir string, dryRun bool) error {
 	if err := modfile.Write(modPath, mf); err != nil {
 		return fmt.Errorf("dep tidy: write modfile: %w", err)
 	}
-	fmt.Printf("meowctl: removed %d orphan dep(s)\n", len(orphans))
+	tui.Note("Removed %d orphan dep(s).", len(orphans))
 	return runSync(configDir)
 }
 

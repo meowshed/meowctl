@@ -16,6 +16,7 @@ import (
 	"github.com/meowshed/meowctl/internal/rewrite"
 	starlarkpkg "github.com/meowshed/meowctl/internal/starlark"
 	"github.com/meowshed/meowctl/internal/state"
+	"github.com/meowshed/meowctl/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -484,7 +485,7 @@ func runApply(cfg runConfig, scopeFilter []string) error {
 	supplementPMRegistry(cfg, pmReg, urlMap)
 
 	if len(toInstall) == 0 && len(toUninstall) == 0 {
-		fmt.Println("meowctl: nothing to do")
+		tui.NewPrinter(nil, nil).Note("Nothing to do.")
 		return nil
 	}
 
@@ -585,24 +586,28 @@ func completedForInstall(sm *state.Manager, id lifecycle.ComponentID) bool {
 // printApplyDryRun prints the install/uninstall plan and returns nil.
 func printApplyDryRun(configDir string, toInstall, toUninstall []lifecycle.ComponentID, staleSet map[string]bool, force bool) error {
 	willRun, skipped := partitionByCompletion(configDir, toInstall, staleSet, force)
+	p := tui.NewPrinter(nil, nil)
 
 	if len(willRun) > 0 {
-		fmt.Println("will install:")
+		p.Heading("Install")
 		for _, id := range willRun {
-			fmt.Printf("  + %s\n", id)
+			p.Added(id)
 		}
-	}
-	if len(skipped) > 0 {
-		fmt.Printf("already complete, will be skipped: %d component(s) — re-run with --force\n", len(skipped))
-	}
-	if len(willRun) == 0 && len(toUninstall) == 0 {
-		fmt.Println("meowctl: nothing to do")
 	}
 	if len(toUninstall) > 0 {
-		fmt.Println("will uninstall:")
-		for _, id := range toUninstall {
-			fmt.Printf("  - %s\n", id)
+		if len(willRun) > 0 {
+			p.Blank()
 		}
+		p.Heading("Uninstall")
+		for _, id := range toUninstall {
+			p.Removed(id)
+		}
+	}
+	if len(willRun) == 0 && len(toUninstall) == 0 {
+		p.Note("Nothing to do.")
+	}
+	if len(skipped) > 0 {
+		p.Note("%d already complete — re-run with --force to redo them.", len(skipped))
 	}
 	return nil
 }
