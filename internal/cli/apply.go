@@ -489,7 +489,7 @@ func runApply(cfg runConfig, scopeFilter []string) error {
 	}
 
 	if cfg.DryRun {
-		return printApplyDryRun(toInstall, toUninstall)
+		return printApplyDryRun(cfg.ConfigDir, toInstall, toUninstall, staleSet, cfg.Force)
 	}
 
 	// A changed module version means the component's on-disk artifacts still point
@@ -544,13 +544,59 @@ func writePkgsLockAfterApply(configDir string, installCaller *starlarkHookCaller
 	return appendPkgsLock(configDir, installCaller.pkgsPins, localSet)
 }
 
+// partitionByCompletion splits an install plan into the components that will
+// actually execute and those the runner will skip.
+//
+// The plan is the full resolved component graph, but Runner.RunPhase skips any
+// component whose install phases are already recorded in state.toml (see
+// lifecycle.Runner.RunPhase). Only components in staleSet — whose module version
+// changed, so clearStaleSentinels wipes their records — are guaranteed to re-run.
+// Printing the raw plan therefore overstates the work by every component that is
+// already in place, which reads as "apply did nothing" when it in fact did.
+//
+// With force set nothing is skipped, so everything is reported as running.
+func partitionByCompletion(configDir string, toInstall []lifecycle.ComponentID, staleSet map[string]bool, force bool) (willRun, skipped []lifecycle.ComponentID) {
+	if force {
+		return toInstall, nil
+	}
+	sm := state.NewManager(filepath.Join(configDir, configStateFile))
+	for _, id := range toInstall {
+		if staleSet[id] || !completedForInstall(sm, id) {
+			willRun = append(willRun, id)
+			continue
+		}
+		skipped = append(skipped, id)
+	}
+	return willRun, skipped
+}
+
+// completedForInstall reports whether every install-set phase of a component is
+// already recorded, which is exactly the condition under which the runner skips
+// it in all three phases.
+func completedForInstall(sm *state.Manager, id lifecycle.ComponentID) bool {
+	for _, phase := range lifecycle.PhaseSetInstall {
+		if !sm.IsCompleted(string(phase), id) {
+			return false
+		}
+	}
+	return true
+}
+
 // printApplyDryRun prints the install/uninstall plan and returns nil.
-func printApplyDryRun(toInstall, toUninstall []lifecycle.ComponentID) error {
-	if len(toInstall) > 0 {
+func printApplyDryRun(configDir string, toInstall, toUninstall []lifecycle.ComponentID, staleSet map[string]bool, force bool) error {
+	willRun, skipped := partitionByCompletion(configDir, toInstall, staleSet, force)
+
+	if len(willRun) > 0 {
 		fmt.Println("will install:")
-		for _, id := range toInstall {
+		for _, id := range willRun {
 			fmt.Printf("  + %s\n", id)
 		}
+	}
+	if len(skipped) > 0 {
+		fmt.Printf("already complete, will be skipped: %d component(s) — re-run with --force\n", len(skipped))
+	}
+	if len(willRun) == 0 && len(toUninstall) == 0 {
+		fmt.Println("meowctl: nothing to do")
 	}
 	if len(toUninstall) > 0 {
 		fmt.Println("will uninstall:")
