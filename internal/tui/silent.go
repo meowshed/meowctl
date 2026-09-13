@@ -7,6 +7,9 @@ type SilentWriter struct{}
 // NewSilentWriter returns a Writer that discards all progress and status events.
 func NewSilentWriter() *SilentWriter { return &SilentWriter{} }
 
+// PhaseStart is a no-op.
+func (w *SilentWriter) PhaseStart(_ string, _ int) {}
+
 // ComponentStart is a no-op.
 func (w *SilentWriter) ComponentStart(_ string) {}
 
@@ -18,6 +21,12 @@ func (w *SilentWriter) ComponentDone(_ string, _ error) {}
 
 // Log is a no-op.
 func (w *SilentWriter) Log(_ string, _ ...any) {}
+
+// Suspend is a no-op.
+func (w *SilentWriter) Suspend() {}
+
+// Resume is a no-op.
+func (w *SilentWriter) Resume() {}
 
 // Close is a no-op.
 func (w *SilentWriter) Close() error { return nil }

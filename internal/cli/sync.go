@@ -9,6 +9,7 @@ import (
 	"github.com/meowshed/meowctl/internal/lock"
 	"github.com/meowshed/meowctl/internal/modfile"
 	"github.com/meowshed/meowctl/internal/starlark/loader"
+	"github.com/meowshed/meowctl/internal/tui"
 )
 
 // cacheDir returns the module cache directory (~/.cache/meowctl/modules).
@@ -57,7 +58,7 @@ func runSync(configDir string) error {
 	}
 
 	if len(changed) == 0 && len(result.ReplacedPaths) == 0 && !localChanged {
-		fmt.Println("meowctl: all modules up to date")
+		tui.Note("All modules up to date.")
 		return nil
 	}
 
@@ -149,7 +150,7 @@ func reportSyncResult(oldModules map[string]lock.ModuleEntry, result *loader.Syn
 		}
 	}
 	for mod, path := range result.ReplacedPaths {
-		fmt.Fprintf(os.Stderr, "meowctl: module %q replaced by local path %q\n", mod, path)
+		tui.Warn("module %q replaced by local path %q", mod, path)
 	}
 }
 
