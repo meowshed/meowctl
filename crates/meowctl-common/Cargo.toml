@@ -1,0 +1,10 @@
+[package]
+name = "meowctl-common"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared domain types, error taxonomy, and event vocabulary for meowctl"
+
+[lints]
+workspace = true
