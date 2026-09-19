@@ -6,7 +6,12 @@ Dotfiles and dev environment manager powered by Starlark.
 
 ## Status
 
-Early development. Not ready for use.
+**0.1.0** — the Go implementation is feature-complete for the dotfiles
+workflow: Starlark components, module resolution with MVS and lockfiles,
+lifecycle phases with rollback. See [CHANGELOG.md](CHANGELOG.md).
+
+0.2.0 is a full rewrite in Rust with a reworked architecture, in progress on
+the `rust-rewrite` branch.
 
 ## Overview
 
