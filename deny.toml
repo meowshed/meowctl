@@ -36,7 +36,14 @@ unused-allowed-license = "allow"
 # than it saves; a duplicate that matters shows up in binary size and gets its
 # own issue.
 multiple-versions = "warn"
+
+# A wildcard version is how a dependency stops being reproducible, so it is
+# denied — except between crates in this workspace, which are path
+# dependencies with no version and are resolved from the tree rather than from
+# a registry. Requiring a version on those would mean bumping every dependent
+# crate on every change for no benefit, since none of them is published.
 wildcards = "deny"
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

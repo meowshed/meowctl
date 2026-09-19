@@ -1,0 +1,46 @@
+# Prose. Neither `ci.yml` nor `rust.yml` triggers on a Markdown change, and
+# this repository is mostly documentation right now: the specifications, the
+# design documents, and the plan. An unchecked rule is one that drifts.
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.md"
+      - ".markdownlint.yaml"
+      - ".markdownlintignore"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "**.md"
+      - ".markdownlint.yaml"
+      - ".markdownlintignore"
+      - ".github/workflows/docs.yml"
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Markdown
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install markdownlint
+        run: npm install -g markdownlint-cli2
+
+      - name: Lint
+        run: markdownlint-cli2 '**/*.md' '#target' '#node_modules' '#.claude' '#CLAUDE.md'

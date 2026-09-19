@@ -2,7 +2,9 @@
 
 **Crate:** `meowctl-config`
 **Design:** `docs/design/0.2.0-rust-rewrite.md` §3, defects #5 and #6
-**v0.1.0 equivalent:** `internal/lock/`, `internal/modfile/`, `internal/state/`, `internal/rewrite/`, and the lockfile code in `internal/cli/apply.go`
+**v0.1.0 equivalent:** `internal/lock/`, `internal/modfile/`,
+`internal/state/`, `internal/rewrite/`, and the lockfile code in
+`internal/cli/apply.go`
 
 ## Scope
 
