@@ -1,0 +1,162 @@
+# Common vocabulary
+
+**Crate:** `meowctl-common`
+**Design:** `docs/design/0.2.0-rust-rewrite.md` §3
+**v0.1.0 equivalent:** scattered across `internal/cli`, `internal/lifecycle`, `internal/lock`
+
+## Scope
+
+This component owns the names every other crate uses: component identifiers,
+lifecycle phases, module references, integrity hashes, the error taxonomy with
+its exit codes, and the `Event` vocabulary the engine emits and the sinks
+render. It performs no input or output and depends on no other crate in the
+workspace.
+
+It exists because `v0.1.0` had no such layer. A component was a `string`, a
+phase was a `string`, and an exit code was an integer literal passed to
+`exitErrorf` at the call site. Every defect where the wrong string reached the
+wrong function was possible because nothing distinguished them.
+
+The `Event` type lives here rather than in `meowctl-engine` so that a sink
+never depends on the producer. That is what lets the sinks be tested against a
+fixture stream with no engine and no terminal.
+
+## Boundary
+
+The public types, their string forms, and their parse rules. Nothing here
+reads a file, spawns a process, or prints.
+
+## Identifiers
+
+**[R-COMMON-001]** A `ComponentId` MUST be constructible from the three forms
+`v0.1.0` accepts: a bare name (`neovim`), a registry-qualified path
+(`@stdlib//components/zsh`), and a GitHub-qualified path
+(`github.com/owner/repo//components/zsh`). Its `Display` MUST reproduce the
+input exactly.
+
+**[R-COMMON-002]** A `ComponentId` MUST expose the module key its source
+belongs to: `dotmeow` for `@dotmeow//path`, `github.com/o/r` for
+`github.com/o/r//path`, and nothing for a bare name. This is the key used to
+look an entry up in a lock file, and `internal/cli/apply.go`'s
+`moduleKeyFromComponentURL` is the behaviour to reproduce.
+
+**[R-COMMON-003]** A `ModuleRef` MUST distinguish a registry module, named by a
+bare identifier, from a GitHub module, named `github:owner/repo@ref`. Parsing a
+string that is neither MUST fail rather than produce a registry module with a
+strange name.
+
+**[R-COMMON-004]** An `Integrity` MUST hold a W3C Subresource Integrity hash in
+the form `sha384-<base64>`, and MUST reject a string that is not one. This is
+what `deps.lock` stores; see [R-CONFIG-020].
+
+## Phases
+
+**[R-COMMON-010]** `Phase` MUST have exactly the thirteen variants `v0.1.0`
+defines in `internal/lifecycle/runner.go`: `install_check`, `install`,
+`install_configure`, `update`, `upgrade_check`, `upgrade`,
+`upgrade_configure`, `uninstall_check`, `uninstall`, `uninstall_cleanup`,
+`shell`, `login`, and `verify`. Its string form MUST match those names exactly,
+because they are the hook names a component author writes and they appear in
+`state.toml`.
+
+**[R-COMMON-011]** `PhaseSet` MUST have the five variants `install`, `update`,
+`upgrade`, `uninstall`, and `verify`, each yielding its phases in the order
+`internal/lifecycle/runner.go` gives:
+
+| Set | Phases |
+| --- | --- |
+| `install` | `install_check`, `install`, `install_configure` |
+| `update` | `update` |
+| `upgrade` | `upgrade_check`, `upgrade`, `upgrade_configure` |
+| `uninstall` | `uninstall_check`, `uninstall`, `uninstall_cleanup` |
+| `verify` | `verify` |
+
+**[R-COMMON-012]** `Phase` MUST report whether it is read-only. The read-only
+phases are `install_check`, `upgrade_check`, `uninstall_check`, and `verify`,
+matching the `validCheckPhases` set in `internal/ctx/methods.go`. A read-only
+phase gets a restricted `ctx`; see [R-CTX-030].
+
+**[R-COMMON-013]** `Phase` MUST report whether it is a runtime hook phase. The
+runtime hook phases are `shell` and `login`. Only in those does `ctx.emit`
+write to stdout; see [R-CTX-024].
+
+## Paths
+
+**[R-COMMON-020]** The config directory MUST resolve to `$MEOWCTL_CONFIG` when
+set, then `$XDG_CONFIG_HOME/meowctl`, then `~/.config/meowctl`, in that order.
+The `--config` flag overrides all of them; see [R-CLI-004].
+
+**[R-COMMON-021]** The module cache directory MUST resolve to
+`$XDG_CACHE_HOME/meowctl/modules`, falling back to
+`~/.cache/meowctl/modules`.
+
+**[R-COMMON-022]** Path resolution MUST expand a leading `~` to the home
+directory and MUST reject a relative path, matching `requirePath` and
+`expandPath` in `internal/ctx/methods.go`. A path that escapes the directory it
+was resolved against MUST be rejected rather than silently normalised.
+
+## Errors and exit codes
+
+**[R-COMMON-030]** The error taxonomy MUST map onto the exit codes `v0.1.0`
+defines in `internal/cli/errors.go`, and no others:
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Success |
+| 1 | General error |
+| 2 | Usage error |
+| 3 | Configuration error: a malformed `init.star`, a missing component, a legacy layout |
+| 4 | Module error: a fetch that failed, an integrity hash that did not match |
+
+**[R-COMMON-031]** Every crate's error enum MUST be convertible to an exit
+code, and that conversion MUST be the only place a code is chosen. A crate
+below `meowctl-cli` MUST NOT name an exit code.
+
+**[R-COMMON-032]** An error that has a source location MUST carry it as a span
+into the file it came from, so `meowctl-cli` can render a diagnostic that
+points at the line. `v0.1.0` could not do this, and its Starlark errors name a
+file and nothing more.
+
+## Events
+
+**[R-COMMON-040]** The `Event` enum MUST cover everything a command produces
+that a sink renders. At minimum: `PlanComputed`, `PhaseStarted`,
+`PhaseFinished`, `ComponentStarted`, `ComponentSkipped`, `ComponentFinished`,
+`OpApplied`, `ProcessStarted`, `ProcessOutput`, `ProcessFinished`,
+`TerminalRequested`, `TerminalReleased`, `Diagnostic`, and
+`Message { severity, text }`.
+
+**[R-COMMON-041]** An `Event` MUST be serializable to JSON, because `JsonSink`
+emits one object per event; see [R-TUI-030].
+
+**[R-COMMON-042]** `Message` MUST be the only variant carrying unstructured
+text, and it MUST carry a severity. Anything a sink needs to render differently
+from other text MUST be its own variant rather than a formatted string.
+
+**[R-COMMON-043]** `Event` MUST NOT carry a rendered string, a colour, a glyph,
+or a width. Those are the sink's decisions, and an event that carries one makes
+the JSON sink emit terminal decoration.
+
+## Failure paths
+
+**[R-COMMON-050]** Parsing any identifier from an untrusted string MUST return
+an error rather than panic. The inputs reach this crate from config files and
+lock files, both of which a user edits.
+
+**[R-COMMON-051]** Constructing a `Phase` from a string that names no phase
+MUST fail. A `state.toml` written by a newer version can contain one; see
+[R-CONFIG-041].
+
+## Parity with v0.1.0
+
+The phase names, the phase-set composition, the exit codes, and the config
+directory resolution are all reproduced exactly. The types are new: `v0.1.0`
+used `string` for a component, a phase, and a module key alike, and
+`internal/lifecycle` declared a `ComponentID` alias that was still a string
+underneath.
+
+This spec deliberately changes one thing. `v0.1.0` resolves the config
+directory in `internal/cli/config.go` and the cache directory in
+`internal/cli/sync.go`, and neither consults `$MEOWCTL_CONFIG`.
+[R-COMMON-020] adds that variable, because the compat corpus needs to point two
+binaries at the same configuration without a flag on every invocation.
