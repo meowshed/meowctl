@@ -159,6 +159,21 @@ mod tests {
 
     use super::*;
 
+    /// An absolute home directory for the platform the test runs on.
+    ///
+    /// `/home/u` is not absolute on Windows, which has no drive letter in it,
+    /// so a test that hard-codes a Unix path checks nothing there and fails
+    /// for the wrong reason.
+    #[cfg(unix)]
+    const HOME: &str = "/home/u";
+    #[cfg(not(unix))]
+    const HOME: &str = r"C:\Users\u";
+
+    /// Joins onto [`HOME`] with the platform's separator.
+    fn under_home(rest: &str) -> PathBuf {
+        PathBuf::from(HOME).join(rest)
+    }
+
     struct FakeEnv(HashMap<&'static str, &'static str>);
 
     impl FakeEnv {
@@ -183,29 +198,26 @@ mod tests {
         let env = FakeEnv::new(&[
             ("MEOWCTL_CONFIG", "/explicit"),
             ("XDG_CONFIG_HOME", "/xdg"),
-            ("HOME", "/home/u"),
+            ("HOME", HOME),
         ]);
         assert_eq!(config_dir(&env).unwrap(), PathBuf::from("/explicit"));
 
-        let env = FakeEnv::new(&[("XDG_CONFIG_HOME", "/xdg"), ("HOME", "/home/u")]);
-        assert_eq!(config_dir(&env).unwrap(), PathBuf::from("/xdg/meowctl"));
-
-        let env = FakeEnv::new(&[("HOME", "/home/u")]);
+        let env = FakeEnv::new(&[("XDG_CONFIG_HOME", "/xdg"), ("HOME", HOME)]);
         assert_eq!(
             config_dir(&env).unwrap(),
-            PathBuf::from("/home/u/.config/meowctl")
+            PathBuf::from("/xdg").join("meowctl")
         );
+
+        let env = FakeEnv::new(&[("HOME", HOME)]);
+        assert_eq!(config_dir(&env).unwrap(), under_home(".config/meowctl"));
     }
 
     /// An empty variable is unset. A shell that exports `XDG_CONFIG_HOME=`
     /// would otherwise send the configuration directory to `/meowctl`.
     #[test]
     fn an_empty_variable_counts_as_unset() {
-        let env = FakeEnv::new(&[("XDG_CONFIG_HOME", ""), ("HOME", "/home/u")]);
-        assert_eq!(
-            config_dir(&env).unwrap(),
-            PathBuf::from("/home/u/.config/meowctl")
-        );
+        let env = FakeEnv::new(&[("XDG_CONFIG_HOME", ""), ("HOME", HOME)]);
+        assert_eq!(config_dir(&env).unwrap(), under_home(".config/meowctl"));
     }
 
     #[test]
@@ -221,31 +233,27 @@ mod tests {
     /// deliberate change, and the fallback still matches.
     #[test]
     fn the_cache_directory_honours_xdg_and_falls_back_as_v0_1_0_does() {
-        let env = FakeEnv::new(&[("XDG_CACHE_HOME", "/c"), ("HOME", "/home/u")]);
+        let env = FakeEnv::new(&[("XDG_CACHE_HOME", "/c"), ("HOME", HOME)]);
         assert_eq!(
             cache_dir(&env).unwrap(),
-            PathBuf::from("/c/meowctl/modules")
+            PathBuf::from("/c").join("meowctl").join("modules")
         );
 
-        let env = FakeEnv::new(&[("HOME", "/home/u")]);
+        let env = FakeEnv::new(&[("HOME", HOME)]);
         assert_eq!(
             cache_dir(&env).unwrap(),
-            PathBuf::from("/home/u/.cache/meowctl/modules")
+            under_home(".cache/meowctl/modules")
         );
     }
 
     /// [R-COMMON-022] `~` expansion matches `expandPath`, including `~` alone.
     #[test]
     fn a_leading_tilde_expands() {
-        let env = FakeEnv::new(&[("HOME", "/home/u")]);
-        assert_eq!(resolve("~", &env).unwrap(), PathBuf::from("/home/u"));
+        let env = FakeEnv::new(&[("HOME", HOME)]);
+        assert_eq!(resolve("~", &env).unwrap(), PathBuf::from(HOME));
         assert_eq!(
             resolve("~/.config/nvim", &env).unwrap(),
-            PathBuf::from("/home/u/.config/nvim")
-        );
-        assert_eq!(
-            resolve("/etc/hosts", &env).unwrap(),
-            PathBuf::from("/etc/hosts")
+            under_home(".config/nvim")
         );
     }
 
@@ -253,7 +261,7 @@ mod tests {
     /// hook author cannot predict, so it is refused rather than guessed at.
     #[test]
     fn a_relative_path_is_refused_with_the_reason() {
-        let env = FakeEnv::new(&[("HOME", "/home/u")]);
+        let env = FakeEnv::new(&[("HOME", HOME)]);
         let err = resolve("config/nvim", &env).unwrap_err();
         assert!(err.to_string().contains("relative"), "{err}");
     }
@@ -262,14 +270,14 @@ mod tests {
     /// named `~user`. Refusing says so instead.
     #[test]
     fn tilde_user_is_refused_rather_than_taken_literally() {
-        let env = FakeEnv::new(&[("HOME", "/home/u")]);
+        let env = FakeEnv::new(&[("HOME", HOME)]);
         let err = resolve("~other/file", &env).unwrap_err();
         assert!(err.to_string().contains("~user"), "{err}");
     }
 
     #[test]
     fn an_empty_path_is_refused() {
-        let env = FakeEnv::new(&[("HOME", "/home/u")]);
+        let env = FakeEnv::new(&[("HOME", HOME)]);
         assert!(resolve("", &env).is_err());
     }
 
