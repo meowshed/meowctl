@@ -170,23 +170,36 @@ that makes them evaluate differently is a defect, whatever the tests say.
 
 <build>
 
-The Go tree builds with mise tasks; the Rust tree will use the same runner.
+Both trees build with mise tasks. `mise install` gets the toolchain: one
+pinned Rust channel, its language server, the test runner, and the Go
+toolchain that keeps `v0.1.0` buildable.
+
+The Rust tree is the default. Run the whole gate before opening a pull
+request:
 
 ```bash
-mise install            # toolchain
-mise run build          # -> bin/meowctl
-mise run test           # go test -race
-mise run lint           # golangci-lint
+mise run all            # fmt-check, check, test, doc, deny, lint-md
 ```
 
-Once the workspace exists, the Rust gate is:
+Or one at a time:
 
 ```bash
-mise run fmt-check && mise run check && mise run test
+mise run build          # cargo build --workspace
+mise run check          # clippy with -D warnings
+mise run test           # cargo nextest run --workspace
+mise run fmt            # cargo fmt --all
+mise run deny           # advisories, licences, bans, sources
+mise run unused-deps    # cargo machete
+mise run snapshots      # cargo insta review
 ```
 
-`mise run check` is Clippy with `-D warnings`. `mise run test` is
-`cargo nextest run --workspace`.
+The frozen Go tree keeps its own tasks, prefixed so they never shadow the
+Rust ones: `go-build`, `go-test`, `go-lint`.
+
+Workspace lints are in the root `Cargo.toml` and every crate inherits them
+with `lints.workspace = true`. Two of them encode principles from this file:
+`print_stdout` and `print_stderr` are denied outside `meowctl-tui`, and
+`unwrap_used` is denied outside tests.
 
 </build>
 
