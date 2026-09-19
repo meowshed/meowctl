@@ -1,0 +1,17 @@
+[
+  {
+    "name": "init.star",
+    "status": "ok",
+    "detail": "<CONFIG>/init.star"
+  },
+  {
+    "name": "lock-file",
+    "status": "ok",
+    "detail": "0 module(s)"
+  },
+  {
+    "name": "state",
+    "status": "ok",
+    "detail": "<CONFIG>/state.toml"
+  }
+]
