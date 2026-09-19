@@ -23,3 +23,5 @@ Component-level normative behaviour, one file per crate or feature. See
 | [`../CLAUDE.md`](../CLAUDE.md) | Root policy: principles, architecture index, the workflow, and the skills |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | Release history |
 | [`../README.md`](../README.md) | What meowctl is, and how to build it |
+| [`../Cargo.toml`](../Cargo.toml) | Workspace members, shared package metadata, the lints every crate inherits, and the build profiles |
+| [`../deny.toml`](../deny.toml) | Which licences a dependency may carry, and why copyleft is excluded |

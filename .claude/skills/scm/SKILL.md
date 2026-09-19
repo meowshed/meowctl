@@ -42,17 +42,19 @@ gets ignored within a week.
 
 ## Branches
 
-Two branches are long-lived:
+Two branches are long-lived, and you commit to neither directly. `main`
+carries the released Go tree, tagged `v0.1.0`, and the shared repository
+furniture: the harness, the toolchain, and the documentation. `rust-rewrite`
+carries the `v0.2.0` rewrite and has its own CI, which is what lets the rewrite
+land in reviewable pieces while `v0.1.0` stays fixable.
 
-| Branch | Holds |
-| --- | --- |
-| `main` | The released Go implementation. Tagged `v0.1.0`. Changes only for a release or a fix to the Go tree |
-| `rust-rewrite` | The `v0.2.0` Rust rewrite. The default target for new work |
+Branch off whichever one your change belongs to, and open the pull request
+against that same branch. When `v0.2.0` is ready, `rust-rewrite` merges into
+`main` once, at M9, and `main` becomes the Rust tree.
 
-Work on a feature branch off `rust-rewrite`, and never commit to either
-long-lived branch directly, including for a one-line fix. A change that skipped
-review is invisible to everyone who reads the pull request log to learn what
-happened.
+Never commit to a long-lived branch directly, including for a one-line fix,
+because a change that skipped review is invisible to everyone who reads the
+pull request log to learn what happened.
 
 Name the branch `<type>/<short-slug>`, using the same types as commit subjects:
 
