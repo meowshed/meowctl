@@ -42,19 +42,19 @@ gets ignored within a week.
 
 ## Branches
 
-Two branches are long-lived, and you commit to neither directly. `main`
-carries the released Go tree, tagged `v0.1.0`, and the shared repository
-furniture: the harness, the toolchain, and the documentation. `rust-rewrite`
-carries the `v0.2.0` rewrite and has its own CI, which is what lets the rewrite
-land in reviewable pieces while `v0.1.0` stays fixable.
+`main` is the only long-lived branch, and you never commit to it directly. It
+carries both trees: the Go implementation released as `v0.1.0`, and the
+`v0.2.0` Rust workspace under `crates/`. They share a branch so that every
+change is reviewed against the same base and watched by the same automation,
+and the Go tree goes at M9 when the Rust tree replaces it.
 
-Branch off whichever one your change belongs to, and open the pull request
-against that same branch. When `v0.2.0` is ready, `rust-rewrite` merges into
-`main` once, at M9, and `main` becomes the Rust tree.
+Branch off `main` and open the pull request against `main`. Never commit to it
+directly, including for a one-line fix, because a change that skipped review is
+invisible to everyone who reads the pull request log to learn what happened.
 
-Never commit to a long-lived branch directly, including for a one-line fix,
-because a change that skipped review is invisible to everyone who reads the
-pull request log to learn what happened.
+Which checks run depends on what you touched. `ci.yml` covers the Go tree and
+`rust.yml` covers the Rust one, each filtered by path, so a change to `crates/`
+does not compile Go and a change to `internal/` does not compile Rust.
 
 Name the branch `<type>/<short-slug>`, using the same types as commit subjects:
 
@@ -111,10 +111,15 @@ Link the issue with `Closes #123` so the merge closes it.
 
 ## Merging
 
-Squash merge, always. The branch's commit history is working material, the
-sequence in which you happened to discover things, and it is noise in
-`rust-rewrite`. One squashed commit per pull request keeps the branch a list of
-changes, each of which built and passed CI.
+Squash merge, always, including for an integration pull request. A branch's
+commit history is working material, the sequence in which you happened to
+discover things, and one squashed commit per pull request keeps `main` a list
+of changes rather than a list of steps.
+
+The repository still permits merge commits and rebase merges in its GitHub
+settings, so nothing stops you mechanically. Turning both off is worth doing;
+until then this is a rule you keep rather than one the platform keeps for
+you.
 
 Two consequences follow:
 
@@ -127,8 +132,17 @@ Two consequences follow:
 
 Delete the branch after the merge.
 
-Never merge without explicit approval, and never merge a pull request whose
-checks are red or still running.
+Never merge without explicit approval, and never merge while checks are still
+running.
+
+Red checks need a judgement, not a reflex. Compare against the base branch
+before you decide: `gh run list --branch main --limit 5` tells you whether a
+failure arrived with your change or was already there. A failure your change
+caused blocks the merge. A failure the base branch already had does not, and
+saying so is part of the merge - name each one, say what it belongs to, and
+link the issue that tracks it. Treating an inherited failure as a blocker would
+freeze the repository until somebody fixes an unrelated tree, and treating it
+as invisible is how a red base becomes permanent.
 
 ## Tags and releases
 
@@ -136,8 +150,8 @@ Tags are annotated and named `vMAJOR.MINOR.PATCH`. The annotation says what the
 release is, in two or three sentences, with no attribution and no changelog
 dump; the changelog lives in `CHANGELOG.md`.
 
-`v0.2.0` is tagged only after `rust-rewrite` merges to `main`, which happens at
-M9, when the compat corpus passes and the Go tree is deleted. Until then
-`rust-rewrite` carries no tags.
+`v0.2.0` is tagged at M9, when the compat corpus passes and the Go tree is
+deleted. Nothing between `v0.1.0` and that point is tagged: the Rust tree
+carries `0.2.0-alpha.0` in `Cargo.toml` and ships nothing.
 
 Confirm with the repository owner before pushing a tag or publishing a release.

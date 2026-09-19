@@ -34,6 +34,15 @@ golangci-lint = "latest"
 
 "pipx:pre-commit" = "latest"
 
+# rustup's shim in ~/.cargo/bin usually wins on PATH and dispatches on
+# RUSTUP_TOOLCHAIN, which mise sets to the toolchain it resolved. mise installs
+# rust-analyzer into its own copy, so the bare command can still fail with
+# "Unknown binary in official toolchain" - which is what an LSP server that
+# crashes with exit code 1 looks like from the outside.
+[tasks.setup]
+run = "rustup component add rust-analyzer"
+description = "Make rust-analyzer resolvable through rustup's shim as well"
+
 [tasks.build]
 run = "cargo build --workspace"
 description = "Build every crate in debug"
