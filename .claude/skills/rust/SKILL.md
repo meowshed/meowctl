@@ -1,6 +1,6 @@
 ---
 name: rust
-description: Rust conventions for the meowctl v0.2.0 workspace - crate boundaries, effects behind traits, operations as data, error handling with thiserror and miette, the Starlark bridge, diagnostics through the event stream, testing with nextest and insta, and the lints this repository enforces. Load before writing or reviewing Rust code here.
+description: Rust conventions for the meowctl v0.2.0 workspace - crate boundaries, effects behind traits, operations as data, error handling with thiserror and miette, the Starlark bridge, code intelligence through rust-analyzer, diagnostics through the event stream, testing with nextest and insta, and the lints this repository enforces. Load before writing or reviewing Rust code here.
 ---
 
 # Rust in this workspace
@@ -30,6 +30,22 @@ planning and lockfile I/O next to the cobra commands, and `buildRunner` takes a
 
 Keep the layering checkable. `cargo deny` and a workspace lint enforce it, so a
 violation fails CI instead of being found in review.
+
+## Code intelligence
+
+`.claude/settings.json` enables the `rust-analyzer-lsp` plugin, so the `LSP`
+tool answers `goToDefinition`, `findReferences`, `hover`, `documentSymbol`, and
+the call hierarchy across the workspace. Reach for it before grepping for a
+symbol: grep finds every string that looks like the name, and rust-analyzer
+finds the one definition that is in scope.
+
+When the tool reports that the server "crashed with exit code 1", the usual
+cause is not the code. rustup's shim in `~/.cargo/bin` normally wins on PATH,
+and it dispatches on `RUSTUP_TOOLCHAIN`, which mise sets to the concrete
+toolchain it resolved. mise installs the `rust-analyzer` component into its own
+copy, so the bare command can still fail with "Unknown binary in official
+toolchain". Run `mise run setup` once, which adds the component to the active
+toolchain too, then check with `rust-analyzer --version`.
 
 ## Effects are traits
 
