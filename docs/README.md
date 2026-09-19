@@ -13,8 +13,27 @@ Architecture-level decisions. These change rarely and always deliberately.
 
 ## Specifications
 
-Component-level normative behaviour, one file per crate or feature. See
+Component-level normative behaviour, one file per crate. See
 [`spec/README.md`](spec/README.md) for the area prefixes and the template.
+
+The files are listed bottom-up, in dependency order: each one may cite the
+requirements above it in this table, and none cites a requirement below it
+except where the higher layer constrains the lower on purpose.
+
+| File | Crate | Covers |
+| --- | --- | --- |
+| [`spec/common.md`](spec/common.md) | `meowctl-common` | Identifiers, phases, paths, the error and exit-code taxonomy, the `Event` vocabulary |
+| [`spec/config.md`](spec/config.md) | `meowctl-config` | Every on-disk format, its schema version, and the syntax-aware Starlark editor |
+| [`spec/fs.md`](spec/fs.md) | `meowctl-fs` | The `FileSystem` trait and its real, dry-run, and in-memory implementations |
+| [`spec/exec.md`](spec/exec.md) | `meowctl-exec` | The `Executor` trait, subprocess output, and terminal hand-off |
+| [`spec/ops.md`](spec/ops.md) | `meowctl-ops` | The `Op` enum, inverses, the write-ahead journal, and replay |
+| [`spec/starlark.md`](spec/starlark.md) | `meowctl-starlark` | Builtins, the accumulator, `load()` resolution, and diagnostics |
+| [`spec/module.md`](spec/module.md) | `meowctl-module` | Version selection, fetching, integrity, the cache, and locking |
+| [`spec/pm.md`](spec/pm.md) | `meowctl-pm` | Package-manager handler registration and dispatch |
+| [`spec/ctx.md`](spec/ctx.md) | `meowctl-ctx` | The `ctx` object a hook receives, and its restricted forms |
+| [`spec/engine.md`](spec/engine.md) | `meowctl-engine` | The staged pipeline, the component graph, phases, staleness, and rollback |
+| [`spec/tui.md`](spec/tui.md) | `meowctl-tui` | The three event sinks, the theme, capability detection, and prompts |
+| [`spec/cli.md`](spec/cli.md) | `meowctl-cli` | The command surface, exit-code mapping, and the compat corpus |
 
 ## Elsewhere in the repository
 
