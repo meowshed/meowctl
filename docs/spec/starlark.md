@@ -82,10 +82,17 @@ four schemes `internal/starlark/loader/composite.go` handles: a path relative
 to the config directory, `self://`, `user://`, `github://owner/repo@ref//path`,
 and `@name//path` for a registry module.
 
-**[R-STAR-021]** A registry URL MUST accept an omitted `.star` extension:
-`@stdlib//components/apt` and `@stdlib//components/apt.star` MUST resolve to
-the same file, and `@name` alone MUST resolve to the module's root
-`init.star`.
+**[R-STAR-021]** A registry URL whose final segment contains no `.` MUST
+resolve to `<path>/init.star` inside the module, and `@name` alone MUST resolve
+to the module's root `init.star`. A path whose final segment does contain a `.`
+is taken as written.
+
+So `@stdlib//components/apt` resolves to `components/apt/init.star`, which is
+how every stdlib component is laid out, and `@stdlib//components/apt.star`
+resolves to that file instead. They are not equivalent. The doc comment on
+`RegistryLoader` in `internal/starlark/loader/registry.go` says they are;
+`parseRegistryURL` a few lines below it is what actually runs, and it appends
+`/init.star`.
 
 **[R-STAR-022]** A module file MUST be integrity-checked before it is
 evaluated; see [R-MODULE-030]. Evaluating first and checking afterwards means
