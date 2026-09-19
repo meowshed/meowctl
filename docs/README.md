@@ -46,5 +46,6 @@ except where the higher layer constrains the lower on purpose.
 | [`../CHANGELOG.md`](../CHANGELOG.md) | Release history |
 | [`../README.md`](../README.md) | What meowctl is, and how to build it |
 | [`../Cargo.toml`](../Cargo.toml) | Workspace members, shared package metadata, the lints every crate inherits, and the build profiles |
+| [`../.markdownlint.yaml`](../.markdownlint.yaml) | Which Markdown rules are relaxed for this content, and why |
 | [`../deny.toml`](../deny.toml) | Which licences a dependency may carry, and why copyleft is excluded |
 | [`../tests/compat/README.md`](../tests/compat/README.md) | The v0.1.0 compatibility corpus: what it compares, what it normalises, and why fixtures are per platform |

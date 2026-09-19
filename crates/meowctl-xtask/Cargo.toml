@@ -4,8 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+publish.workspace = true
 description = "Developer tasks for meowctl: the v0.1.0 compatibility corpus"
-publish = false
 
 [dependencies]
 anyhow = "1"

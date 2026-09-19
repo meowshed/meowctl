@@ -1,0 +1,25 @@
+# Markdown rules for this repository.
+#
+# The defaults are kept except where they fight the content rather than improve
+# it. Each exception says which content and why.
+
+# Prose wraps at 80 so a diff of a paragraph shows the sentence that changed
+# rather than the whole paragraph. A table row cannot wrap at all, and a code
+# block wraps where the code says, so neither is measured.
+MD013:
+  line_length: 80
+  tables: false
+  code_blocks: false
+  headings: false
+
+# A bare URL is a link. Requiring angle brackets around one buys nothing in a
+# document nobody renders as plain text.
+MD034: false
+
+# Duplicate headings are normal here: every specification has a "Scope" and a
+# "Failure paths", and several share a "Parity with v0.1.0".
+MD024:
+  siblings_only: true
+
+# The prompt files under .claude/ are written for a model, and their XML tags
+# are deliberate.

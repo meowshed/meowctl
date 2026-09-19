@@ -22,7 +22,7 @@ Go-based successor to the `.meow` shell scripting system.
 ## Repositories
 
 | Repo | Purpose |
-|------|---------|
+| ------ | --------- |
 | [meowshed/meowctl](https://github.com/meowshed/meowctl) | This repo — Go binary |
 | [meowshed/meowctl-stdlib](https://github.com/meowshed/meowctl-stdlib) | Standard library components (package managers, utilities) |
 | [meowshed/meowctl-registry](https://github.com/meowshed/meowctl-registry) | Module registry index |
