@@ -8,6 +8,7 @@ bin/
 coverage.out
 
 # Editor
+.claude/settings.local.json
 .idea/
 .vscode/
 *.swp
