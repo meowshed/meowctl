@@ -201,6 +201,13 @@ with `lints.workspace = true`. Two of them encode principles from this file:
 `print_stdout` and `print_stderr` are denied outside `meowctl-tui`, and
 `unwrap_used` is denied outside tests.
 
+`.claude/settings.json` enables the `rust-analyzer-lsp` plugin, so the `LSP`
+tool answers `goToDefinition`, `findReferences`, `hover`, and the call
+hierarchy over the workspace. Use it instead of grepping for a symbol: a
+grep finds every string that looks like the name, and rust-analyzer finds the
+one definition that is actually in scope. It is declared in the repository
+rather than left to each person's global settings, so a fresh clone gets it.
+
 </build>
 
 <workflow>
