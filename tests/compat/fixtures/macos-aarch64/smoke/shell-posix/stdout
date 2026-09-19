@@ -1,0 +1,12 @@
+# meowctl shell integration for POSIX sh
+# Add this to your ~/.profile or ~/.shrc:
+#   eval "$(meowctl shell posix)"
+
+meowctl_shell_init() {
+    export MEOWCTL_SHELL=posix
+    if [ -z "$_MEOWCTL_SHELL_DONE" ]; then
+        export _MEOWCTL_SHELL_DONE=1
+        eval "$(meowctl hook shell)"
+    fi
+}
+meowctl_shell_init
