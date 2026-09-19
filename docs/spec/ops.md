@@ -24,10 +24,16 @@ The `Op` enum, `apply`, `inverse`, the journal file format, and replay.
 
 ## Operations
 
-**[R-OPS-001]** `Op` MUST have one variant per reversible effect `v0.1.0`
-journals, and no others: `WriteFile`, `AppendFile`, `CopyFile`, `Symlink`,
-`LinkFile`, `Mkdir`, `Download`, `DefaultsWrite`, and `PlistSet`. These are the
-`Kind*` constants in `internal/rollback/rollback.go`.
+**[R-OPS-001]** `Op` MUST have exactly these nine variants: `WriteFile`,
+`AppendFile`, `CopyFile`, `Symlink`, `LinkFile`, `Mkdir`, `Download`,
+`DefaultsWrite`, and `PlistSet`.
+
+`v0.1.0` journals the first seven. It declares `defaults_write` and `plist_set`
+as `Kind*` constants, and `applyInverse` returns "inverse not implemented" for
+both, but nothing ever appends a record of either kind: `internal/ctx` calls
+neither `Append*` helper, and none exists. The two macOS operations are
+unjournaled and irreversible today. [R-OPS-017] closes that, and it is a
+deliberate change rather than a transcription.
 
 **[R-OPS-002]** `Op::apply` MUST perform the effect through a `FileSystem` and
 MUST NOT touch the filesystem by any other route. This is what makes a dry run
@@ -54,9 +60,11 @@ carries exactly this distinction, and the `had_prior` flag is what separates
 them.
 
 **[R-OPS-011]** `AppendFile` MUST wrap what it appends in begin and end markers
-carrying a unique identifier, and its inverse MUST remove the block those
-markers delimit rather than truncating the file. `inverseAppendFile` stores the
-marker; `removeMarkedBlock` is the removal.
+carrying an identifier, and its inverse MUST remove the block those markers
+delimit rather than truncating the file. `inverseAppendFile` stores the marker;
+`removeMarkedBlock` is the removal. The identifier MUST default to a generated
+one and MUST be overridable by the caller, because `ctx.append_file` takes a
+`marker` argument; see [R-CTX-028].
 
 **[R-OPS-012]** `CopyFile`'s inverse MUST delete the destination.
 
@@ -76,7 +84,13 @@ destination existed and MUST delete the file when it did not.
 
 **[R-OPS-017]** `DefaultsWrite` and `PlistSet` MUST record the prior value, and
 their inverses MUST restore it. Where no prior value existed, the inverse MUST
-delete the key rather than write an empty one.
+delete the key rather than write an empty one. Reading the prior value MUST be
+part of computing the inverse, per [R-OPS-003], because `defaults read` after
+the write returns the new value.
+
+This is new behaviour. In `v0.1.0` both operations apply with no journal entry
+at all, so a failed run leaves the user's system preferences changed with no
+record of what they were.
 
 ## The journal
 
@@ -124,12 +138,15 @@ exists to prevent.
 
 ## Parity with v0.1.0
 
-The journal format, the nine operation kinds, the inverse payloads, and the
-three rollback outcomes all come from `internal/rollback/rollback.go` and are
-reproduced exactly, including the JSON field names, so a journal left by one
-binary is readable by the other.
+The journal format, the seven implemented operation kinds, their inverse
+payloads, and the three rollback outcomes all come from
+`internal/rollback/rollback.go` and are reproduced exactly, including the JSON
+field names, so a journal left by one binary is readable by the other.
 
-Two things change. `v0.1.0` performs an effect in `internal/ctx` and journals it
+Three things change. [R-OPS-017] journals `defaults_write` and `plist_set`,
+which `v0.1.0` applies unjournaled; a `v0.1.0` binary replaying a `v0.2.0`
+journal containing one of them will report "inverse not implemented" and carry
+on, which is the same outcome it reaches today by having no record at all. `v0.1.0` performs an effect in `internal/ctx` and journals it
 through a separate `Append*` call, so the two can disagree; here they are one
 value. And `v0.1.0` has no property test that apply-then-undo restores the
 tree, which is why [R-OPS-004] is written as an obligation on every variant
