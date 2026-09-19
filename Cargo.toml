@@ -1,8 +1,13 @@
 [workspace]
-members = ["crates/meowctl-common", "crates/meowctl-xtask"]
+members = ["crates/meowctl-common", "crates/meowctl-fs", "crates/meowctl-xtask"]
 resolver = "3"
 
 [workspace.package]
+# Nothing here goes to crates.io: meowctl ships as a binary. Saying so lets
+# cargo-deny treat the path dependencies between these crates as what they are
+# rather than as wildcard versions, which it refuses for a publishable crate
+# because crates.io disallows path dependencies.
+publish = false
 version = "0.2.0-alpha.0"
 edition = "2024"
 license = "Apache-2.0"
@@ -13,6 +18,7 @@ thiserror = "2"
 anyhow = "1"
 serde = "1"
 serde_json = "1"
+tempfile = "3"
 
 # Every crate inherits these with `lints.workspace = true`.
 [workspace.lints.rust]

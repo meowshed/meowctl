@@ -1,18 +1,18 @@
 [package]
-name = "meowctl-common"
+name = "meowctl-fs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 publish.workspace = true
-description = "Shared domain types, error taxonomy, and event vocabulary for meowctl"
+description = "The filesystem effects meowctl performs, behind one trait"
 
 [dependencies]
-serde = { workspace = true, features = ["derive"] }
+meowctl-common = { path = "../meowctl-common" }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-serde_json = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true
