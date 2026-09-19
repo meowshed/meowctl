@@ -15,9 +15,10 @@ surface is what users touch, and `v0.2.0` changes the implementation
 underneath it from `go.starlark.net` to `starlark-rust` without changing what a
 component file may say.
 
-**M0 gates this spec.** The requirements below state what the evaluator must
-do; how it binds to `starlark-rust` is open until the spike answers it, and
-findings that contradict a requirement here go through `/amend-spec`.
+M0 has run. Its findings are at the end of this file, and none of them
+contradicted a requirement below; the binding questions the spike answered are
+recorded because they constrain how this crate is written, not what it must
+do.
 
 ## Boundary
 
@@ -139,20 +140,70 @@ platform struct, and the `select` matching are all reproduced from
 `internal/starlark/`. The `json` module comes from the Starlark standard
 library in both implementations.
 
-No behaviour is deliberately changed. Where `starlark-rust` and
-`go.starlark.net` differ in a way a component can observe, the difference is a
-finding for M0 and its resolution is an amendment to this spec, not a silent
-divergence.
+One thing changes, and it is not a choice. Runtime error text differs between
+the two implementations, because each writes its own messages. The decision to
+accept that rather than rewrite the library's messages is argued in
+`docs/design/0.2.0-decisions.md`.
 
-## Open questions
+## M0 findings
 
-All four wait on M0, and each can change the design rather than only this spec:
+M0 ran against `starlark` 0.14.2 and answered every question this spec was
+waiting on. Each answer below is something the spike executed, not something
+read from documentation.
 
-1. How `load()` interception maps onto `starlark-rust`'s loader, and whether
-   the composite loader can stay a single trait object.
-2. Whether a custom value with attributes can carry the borrowed engine state
-   `ctx` needs, or whether `ctx` has to hold handles instead.
-3. How per-evaluation state reaches a builtin, and what lifetime it takes.
-4. Whether runtime error messages differ in text. They appear in snapshots and
-   in user-facing output, so a difference is a parity finding even when the
-   behaviour matches.
+**`load()` interception works as a trait object.** `FileLoader` has one method,
+`load(&self, path: &str) -> starlark::Result<FrozenModule>`, and
+`Evaluator::set_loader` installs it. The composite loader stays one type that
+dispatches on the URL scheme, exactly as `internal/starlark/loader/composite.go`
+does. A load the loader refuses surfaces as an ordinary evaluation error
+carrying the loader's message, which is what [R-STAR-053] needs.
+
+**A custom value carries attributes and methods, with two constraints.** Data
+properties come from `get_attr`, `has_attr`, and `dir_attr` on `StarlarkValue`;
+methods come from a `#[starlark_module]` block registered through
+`MethodsStatic`. The constraints are that a method's receiver arrives as
+`Value<'v>` and is downcast, rather than being bound as `&Ctx` directly, and
+that a value holding interior mutability must be allocated with
+`alloc_complex_no_freeze` and derive `Trace`. `alloc_simple` requires
+`Send + Sync + 'static`, which `ctx` is not.
+
+**Per-evaluation state reaches a builtin through `Evaluator::extra`.** It is an
+`Option<&dyn AnyLifetime>`, downcast in the builtin. This is the direct
+equivalent of the thread-local `v0.1.0` uses, and it is per evaluation rather
+than global, which is what [R-STAR-010] requires.
+
+**Calling a Starlark function from Rust works.** `Evaluator::eval_function(f,
+&[ctx], &[])` passes a custom value as a positional argument and returns the
+function's result.
+
+**Diagnostics are better than `v0.1.0`'s.** `Error::span()` returns a
+`FileSpan` of the form `broken.star:2:1-12`, and the `Display` form already
+renders a traceback and a caret under the offending source:
+
+```text
+error: Missing parameter `name` for call to `component`
+ --> broken.star:2:1
+  |
+2 | component()
+  | ^^^^^^^^^^^
+```
+
+[R-STAR-040] is therefore satisfied by the library rather than by work in
+`meowctl-starlark`, and `miette` is needed only to render errors that come from
+elsewhere in the workspace.
+
+**One structural finding changes how the rest of the workspace is written.**
+A module and its heap are scoped to a closure: `Module::with_temp_heap(|module|
+...)`. Every `Value<'v>` lives inside that closure and nothing Starlark
+allocated can escape it. [R-STAR-011] was written as a precaution and is now a
+fact the compiler enforces, and it means the evaluation boundary is where
+declarations become owned data or they do not exist at all.
+
+The one question the spike did not close is whether runtime error *text*
+matches `go.starlark.net` for the same mistake. It does not, in at least one
+case: the message above says "Missing parameter `name` for call to
+`component`" where `go.starlark.net` says "component: missing argument for
+name". Error text appears in user-facing output and in snapshots, so every
+difference is a parity finding, and the decision recorded in
+`docs/design/0.2.0-decisions.md` is to accept the library's text rather than
+rewrite it.
