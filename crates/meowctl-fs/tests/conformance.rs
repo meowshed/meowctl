@@ -24,6 +24,13 @@ struct Subject {
     name: &'static str,
     fs: Box<dyn FileSystem>,
     root: PathBuf,
+    /// Whether this implementation can create a symlink here.
+    ///
+    /// `RealFs` refuses on Windows rather than guessing between a file link
+    /// and a directory link, both of which need a privilege the machine may
+    /// not grant. The in-memory implementations have no such constraint, so
+    /// the difference is real and the tests say which side they are checking.
+    symlinks: bool,
     /// Kept alive so the temporary directory outlives the test.
     _temp: Option<tempfile::TempDir>,
 }
@@ -53,18 +60,21 @@ fn subjects() -> Vec<Subject> {
             name: "MemFs",
             fs: Box::new(mem),
             root: PathBuf::from("/root"),
+            symlinks: true,
             _temp: None,
         },
         Subject {
             name: "DryRunFs",
             fs: Box::new(DryRunFs::new(Box::new(dry_backing))),
             root: PathBuf::from("/root"),
+            symlinks: true,
             _temp: None,
         },
         Subject {
             name: "RealFs",
             fs: Box::new(RealFs::new()),
             root: real_root,
+            symlinks: cfg!(unix),
             _temp: Some(temp),
         },
     ]
@@ -145,6 +155,9 @@ fn creating_a_directory_reports_whether_it_made_one() {
 #[test]
 fn replacing_a_symlink_reports_what_it_displaced() {
     for_each(|s| {
+        if !s.symlinks {
+            return;
+        }
         let link = s.path("link");
         let first = s.path("first");
         let second = s.path("second");
@@ -186,6 +199,9 @@ fn a_symlink_over_a_regular_file_is_refused_without_a_backup() {
 #[test]
 fn a_symlink_over_a_regular_file_moves_it_aside_when_asked() {
     for_each(|s| {
+        if !s.symlinks {
+            return;
+        }
         let link = s.path("dotfile");
         let backup = s.path("dotfile.backup");
         s.fs.write(&link, b"mine").expect(s.name);
@@ -213,6 +229,26 @@ fn a_symlink_over_a_regular_file_moves_it_aside_when_asked() {
 }
 
 /// [R-FS-022] a mistyped path must not delete something real.
+/// The refusal is deliberate, and a test that skipped it would let the
+/// platform behaviour change without anybody noticing.
+#[cfg(not(unix))]
+#[test]
+fn creating_a_symlink_on_a_platform_without_them_says_so() {
+    for_each(|s| {
+        if s.symlinks {
+            return;
+        }
+        let err =
+            s.fs.symlink(&s.path("target"), &s.path("link"), None)
+                .expect_err(s.name);
+        assert!(
+            err.to_string().contains("not supported"),
+            "{}: {err}",
+            s.name
+        );
+    });
+}
+
 #[test]
 fn removing_a_symlink_refuses_a_regular_file() {
     for_each(|s| {
