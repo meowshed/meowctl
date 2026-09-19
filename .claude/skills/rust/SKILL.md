@@ -212,6 +212,12 @@ rustup target add x86_64-pc-windows-msvc   # once
 cargo check --workspace --target x86_64-pc-windows-msvc
 ```
 
+That catches a compile error and nothing else. A behavioural difference still
+reaches CI: `/home/u` is not absolute on Windows, so a test that hard-codes a
+Unix path passes locally and fails there. Write test paths through a `cfg`
+constant rather than as literals whenever the code under test asks the platform
+a question.
+
 Write the non-Unix branch as behaviour rather than as a stub. A platform that
 cannot do what the code needs should say so and fail; silently skipping the
 work gives a green test over a machine in a state nobody asked for.
