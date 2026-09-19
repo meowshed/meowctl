@@ -6,19 +6,17 @@
 //! phases, module references, the error and exit-code taxonomy, and the
 //! [`Event`] vocabulary the engine emits and the sinks render.
 //!
-//! The crate is deliberately empty for now. Its types arrive with the
-//! specifications that describe them, one component at a time, so that nothing
-//! here exists before a requirement in `docs/spec/` says what it must do.
-//!
-//! [`Event`]: https://github.com/meowshed/meowctl/blob/rust-rewrite/docs/design/0.2.0-rust-rewrite.md
+//! Path resolution lives here too, rather than in `meowctl-fs`, because a dry
+//! run and a real run have to resolve a path identically.
 
-#[cfg(test)]
-mod tests {
-    /// The workspace, the toolchain, and the test runner agree with each
-    /// other. Until this crate has behaviour, that is the only thing worth
-    /// asserting, and a suite that runs zero tests cannot prove it.
-    #[test]
-    fn the_test_harness_runs() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+mod error;
+mod event;
+mod id;
+pub mod paths;
+mod phase;
+
+pub use error::{Error, Severity, Span};
+pub use event::{Event, Level, Outcome, PlannedStep, SkipReason, Stream};
+pub use id::{ComponentId, Integrity, ModuleRef};
+pub use paths::{Env, SystemEnv};
+pub use phase::{Phase, PhaseSet};

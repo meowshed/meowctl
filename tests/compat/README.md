@@ -41,6 +41,31 @@ path would still match if the wrong path happened to be the sandbox. The
 alternative is a corpus that cannot be recorded at all. The rewrite is kept
 narrow for that reason.
 
+## What the corpus will not run
+
+`verify` is not in the command list. Its whole job is to execute a component's
+verification hook, and in the standard library that means `open -a <App>` to
+check an application is installed. Running it launches every application the
+configuration manages.
+
+More generally, a command that evaluates hooks runs whatever the configuration
+tells it to. For a configuration outside this repository, those commands are
+skipped and `compat list` says so. Only the four that evaluate no hooks —
+`version`, `status`, `doctor --json`, `dep list` — run against one.
+
+The corpus configuration is exempt, because its hooks are in this repository
+and touch nothing outside the sandbox.
+
+## What is not recorded
+
+A hook runs real commands, and those commands write their own state: Homebrew's
+API cache, `gh`'s device id. Directories named `.cache`, `Caches`, or `state`
+are recorded as existing and not descended into, so the corpus notices one
+appearing or disappearing without comparing a third-party tool's bookkeeping.
+
+That hides a real effect if meowctl ever writes into one of them. The
+configuration directory, where meowctl actually writes, is never excluded.
+
 ## Fixtures are per platform
 
 `fixtures/<os>-<arch>/`. The corpus compares two binaries on one machine, not
