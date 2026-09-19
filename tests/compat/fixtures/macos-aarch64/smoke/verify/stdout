@@ -1,6 +1,0 @@
-verify  5 component(s)
-  ✓ base
-  ✓ tool
-  ✓ fakepm
-  ✓ packaged
-  ✓ shellbits
