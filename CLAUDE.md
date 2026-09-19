@@ -81,12 +81,12 @@ compiler asks for the inverse.
 </principle>
 
 <principle name="reviewable_history">
-`main` is the default branch and holds the released Go implementation.
-`rust-rewrite` is the long-lived branch for `v0.2.0`. Work on a feature branch
-off `rust-rewrite`, open a pull request, and squash merge it. Never commit to
-either long-lived branch directly, including for a one-line fix. Conventional
-commit subjects. The `scm` skill has the branch names, the pull request body,
-and the merge rules.
+`main` is the only long-lived branch and carries both trees: the Go
+implementation released as `v0.1.0`, and the `v0.2.0` Rust workspace under
+`crates/`. Work on a feature branch off `main`, open a pull request, and squash
+merge it. Never commit to `main` directly, including for a one-line fix.
+Conventional commit subjects. The `scm` skill has the branch names, the pull
+request body, and the merge rules.
 </principle>
 
 <principle name="no_ai_attribution">
@@ -202,11 +202,8 @@ with `lints.workspace = true`. Two of them encode principles from this file:
 `unwrap_used` is denied outside tests.
 
 `.claude/settings.json` enables the `rust-analyzer-lsp` plugin, so the `LSP`
-tool answers `goToDefinition`, `findReferences`, `hover`, and the call
-hierarchy over the workspace. Use it instead of grepping for a symbol: a
-grep finds every string that looks like the name, and rust-analyzer finds the
-one definition that is actually in scope. It is declared in the repository
-rather than left to each person's global settings, so a fresh clone gets it.
+tool has code intelligence over the workspace. The `rust` skill says what it
+answers and what to do when the server fails to start.
 
 </build>
 

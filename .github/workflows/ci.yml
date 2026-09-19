@@ -1,10 +1,31 @@
 name: CI
 
+# CI for the v0.1.0 Go tree, which stays until M9 because the compat corpus
+# diffs against it. The path filter keeps it off Rust-only changes; `rust.yml`
+# covers those.
 on:
   push:
     branches: [main]
+    # Repeated below rather than shared with a YAML anchor, which GitHub
+    # Actions does not expand.
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "testdata/**"
+      - "go.mod"
+      - "go.sum"
+      - ".golangci.yml"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "testdata/**"
+      - "go.mod"
+      - "go.sum"
+      - ".golangci.yml"
+      - ".github/workflows/ci.yml"
 
 permissions:
   contents: read
