@@ -1,6 +1,6 @@
 ---
 name: scm
-description: Branch, commit, pull request, and merge conventions for this repository. Covers the two long-lived branches, feature branches, squash merges, commit message format, what a pull request body must contain, and the ban on AI attribution in any git or GitHub text. Load before creating a branch, writing a commit, opening a pull request, or merging.
+description: Branch, commit, pull request, and merge conventions for this repository. Covers the single long-lived branch and its path-filtered CI, feature branches, squash merges, how to judge a red check, commit message format, what a pull request body must contain, and the ban on AI attribution in any git or GitHub text. Load before creating a branch, writing a commit, opening a pull request, or merging.
 ---
 
 # Source control

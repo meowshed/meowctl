@@ -1,6 +1,6 @@
 ---
 name: rust
-description: Rust conventions for the meowctl v0.2.0 workspace - crate boundaries, effects behind traits, operations as data, error handling with thiserror and miette, the Starlark bridge, diagnostics through the event stream, testing with nextest and insta, and the lints this repository enforces. Load before writing or reviewing Rust code here.
+description: Rust conventions for the meowctl v0.2.0 workspace - crate boundaries, effects behind traits, operations as data, error handling with thiserror and miette, the Starlark bridge, code intelligence through rust-analyzer, diagnostics through the event stream, testing with nextest and insta, and the lints this repository enforces. Load before writing or reviewing Rust code here.
 ---
 
 # Rust in this workspace
