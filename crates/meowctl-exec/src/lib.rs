@@ -181,14 +181,40 @@ pub(crate) fn lines(text: &str) -> impl Iterator<Item = &str> {
 }
 
 /// Looks a program up on `PATH`, for implementations that need it.
+///
+/// A name containing a separator is a path and is used as written. Otherwise
+/// each directory on `PATH` is tried, and on Windows each extension in
+/// `PATHEXT` as well: an executable there is `cmd.exe`, not `cmd`, so a
+/// lookup that only tried the bare name would report every program missing.
 pub(crate) fn find_on_path(program: &str) -> Option<PathBuf> {
     if program.contains(std::path::MAIN_SEPARATOR) {
         let path = Path::new(program);
         return path.is_file().then(|| path.to_path_buf());
     }
     let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path).find_map(|dir| {
-        let candidate = dir.join(program);
+    std::env::split_paths(&path).find_map(|dir| executable_in(&dir, program))
+}
+
+/// The program in this directory, with the platform's extensions tried.
+#[cfg(not(windows))]
+fn executable_in(dir: &Path, program: &str) -> Option<PathBuf> {
+    let candidate = dir.join(program);
+    candidate.is_file().then_some(candidate)
+}
+
+#[cfg(windows)]
+fn executable_in(dir: &Path, program: &str) -> Option<PathBuf> {
+    let bare = dir.join(program);
+    if bare.is_file() {
+        return Some(bare);
+    }
+    let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_owned());
+    pathext.split(';').find_map(|ext| {
+        let ext = ext.trim();
+        if ext.is_empty() {
+            return None;
+        }
+        let candidate = dir.join(format!("{program}{ext}"));
         candidate.is_file().then_some(candidate)
     })
 }

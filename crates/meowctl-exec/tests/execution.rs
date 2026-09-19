@@ -146,6 +146,19 @@ fn a_skipped_command_reports_success() {
     assert!(got.succeeded());
 }
 
+/// A component writes `cmd`, not `cmd.exe`, so resolving the extension is the
+/// lookup's job. Windows-only, because it is the only platform with the
+/// problem.
+#[cfg(windows)]
+#[test]
+fn a_windows_program_resolves_without_its_extension() {
+    let exec = RealExecutor::new();
+    assert!(
+        exec.which("cmd").expect("which").is_some(),
+        "cmd should resolve to cmd.exe"
+    );
+}
+
 /// [R-EXEC-032] asking whether a tool exists is a question, not an assertion.
 #[test]
 fn which_answers_absent_rather_than_failing() {
@@ -183,6 +196,10 @@ fn a_missing_program_is_named() {
 
 /// The real executor is exercised once, against a command every platform in
 /// the matrix has, so the capture path is not only tested through a double.
+///
+/// On Windows the program is named without its extension on purpose: that is
+/// how a component writes it, and resolving `cmd` to `cmd.exe` is the lookup's
+/// job rather than the caller's.
 #[test]
 fn the_real_executor_captures_output() {
     let exec = RealExecutor::new();
