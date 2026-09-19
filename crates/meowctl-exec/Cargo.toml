@@ -1,0 +1,15 @@
+[package]
+name = "meowctl-exec"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Subprocess execution and terminal hand-off for meowctl"
+
+[dependencies]
+meowctl-common = { path = "../meowctl-common" }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
