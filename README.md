@@ -37,7 +37,7 @@ Go-based successor to the `.meow` shell scripting system.
 Install tools and run common tasks via [mise](https://mise.jdx.dev):
 
 ```sh
-mise install          # install Go, golangci-lint, opencode
+mise install          # install Go and golangci-lint
 mise run build        # build bin/meowctl
 mise run test         # run tests
 mise run lint         # run golangci-lint
