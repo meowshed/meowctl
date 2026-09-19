@@ -2,7 +2,8 @@
 
 **Crate:** `meowctl-ops`
 **Design:** `docs/design/0.2.0-rust-rewrite.md` §3
-**v0.1.0 equivalent:** `internal/rollback/` plus the effectful half of `internal/ctx/methods.go`
+**v0.1.0 equivalent:** `internal/rollback/` plus the effectful half of
+`internal/ctx/methods.go`
 
 ## Scope
 
@@ -146,8 +147,12 @@ field names, so a journal left by one binary is readable by the other.
 Three things change. [R-OPS-017] journals `defaults_write` and `plist_set`,
 which `v0.1.0` applies unjournaled; a `v0.1.0` binary replaying a `v0.2.0`
 journal containing one of them will report "inverse not implemented" and carry
-on, which is the same outcome it reaches today by having no record at all. `v0.1.0` performs an effect in `internal/ctx` and journals it
-through a separate `Append*` call, so the two can disagree; here they are one
-value. And `v0.1.0` has no property test that apply-then-undo restores the
-tree, which is why [R-OPS-004] is written as an obligation on every variant
+on, which is the same outcome it reaches today by having no record at all.
+
+The second is structural. `v0.1.0` performs an effect in `internal/ctx` and
+journals it through a separate `Append*` call, so the two can disagree; here
+they are one value.
+
+The third is what proves it. `v0.1.0` has no test that apply-then-undo restores
+the tree, which is why [R-OPS-004] is written as an obligation on every variant
 rather than on the ones somebody remembered to check.
