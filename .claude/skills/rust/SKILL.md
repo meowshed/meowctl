@@ -201,6 +201,21 @@ Use `proptest` where a round trip should hold: apply-then-undo over `MemFs`,
 config parse-then-write, and the Starlark editor preserving comments and
 formatting.
 
+The test matrix runs on Linux, macOS, and Windows, and the gate above only
+proves one of them. Code behind `#[cfg(unix)]` is the usual way a change passes
+locally and fails on Windows: the other branch stops using a variable, and
+`-D warnings` turns that into an error. Check it before pushing rather than
+after:
+
+```sh
+rustup target add x86_64-pc-windows-msvc   # once
+cargo check --workspace --target x86_64-pc-windows-msvc
+```
+
+Write the non-Unix branch as behaviour rather than as a stub. A platform that
+cannot do what the code needs should say so and fail; silently skipping the
+work gives a green test over a machine in a state nobody asked for.
+
 Test the failure paths as carefully as the success path. A hook that exits
 non-zero mid-phase, a tarball whose hash does not match, a lock file from a
 newer schema version, and a module bumped since the last apply are where the

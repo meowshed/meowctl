@@ -606,9 +606,7 @@ fn copy_dir(from: &Path, to: &Path) -> Result<()> {
         if meta.is_dir() {
             fs::create_dir_all(&target)?;
         } else if meta.is_symlink() {
-            let link = fs::read_link(entry.path())?;
-            #[cfg(unix)]
-            std::os::unix::fs::symlink(link, &target)?;
+            copy_symlink(&fs::read_link(entry.path())?, &target)?;
         } else {
             if let Some(parent) = target.parent() {
                 fs::create_dir_all(parent)?;
@@ -617,6 +615,30 @@ fn copy_dir(from: &Path, to: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Reproduces a symlink in the sandbox rather than following it, because a
+/// configuration that symlinks a component directory is a case the corpus has
+/// to cover.
+///
+/// Windows is refused rather than silently skipped. Creating a symlink there
+/// needs a privilege the runner does not have by default, and a sandbox whose
+/// symlinks quietly became regular files would make the corpus compare
+/// something other than the configuration it was given.
+#[cfg(unix)]
+fn copy_symlink(link: &Path, target: &Path) -> Result<()> {
+    std::os::unix::fs::symlink(link, target)
+        .with_context(|| format!("linking {} -> {}", target.display(), link.display()))
+}
+
+#[cfg(not(unix))]
+fn copy_symlink(link: &Path, target: &Path) -> Result<()> {
+    bail!(
+        "the corpus copies symlinks and this platform does not support creating them \
+         unprivileged: {} -> {}",
+        target.display(),
+        link.display()
+    )
 }
 
 fn tempdir() -> Result<PathBuf> {
