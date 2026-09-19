@@ -1,14 +1,32 @@
-# CI for the v0.2.0 Rust tree. The Go tree keeps `ci.yml`, which is unchanged:
-# v0.1.0 stays buildable until M9 because the compat corpus diffs against it.
+# CI for the v0.2.0 Rust tree. Both trees live on `main`, so the path filter is
+# what keeps this workflow off Go-only changes and `ci.yml` off Rust-only ones.
+# Neither tree pays for the other, and v0.1.0 stays buildable until M9 because
+# the compat corpus diffs against it.
 name: Rust
 
 on:
   push:
-    branches: [main, rust-rewrite]
-    paths-ignore: ["**.md"]
+    branches: [main]
+    # Repeated below rather than shared with a YAML anchor, which GitHub
+    # Actions does not expand.
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "clippy.toml"
+      - "deny.toml"
+      - ".github/workflows/rust.yml"
   pull_request:
-    branches: [main, rust-rewrite]
-    paths-ignore: ["**.md"]
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "clippy.toml"
+      - "deny.toml"
+      - ".github/workflows/rust.yml"
 
 concurrency:
   group: rust-${{ github.ref }}
