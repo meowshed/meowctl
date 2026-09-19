@@ -1,0 +1,17 @@
+[package]
+name = "meowctl-fs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "The filesystem effects meowctl performs, behind one trait"
+
+[dependencies]
+meowctl-common = { path = "../meowctl-common" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
