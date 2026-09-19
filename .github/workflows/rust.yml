@@ -16,6 +16,7 @@ on:
       - "rust-toolchain.toml"
       - "clippy.toml"
       - "deny.toml"
+      - "tests/compat/**"
       - ".github/workflows/rust.yml"
   pull_request:
     branches: [main]
@@ -26,6 +27,7 @@ on:
       - "rust-toolchain.toml"
       - "clippy.toml"
       - "deny.toml"
+      - "tests/compat/**"
       - ".github/workflows/rust.yml"
 
 concurrency:
@@ -132,6 +134,39 @@ jobs:
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
+
+  # Checks the corpus harness rather than the rewrite: the committed fixtures
+  # must still match what the v0.1.0 binary does. A failure means the fixtures
+  # drifted from the oracle, which would make every later comparison meaningless.
+  compat:
+    name: Compatibility corpus
+    # macOS because the fixtures are recorded there. The corpus compares two
+    # binaries on one machine, so a macOS recording checked on Linux would
+    # report platform differences as rewrite defects. Linux fixtures get
+    # recorded when somebody works on Linux.
+    runs-on: macos-latest
+    needs: fmt
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build the v0.1.0 oracle
+        run: CGO_ENABLED=0 go build -o bin/meowctl ./cmd/meowctl
+
+      - name: Check the fixtures against it
+        run: MEOWCTL_COMPAT_SUBJECT=$PWD/bin/meowctl cargo xtask compat check
 
   unused-deps:
     name: Unused dependencies
