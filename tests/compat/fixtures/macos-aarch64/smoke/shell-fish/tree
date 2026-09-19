@@ -1,0 +1,10 @@
+  config
+  config/components
+a3ef1d2bad7fd0143ad223f0d175517ec3b1855a55d4a9f76329e11281b8d0e1  config/components/base.star
+be5725d5c745a58f6d61593353c08a66c7efc81dfe9f7c549083e9aa86303096  config/components/fakepm.star
+30c8c42349561a466a9e5176e34a8673964865722e6183aa097e18fb2918c805  config/components/packaged.star
+0ea6c895f7a9a19c0a7b04bc61bde3ce93dd40ec772bc65e03a49f8a8689f1a0  config/components/shellbits.star
+41415740bc9ef21a9481698f463da5ad439cba867b7d5ce1d5f8f98fe89d68e9  config/components/tool.star
+27b789054998fd07ef410fa5d7bfdea6032b091970d4ec079ff61c60ccf97ca1  config/init.star
+ee304c3542b60bb7a2dc19413731c21c3dd6dddee3fbe435c1efa28b145b318c  config/local.star
+  home
