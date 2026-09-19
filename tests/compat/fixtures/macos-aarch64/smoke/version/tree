@@ -8,4 +8,3 @@ be5725d5c745a58f6d61593353c08a66c7efc81dfe9f7c549083e9aa86303096  config/compone
 27b789054998fd07ef410fa5d7bfdea6032b091970d4ec079ff61c60ccf97ca1  config/init.star
 ee304c3542b60bb7a2dc19413731c21c3dd6dddee3fbe435c1efa28b145b318c  config/local.star
   home
-  home/.cache

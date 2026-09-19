@@ -583,6 +583,9 @@ fn read_observation(dir: &Path) -> Result<Observation> {
 /// compare a third-party tool's bookkeeping instead of the rewrite, and none
 /// of it is reproducible between two runs seconds apart.
 ///
+/// The list also covers the module cache the harness links into the sandbox
+/// home, which exists only on a machine that has fetched a module.
+///
 /// The exclusion is by directory name rather than by path, and the list is
 /// short on purpose. It hides a real effect if meowctl ever writes into one of
 /// these, which is worth knowing; the configuration directory, where meowctl
@@ -606,17 +609,11 @@ fn hash_tree(root: &Path, home: &Path, config: &Path) -> Result<BTreeMap<String,
         let rel = path.strip_prefix(root)?.to_string_lossy().into_owned();
         let meta = entry.path().symlink_metadata()?;
 
-        // A directory a third-party tool owns is recorded as existing and not
-        // descended into, so the corpus still notices if one appears or
-        // disappears.
-        if meta.is_dir()
-            && path
-                .file_name()
-                .is_some_and(|n| VOLATILE_DIRS.contains(&n.to_string_lossy().as_ref()))
-        {
-            tree.insert(rel, String::new());
-            continue;
-        }
+        // Skipped outright, not recorded as existing. Whether one of these is
+        // there at all depends on the machine: the harness links the module
+        // cache into the sandbox home only when the machine has one, so
+        // recording its existence made a fixture that passed where a cache was
+        // present and failed where it was not.
         if path
             .ancestors()
             .filter_map(Path::file_name)
