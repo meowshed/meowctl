@@ -94,6 +94,11 @@ read stdin directly; see [R-TUI-060].
 string and `render_file(src, dst, vars)` MUST render a file into a destination,
 journaling the write.
 
+**[R-CTX-028]** `append_file(dst, content, marker = None)` MUST accept a
+caller-supplied marker and MUST generate one when it is absent. A component
+that re-runs with the same marker replaces its own block rather than appending
+a second copy, which is why the argument exists; see [R-OPS-011].
+
 ## Restricted contexts
 
 **[R-CTX-030]** In a read-only phase, `ctx` MUST expose no mutating method. The

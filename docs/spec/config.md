@@ -36,6 +36,11 @@ resolved by `meowctl-common`; see [R-COMMON-020].
 [R-FS-003]. These files are read by the next run and by a second binary, and a
 partial one is indistinguishable from a valid one that lost data.
 
+`v0.1.0` is atomic for `deps.lock` and `state.toml` and is not for `deps.mod`,
+which `internal/modfile/modfile.go` writes with a plain `os.WriteFile`. Making
+all of them atomic is a deliberate change: a `deps.mod` truncated by a crash
+during `meowctl dep add` leaves a configuration that does not parse.
+
 **[R-CONFIG-003]** A file that does not exist MUST parse as its empty value
 where `v0.1.0` treats it that way: an absent lock file is a clean slate, an
 absent `state.toml` is a first run, an absent `local.star` is no local
@@ -65,13 +70,27 @@ never neither.
 regular-expression rewriter; here it is required so the two binaries produce
 identical files.
 
+**[R-CONFIG-014]** A written `deps.mod` MUST reproduce `modfile.Write` byte for
+byte: the header comment, `module()` across four lines with indented keyword
+arguments, each `dep()` on one line, a blank line after the dependency block,
+and each `replace()` on one line.
+
+The header `v0.1.0` writes names the file `meowctl.mod`, which the rename to
+`deps.mod` left behind. The text MUST be reproduced as it is, because the file
+is compared byte for byte; correcting it is a `0.3.0` change that costs a
+corpus rebaseline and buys a comment nobody reads.
+
 ## Lock files
 
 **[R-CONFIG-020]** `deps.lock` MUST be TOML with the four tables
 `internal/lock/lock.go` defines: `meta`, `modules`, `github-modules`, and
 `packages`. A module entry MUST carry `version`, `source`, `integrity`,
 `files`, and optionally `commit-sha`, `replaced`, and `path`, under exactly
-those key names.
+those key names and in that order.
+
+A `github-modules` entry MUST carry `commit` and `integrity`. A `packages`
+entry is keyed by manager, then by package, and MUST carry `requested`,
+`installed`, and optionally `note`.
 
 **[R-CONFIG-021]** `files` MUST map each extracted path, relative to the module
 root, to its own integrity hash, so a cached module can be verified file by
@@ -175,8 +194,10 @@ Every schema, key name, and default in this spec is read from the Go source:
 `internal/cli/apply.go` for `installed.lock` and `pkgs.lock`, which have no
 package of their own.
 
-Three requirements deliberately change behaviour. [R-CONFIG-041] refuses to
-overwrite a newer `state.toml`, where `v0.1.0` overwrites it. [R-CONFIG-051]
-replaces regular-expression editing with parsing, which removes the documented
-keyword-order limitation. [R-CONFIG-052] reports a missed edit, where
-`AppendComponent` in `internal/rewrite/rewrite.go` can append a duplicate.
+Four requirements deliberately change behaviour. [R-CONFIG-002] makes
+`deps.mod` writes atomic, where `internal/modfile/modfile.go` uses a plain
+`os.WriteFile`. [R-CONFIG-041] refuses to overwrite a newer `state.toml`, where
+`v0.1.0` overwrites it. [R-CONFIG-051] replaces regular-expression editing with
+parsing, which removes the documented keyword-order limitation. [R-CONFIG-052]
+reports a missed edit, where `AppendComponent` in `internal/rewrite/rewrite.go`
+can append a duplicate.
