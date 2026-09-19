@@ -133,6 +133,20 @@ struct Case {
     name: &'static str,
     /// Configuration directory, relative to the repository root.
     config: PathBuf,
+    /// Whether this configuration's hooks are safe to execute.
+    ///
+    /// True only for a configuration written for the corpus, whose hooks are
+    /// in this repository and touch nothing outside the sandbox. A
+    /// configuration belonging to a person runs their components, and a
+    /// component may do anything a command can do.
+    hooks_are_ours: bool,
+}
+
+impl Case {
+    /// Whether this command may run against this configuration.
+    fn may_run(&self, inv: &Invocation) -> bool {
+        self.hooks_are_ours || !inv.runs_hooks
+    }
 }
 
 /// One command, with the slug its fixtures are stored under.
@@ -141,61 +155,77 @@ struct Invocation {
     args: &'static [&'static str],
     /// True when stdout is a machine interface and must match byte for byte.
     stdout_is_interface: bool,
+    /// True when the command evaluates a component's hooks.
+    ///
+    /// A hook runs whatever the configuration tells it to. The standard
+    /// library's `verify` hooks call `open -a <App>` to check an application
+    /// is installed, so running one against somebody's real configuration
+    /// launches their applications. That happened once, and this flag is what
+    /// stops it; see [`Case::may_run`].
+    runs_hooks: bool,
 }
 
+/// `verify` is deliberately absent. Its whole job is to execute a component's
+/// verification hook, and in the standard library that means launching the
+/// application being verified. There is no version of that which is polite to
+/// run repeatedly, so the corpus does not run it at all; `apply --dry-run`
+/// already covers evaluation, the graph, and planning.
 const INVOCATIONS: &[Invocation] = &[
     Invocation {
         slug: "version",
         args: &["version"],
         stdout_is_interface: false,
+        runs_hooks: false,
     },
     Invocation {
         slug: "status",
         args: &["status"],
         stdout_is_interface: false,
+        runs_hooks: false,
     },
     Invocation {
         slug: "doctor-json",
         args: &["doctor", "--json"],
         stdout_is_interface: true,
+        runs_hooks: false,
     },
     Invocation {
         slug: "dep-list",
         args: &["dep", "list"],
         stdout_is_interface: false,
+        runs_hooks: false,
     },
     Invocation {
         slug: "apply-dry-run",
         args: &["apply", "--dry-run"],
         stdout_is_interface: false,
-    },
-    Invocation {
-        slug: "verify",
-        args: &["verify"],
-        stdout_is_interface: false,
+        runs_hooks: true,
     },
     Invocation {
         slug: "shell-fish",
         args: &["shell", "fish"],
         stdout_is_interface: true,
+        runs_hooks: true,
     },
     Invocation {
         slug: "shell-zsh",
         args: &["shell", "zsh"],
         stdout_is_interface: true,
+        runs_hooks: true,
     },
     Invocation {
         slug: "shell-bash",
         args: &["shell", "bash"],
         stdout_is_interface: true,
+        runs_hooks: true,
     },
     Invocation {
         slug: "shell-posix",
         args: &["shell", "posix"],
         stdout_is_interface: true,
+        runs_hooks: true,
     },
 ];
-
 /// What one command produced. Everything here is compared except `stdout`,
 /// which is compared only when the invocation says it is an interface.
 #[derive(Debug, PartialEq, Eq)]
@@ -223,6 +253,7 @@ fn cases(root: &Path) -> Result<Vec<Case>> {
     let mut cases = vec![Case {
         name: "smoke",
         config: root.join("tests/compat/configs/smoke"),
+        hooks_are_ours: true,
     }];
 
     if let Ok(extra) = std::env::var("MEOWCTL_COMPAT_EXTRA") {
@@ -233,6 +264,7 @@ fn cases(root: &Path) -> Result<Vec<Case>> {
         cases.push(Case {
             name: "extra",
             config: path,
+            hooks_are_ours: false,
         });
     }
 
@@ -280,12 +312,17 @@ pub fn list() -> Result<bool> {
     for case in cases(&root)? {
         println!("{} ({})", case.name, case.config.display());
         for inv in INVOCATIONS {
-            let marker = if inv.stdout_is_interface {
+            let compared = if inv.stdout_is_interface {
                 " [stdout compared]"
             } else {
                 ""
             };
-            println!("    meowctl {}{marker}", inv.args.join(" "));
+            let skipped = if case.may_run(inv) {
+                ""
+            } else {
+                "  -- skipped: it would run your hooks"
+            };
+            println!("    meowctl {}{compared}{skipped}", inv.args.join(" "));
         }
     }
     Ok(true)
@@ -297,7 +334,7 @@ pub fn record() -> Result<bool> {
     let fixtures = root.join("tests/compat/fixtures").join(platform_key());
 
     for case in cases(&root)? {
-        for inv in INVOCATIONS {
+        for inv in INVOCATIONS.iter().filter(|i| case.may_run(i)) {
             let observed = run(&binary, &case, inv)?;
             let dir = fixtures.join(case.name).join(inv.slug);
             write_observation(&dir, &observed)?;
@@ -320,7 +357,7 @@ pub fn check() -> Result<bool> {
 
     let mut failures = 0usize;
     for case in cases(&root)? {
-        for inv in INVOCATIONS {
+        for inv in INVOCATIONS.iter().filter(|i| case.may_run(i)) {
             let dir = fixtures.join(case.name).join(inv.slug);
             if !dir.is_dir() {
                 println!(
@@ -365,8 +402,15 @@ fn run(binary: &Path, case: &Case, inv: &Invocation) -> Result<Observation> {
         .with_context(|| format!("copying the {} configuration", case.name))?;
 
     // Everything meowctl might write lands under the sandbox. The module cache
-    // is the one thing shared with the machine, read-only in practice, so a run
-    // needs no network; see R-MODULE-043.
+    // is the one thing shared with the machine, so a run needs no network; see
+    // R-MODULE-043.
+    //
+    // It is shared by linking it into the sandbox home rather than through
+    // XDG_CACHE_HOME, because v0.1.0's `cacheDir` ignores that variable and
+    // always looks under $HOME. Only the meowctl subdirectory is linked, so
+    // nothing else in the real cache is reachable from the sandbox.
+    link_module_cache(&home)?;
+
     let mut cmd = Command::new(binary);
     cmd.arg("--config")
         .arg(&config)
@@ -374,7 +418,6 @@ fn run(binary: &Path, case: &Case, inv: &Invocation) -> Result<Observation> {
         .env_clear()
         .env("HOME", &home)
         .env("PATH", std::env::var("PATH").unwrap_or_default())
-        .env("XDG_CACHE_HOME", real_cache_home())
         .env("MEOWCTL_OUTPUT", "plain")
         .env("NO_COLOR", "1")
         .env("TERM", "dumb")
@@ -394,14 +437,30 @@ fn run(binary: &Path, case: &Case, inv: &Invocation) -> Result<Observation> {
     Ok(observation)
 }
 
-fn real_cache_home() -> PathBuf {
-    if let Ok(x) = std::env::var("XDG_CACHE_HOME") {
-        return PathBuf::from(x);
+/// Links the machine's module cache into the sandbox home, so a module the
+/// configuration depends on is already there and the run needs no network.
+///
+/// Absent on a machine that has never fetched a module, which is fine: a
+/// configuration with no dependencies never looks, and one with dependencies
+/// fails the same way under both binaries.
+fn link_module_cache(home: &Path) -> Result<()> {
+    let Some(real) = real_module_cache() else {
+        return Ok(());
+    };
+    if !real.is_dir() {
+        return Ok(());
     }
-    match std::env::var("HOME") {
-        Ok(h) => PathBuf::from(h).join(".cache"),
-        Err(_) => PathBuf::from("/tmp"),
-    }
+    let cache = home.join(".cache");
+    fs::create_dir_all(&cache)?;
+    copy_symlink(&real, &cache.join("meowctl"))
+}
+
+/// Where `v0.1.0` keeps its module cache: `$HOME/.cache/meowctl`, with no
+/// `XDG_CACHE_HOME` in it; see `cacheDir` in `internal/cli/sync.go`.
+fn real_module_cache() -> Option<PathBuf> {
+    std::env::var("HOME")
+        .ok()
+        .map(|h| PathBuf::from(h).join(".cache").join("meowctl"))
 }
 
 fn diff(expected: &Observation, observed: &Observation, compare_stdout: bool) -> Vec<String> {
@@ -517,6 +576,22 @@ fn read_observation(dir: &Path) -> Result<Observation> {
     })
 }
 
+/// Directory names whose contents are not meowctl's effects.
+///
+/// A hook runs real commands, and those commands write their own state:
+/// Homebrew's API cache, `gh`'s device id. Recording them makes the corpus
+/// compare a third-party tool's bookkeeping instead of the rewrite, and none
+/// of it is reproducible between two runs seconds apart.
+///
+/// The list also covers the module cache the harness links into the sandbox
+/// home, which exists only on a machine that has fetched a module.
+///
+/// The exclusion is by directory name rather than by path, and the list is
+/// short on purpose. It hides a real effect if meowctl ever writes into one of
+/// these, which is worth knowing; the configuration directory, where meowctl
+/// actually writes, is never excluded.
+const VOLATILE_DIRS: &[&str] = &[".cache", "Caches", "state"];
+
 /// Every path under `root`, with a content hash per file. Symlinks are
 /// recorded by their target rather than followed, because a symlink meowctl
 /// created is the effect being checked.
@@ -533,6 +608,19 @@ fn hash_tree(root: &Path, home: &Path, config: &Path) -> Result<BTreeMap<String,
         }
         let rel = path.strip_prefix(root)?.to_string_lossy().into_owned();
         let meta = entry.path().symlink_metadata()?;
+
+        // Skipped outright, not recorded as existing. Whether one of these is
+        // there at all depends on the machine: the harness links the module
+        // cache into the sandbox home only when the machine has one, so
+        // recording its existence made a fixture that passed where a cache was
+        // present and failed where it was not.
+        if path
+            .ancestors()
+            .filter_map(Path::file_name)
+            .any(|n| VOLATILE_DIRS.contains(&n.to_string_lossy().as_ref()))
+        {
+            continue;
+        }
 
         let hash = if meta.is_symlink() {
             format!("symlink:{}", fs::read_link(path)?.display())

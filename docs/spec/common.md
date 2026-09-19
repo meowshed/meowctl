@@ -87,13 +87,25 @@ set, then `$XDG_CONFIG_HOME/meowctl`, then `~/.config/meowctl`, in that order.
 The `--config` flag overrides all of them; see [R-CLI-004].
 
 **[R-COMMON-021]** The module cache directory MUST resolve to
-`$XDG_CACHE_HOME/meowctl/modules`, falling back to
-`~/.cache/meowctl/modules`.
+`$XDG_CACHE_HOME/meowctl/modules`, falling back to `~/.cache/meowctl/modules`.
+
+`cacheDir` in `internal/cli/sync.go` uses the fallback unconditionally and
+never reads `$XDG_CACHE_HOME`, so a machine that relocates its cache still has
+`v0.1.0` writing to the default. Honouring the variable is a deliberate change,
+and it is why the compatibility corpus cannot share a cache with `v0.1.0`
+through that variable.
 
 **[R-COMMON-022]** Path resolution MUST expand a leading `~` to the home
-directory and MUST reject a relative path, matching `requirePath` and
-`expandPath` in `internal/ctx/methods.go`. A path that escapes the directory it
+directory, matching `expandPath` in `internal/ctx/methods.go`, and MUST reject
+a path that is not absolute once expanded. A path that escapes the directory it
 was resolved against MUST be rejected rather than silently normalised.
+
+`requirePath` rejects only the empty string, so `v0.1.0` accepts a relative
+path and resolves it against whatever the process working directory happens to
+be. A hook has no defined working directory, so that result is unpredictable;
+refusing is a deliberate change. `~user` is refused for the same reason:
+`expandPath` passes it through, which creates a directory literally named
+`~user`.
 
 ## Errors and exit codes
 
@@ -155,8 +167,10 @@ used `string` for a component, a phase, and a module key alike, and
 `internal/lifecycle` declared a `ComponentID` alias that was still a string
 underneath.
 
-This spec deliberately changes one thing. `v0.1.0` resolves the config
-directory in `internal/cli/config.go` and the cache directory in
-`internal/cli/sync.go`, and neither consults `$MEOWCTL_CONFIG`.
-[R-COMMON-020] adds that variable, because the compat corpus needs to point two
-binaries at the same configuration without a flag on every invocation.
+Three requirements deliberately change behaviour. [R-COMMON-020] adds
+`$MEOWCTL_CONFIG`, which `internal/cli/config.go` does not consult, because the
+compat corpus needs to point two binaries at one configuration without a flag
+on every invocation. [R-COMMON-021] honours `$XDG_CACHE_HOME`, which
+`internal/cli/sync.go` ignores. [R-COMMON-022] refuses a relative path and
+`~user`, both of which `internal/ctx/methods.go` accepts and resolves to
+something the component author did not ask for.
