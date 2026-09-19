@@ -1,0 +1,16 @@
+[package]
+name = "meowctl-xtask"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Developer tasks for meowctl: the v0.1.0 compatibility corpus"
+publish = false
+
+[dependencies]
+anyhow = "1"
+sha2 = "0.10"
+walkdir = "2"
+
+[lints]
+workspace = true
