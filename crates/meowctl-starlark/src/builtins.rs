@@ -200,15 +200,27 @@ pub(crate) fn meowctl_globals(builder: &mut GlobalsBuilder) {
         Ok(NoneType)
     }
 
-    /// Declares this configuration's own module identity.
+    /// Declares a module's identity.
+    ///
+    /// One builtin for three files. `v0.1.0` reads them with three different
+    /// grammars: the evaluator's builtins for `init.star`,
+    /// `internal/modfile`'s for `deps.mod`, and a third set inside the loader
+    /// for `MODULE.meow`, whose `module()` ignores its arguments entirely.
+    /// That third one is why every `MODULE.meow` in the meowshed organisation
+    /// carries `compat` and the other two would reject it.
+    ///
+    /// This accepts the union, which is what lets one evaluator read all
+    /// three; see [R-STAR-006].
     fn module<'v>(
         name: String,
         version: Option<String>,
+        compat: Option<i64>,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> anyhow::Result<NoneType> {
         context(eval)?.accumulator.set_module(ModuleDecl {
             name,
             version: version.unwrap_or_default(),
+            compat,
         });
         Ok(NoneType)
     }

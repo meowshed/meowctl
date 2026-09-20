@@ -55,9 +55,22 @@ named manager.
 `interrogate` on its own evaluation and return what it returns. It is the one
 builtin that runs user code during evaluation; see [R-PM-020].
 
-**[R-STAR-006]** `dep`, `module`, and `replace` MUST record the same
-declarations `deps.mod` carries, so that a `deps.mod` is evaluated rather than
-parsed by a second grammar; see [R-CONFIG-011].
+**[R-STAR-006]** `dep`, `module`, and `replace` MUST read every manifest
+meowctl encounters: a `deps.mod`, which meowctl writes, and a `MODULE.meow`,
+which a module author writes. One grammar for both; see [R-CONFIG-011].
+
+`v0.1.0` has three. The evaluator's builtins read `init.star`;
+`internal/modfile` has its own `module`, `dep` and `replace` for `deps.mod`;
+and `parseModuleMeow*` inside the loader has a third pair for `MODULE.meow`,
+whose `module()` ignores its arguments entirely. That third one is the reason
+every `MODULE.meow` in the meowshed organisation carries `compat` and the
+other two would reject it.
+
+So `module(name, version = "", compat = None)` MUST accept `compat` and record
+it. Recording rather than acting on it: nothing reads it yet, and dropping it
+would leave a module declaring a newer schema indistinguishable from one that
+declares none. This is wider than any single `v0.1.0` reader and narrower than
+none of them, so every manifest that parses today parses here.
 
 **[R-STAR-007]** `platform()` MUST return a struct carrying the operating
 system, the architecture, and, on Linux, the distribution and its `ID_LIKE`
