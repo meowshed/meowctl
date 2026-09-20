@@ -464,10 +464,7 @@ fn remove_symlink_refuses_a_regular_file() {
     let err =
         call(&ctx, Surface::Full, "    ctx.remove_symlink(\"~/real\")").expect_err("should refuse");
     assert!(err.to_string().contains("not a symlink"), "{err}");
-    assert!(
-        world.fs.read(Path::new("/home/u/real")).is_ok(),
-        "still there"
-    );
+    assert!(world.fs.read(&under_home("real")).is_ok(), "still there");
 }
 
 /// [R-CTX-021] asking whether a tool is installed is a question, and a
@@ -535,7 +532,10 @@ fn download_verifies_before_it_writes() {
 fn git_clone_runs_git() {
     let (ctx, world) = build(
         vec![ScriptedRun::ok(
-            "git clone --branch v1 https://h/r /home/u/r",
+            format!(
+                "git clone --branch v1 https://h/r {}",
+                under_home("r").display()
+            ),
             "",
         )],
         ScriptedHttp::new(),
