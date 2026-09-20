@@ -204,6 +204,17 @@ const INVOCATIONS: &[Invocation] = &[
         stdout_is_interface: false,
         runs_hooks: false,
     },
+    // Evaluating every component file the configuration holds, without
+    // calling a hook. It is the broadest check of the evaluator the corpus
+    // can make against somebody's real configuration: a component that
+    // evaluates differently under the two binaries shows up here, and
+    // nothing of theirs runs.
+    Invocation {
+        slug: "check",
+        args: &["check", "{config}/components"],
+        stdout_is_interface: false,
+        runs_hooks: false,
+    },
     Invocation {
         slug: "dep-list",
         args: &["dep", "list"],
@@ -436,10 +447,20 @@ fn run(binary: &Path, case: &Case, inv: &Invocation) -> Result<Observation> {
     // nothing else in the real cache is reachable from the sandbox.
     link_module_cache(&home)?;
 
+    // `{config}` stands for the sandbox's configuration directory, so an
+    // invocation can name a path inside it without knowing where the sandbox
+    // is. `check` is the one that needs it: its argument is a path relative
+    // to the working directory, not to the configuration.
+    let args: Vec<String> = inv
+        .args
+        .iter()
+        .map(|arg| arg.replace("{config}", &config.display().to_string()))
+        .collect();
+
     let mut cmd = Command::new(binary);
     cmd.arg("--config")
         .arg(&config)
-        .args(inv.args)
+        .args(&args)
         .env_clear()
         .env("HOME", &home)
         .env("PATH", std::env::var("PATH").unwrap_or_default())

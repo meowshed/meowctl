@@ -668,6 +668,15 @@ fn check(session: &mut Session<'_>, dir: &std::path::Path) -> CliResult<()> {
     let mut checked = 0usize;
     let mut problems: Vec<String> = Vec::new();
 
+    // A directory that is not there is a mistake in the argument, not a tree
+    // with no components in it.
+    // A general failure rather than a configuration one: the directory is an
+    // argument to this command, not part of anybody's configuration, and
+    // `v0.1.0` exits 1 for it.
+    if !session.fs.exists(dir).unwrap_or(false) {
+        return Err(CliError::General(format!("{} is not there", dir.display())));
+    }
+
     // Recursively, because components are laid out as `<dir>/<name>/init.star`
     // and a flat walk validates nothing; the `fix(check)` commit is why.
     let mut pending = vec![dir.to_path_buf()];

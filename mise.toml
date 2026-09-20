@@ -84,8 +84,8 @@ run = "cargo machete"
 description = "Find dependencies nothing uses"
 
 [tasks.lint-md]
-run = "markdownlint-cli2 '**/*.md' '#target' '#node_modules' '#.claude' '#CLAUDE.md'"
-description = "Lint all Markdown prose (prompt files are excluded: their XML tags are deliberate)"
+run = "markdownlint-cli2 '**/*.md' '#target' '#node_modules' '#.claude' '#CLAUDE.md' '#tests/compat/fixtures'"
+description = "Lint the Markdown we write (prompt files and corpus recordings are not it)"
 
 [tasks.watch]
 run = "cargo watch -x 'clippy --workspace --all-targets'"
