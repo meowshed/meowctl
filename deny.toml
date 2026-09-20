@@ -5,6 +5,23 @@
 version = 2
 yanked = "deny"
 
+# Four crates in starlark-rust's dependency tree carry an "unmaintained"
+# advisory. None is a vulnerability: each says the author stopped maintaining
+# it, which is worth knowing and is not worth failing a build over when the
+# dependency is transitive and we do not choose it.
+#
+# The alternative was to stop using starlark-rust, which is the whole
+# evaluator, or to vendor a patched copy of it, which is a far larger
+# commitment than four upstream crates that still work. Revisit whenever
+# starlark-rust updates: the right fix is theirs to make, and an ignore that
+# outlives its cause is how a security check stops being read.
+ignore = [
+    "RUSTSEC-2023-0089", # atomic-polyfill, via starlark
+    "RUSTSEC-2024-0388", # derivative, via starlark and starlark_syntax
+    "RUSTSEC-2025-0057", # fxhash, via starlark
+    "RUSTSEC-2024-0436", # paste, via starlark
+]
+
 [licenses]
 version = 2
 # meowctl ships under Apache-2.0 as a static binary people install on their own
