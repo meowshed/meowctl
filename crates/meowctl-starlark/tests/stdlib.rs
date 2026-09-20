@@ -207,3 +207,26 @@ fn a_manifest_declares_dependencies_like_a_deps_mod() {
     assert_eq!(result.declarations.deps[0].version, "0.2.17");
     assert_eq!(result.declarations.deps[1].source, "github:o/r@v1");
 }
+
+/// [R-STAR-052] nothing claims to bound an evaluation, which is what the
+/// requirement now says. A test that asserted a bound would be asserting
+/// something no reader could rely on.
+///
+/// What can be checked is the claim underneath it: `starlark-rust` offers no
+/// supported way to stop an evaluation from inside, so the evaluator installs
+/// nothing that pretends to. If a future version adds one, this fails and the
+/// requirement gets revisited rather than quietly staying wrong.
+#[test]
+fn the_evaluator_installs_no_bound_it_cannot_honour() {
+    let source = include_str!("../src/evaluator.rs");
+    for claim in [
+        "set_max_execution_steps",
+        "before_stmt",
+        "set_max_callstack",
+    ] {
+        assert!(
+            !source.contains(claim),
+            "the evaluator reaches for {claim}, so [R-STAR-052] needs rewriting"
+        );
+    }
+}

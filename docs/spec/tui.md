@@ -137,15 +137,25 @@ environment variable is the behaviour to avoid.
 
 ## The theme
 
-**[R-TUI-050]** The palette MUST be loaded as data, with the Catppuccin values
-as the built-in default. A user MUST be able to point at their own.
+**[R-TUI-050]** The palette MUST be data rather than colours at call sites,
+with the Catppuccin values as the built-in default.
+
+An earlier draft added "a user MUST be able to point at their own". No
+loader was built, so [R-TUI-052] -- the malformed file falls back -- had
+nothing to fall back from, and both were requirements with no test because
+there was nothing to test. The half that shipped is the half that mattered
+for the rewrite: the palette is one table and [R-TUI-051] keeps call sites
+naming roles, so pointing at a user file later is a reader, not a
+restructuring.
 
 **[R-TUI-051]** Call sites MUST name a role, never a colour, so the palette
 changes in one place.
 
-**[R-TUI-052]** A theme file that is malformed MUST warn and fall back to the
-default, not fail the command. Nobody's apply should stop because their colours
-are wrong.
+**[R-TUI-052]** *Deferred to 0.3.0 with the user theme file it describes. A
+malformed file MUST warn and fall back to the default rather than failing the
+command, because nobody's apply should stop because their colours are wrong.
+Kept rather than withdrawn: the obligation is right and there is nothing yet
+for it to constrain.*
 
 ## Interaction
 
@@ -176,9 +186,19 @@ and the session that cannot answer it both need to know which was asked.
 MUST NOT abort a run in progress. A closed pipe is normal when output is piped
 into `head`.
 
-**[R-TUI-071]** An event a sink does not recognise MUST be rendered as
-something rather than dropped, so a sink built against an older event set
-degrades instead of hiding work.
+**[R-TUI-071]** Adding a variant to `Event` MUST NOT compile until every sink
+that renders a run handles it.
+
+This replaces a requirement that asked for an unrecognised event to be
+rendered as something rather than dropped. Nothing can be unrecognised:
+`Event` is not `#[non_exhaustive]` and every sink matches it exhaustively, so
+a new variant is a compile error in each one. That is stronger than the
+requirement asked for and leaves it nothing to test, which is how it was
+found -- it was one of the requirements `/verify` reported with no test, and
+the reason turned out to be that there was no test to write.
+
+`ShellSink` is outside this, as [R-TUI-012] says: it renders one variant on
+purpose and is not a rendering of a run.
 
 ## Verification
 

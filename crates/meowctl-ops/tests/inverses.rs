@@ -448,3 +448,39 @@ fn undoing_a_write_of_content_already_there_keeps_the_file() {
 
     assert_eq!(fs.snapshot(), before);
 }
+
+/// [R-OPS-001] the nine a journal carries, and the four that only ever
+/// express an inverse.
+///
+/// The line matters because a journal written by one binary has to replay
+/// under the other, and `v0.1.0` knows only the nine; see [R-OPS-020].
+#[test]
+fn only_the_nine_v0_1_0_knows_are_journalled() {
+    use meowctl_ops::OpKind;
+
+    for kind in [
+        OpKind::WriteFile,
+        OpKind::AppendFile,
+        OpKind::CopyFile,
+        OpKind::Symlink,
+        OpKind::LinkFile,
+        OpKind::Mkdir,
+        OpKind::Download,
+        OpKind::DefaultsWrite,
+        OpKind::PlistSet,
+    ] {
+        assert!(kind.is_journaled(), "{kind:?} should reach a journal");
+    }
+
+    for kind in [
+        OpKind::Remove,
+        OpKind::RemoveDir,
+        OpKind::RestoreBackup,
+        OpKind::Nothing,
+    ] {
+        assert!(
+            !kind.is_journaled(),
+            "{kind:?} is an inverse and would not replay under v0.1.0"
+        );
+    }
+}
