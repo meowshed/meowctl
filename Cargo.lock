@@ -920,6 +920,7 @@ dependencies = [
  "meowctl-common",
  "serde_json",
  "terminal_size",
+ "thiserror",
 ]
 
 [[package]]
