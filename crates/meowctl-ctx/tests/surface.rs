@@ -977,8 +977,9 @@ fn prompt_answers_with_what_the_interaction_said() {
     .expect("the answer arrives");
 }
 
-/// [R-CTX-016] a value reaches a command as the shell spells it: `defaults
-/// write` and `PlistBuddy` both reject Starlark's `True`.
+/// [R-CTX-010] a value reaches a command as the shell spells it: `defaults
+/// write` and `PlistBuddy` both reject Starlark's `True`, so the method has
+/// to render it rather than pass it through.
 #[test]
 fn a_boolean_reaches_a_command_as_the_shell_spells_it() {
     let (ctx, world) = build(
@@ -1047,7 +1048,8 @@ fn dir_lists_the_surface_the_phase_gets() {
     .expect("the shell surface lists itself");
 }
 
-/// [R-CTX-015] `link_file` with no backup given puts the user's file at
+/// [R-OPS-015] and [R-CTX-013]: `link_file` with no backup given puts the
+/// user's file at
 /// `<name>.meowctl-backup` beside it, which is where `v0.1.0` puts it and
 /// therefore where a user who has been through this before will look.
 #[test]
