@@ -1,0 +1,8 @@
+---
+source: crates/meowctl-tui/tests/live.rs
+expression: rendered
+---
+install (1)
+<hide><sync><erase>  ⠋ neovim
+</sync><up><erase><cr>  ✓ neovim
+<show>

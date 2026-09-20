@@ -62,6 +62,12 @@ variables patched by linker flags, and MUST report the version, the target,
 the commit, and the build date, in the form `internal/version/version.go`
 produces.
 
+**[R-CLI-014]** The binary MUST install a handler for interruption and
+suspension that finishes the sink before the process stops, so the cursor is
+restored; see [R-TUI-023]. The handler belongs here because a signal arrives
+at the process, and a sink that installed one would be a library taking a
+process-wide resource.
+
 ## Output
 
 **[R-CLI-020]** Every command MUST write through the sink. A command MUST NOT

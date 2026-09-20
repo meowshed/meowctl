@@ -37,11 +37,12 @@ impl std::io::Write for Captured {
 
 fn caps(colour: ColourDepth, unicode: bool) -> Caps {
     Caps {
-        tty: true,
+        tty: false,
         motion: false,
         unicode,
         colour,
         width: Some(80),
+        height: Some(24),
     }
 }
 

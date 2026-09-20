@@ -63,6 +63,11 @@ pub struct Caps {
     pub colour: ColourDepth,
     /// Its width in columns, when that is known.
     pub width: Option<u16>,
+    /// Its height in rows, when that is known.
+    ///
+    /// Only the live region uses it, to cap itself to the viewport; see
+    /// [R-TUI-020].
+    pub height: Option<u16>,
 }
 
 impl Default for Caps {
@@ -74,6 +79,7 @@ impl Default for Caps {
             unicode: false,
             colour: ColourDepth::None,
             width: None,
+            height: None,
         }
     }
 }
@@ -99,11 +105,11 @@ impl Caps {
     #[must_use]
     pub fn detect(mode: Mode, env: &impl Env) -> Caps {
         let tty = std::io::stdout().is_terminal();
-        let width = tty
-            .then(terminal_size::terminal_size)
-            .flatten()
-            .map(|(w, _)| w.0);
-        Caps::resolve(mode, env, tty, width)
+        let size = tty.then(terminal_size::terminal_size).flatten();
+        Caps {
+            height: size.map(|(_, h)| h.0),
+            ..Caps::resolve(mode, env, tty, size.map(|(w, _)| w.0))
+        }
     }
 
     /// Resolves from facts a test can supply.
@@ -127,6 +133,7 @@ impl Caps {
             unicode: supports_unicode(env),
             colour: colour_depth(env, tty, dumb),
             width,
+            height: None,
         }
     }
 
@@ -140,6 +147,19 @@ impl Caps {
         terminal_size::terminal_size()
             .map(|(w, _)| w.0)
             .or(self.width)
+    }
+
+    /// The height now, for capping the live region to the viewport.
+    ///
+    /// Re-read per frame, like the width; see [R-TUI-025].
+    #[must_use]
+    pub fn current_height(self) -> Option<u16> {
+        if !self.tty {
+            return self.height;
+        }
+        terminal_size::terminal_size()
+            .map(|(_, h)| h.0)
+            .or(self.height)
     }
 }
 
