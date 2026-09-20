@@ -1071,6 +1071,7 @@ name = "meowctl-engine"
 version = "0.2.0-alpha.0"
 dependencies = [
  "meowctl-common",
+ "meowctl-config",
  "meowctl-pm",
  "meowctl-starlark",
  "thiserror",
