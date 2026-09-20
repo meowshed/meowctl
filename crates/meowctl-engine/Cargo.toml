@@ -10,9 +10,19 @@ description = "Discovery, the component graph, the plan, and the runner"
 [dependencies]
 meowctl-common = { path = "../meowctl-common" }
 meowctl-config = { path = "../meowctl-config" }
+meowctl-ctx = { path = "../meowctl-ctx" }
+meowctl-exec = { path = "../meowctl-exec" }
+meowctl-ops = { path = "../meowctl-ops" }
 meowctl-pm = { path = "../meowctl-pm" }
 meowctl-starlark = { path = "../meowctl-starlark" }
+starlark = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+meowctl-fs = { path = "../meowctl-fs" }
+meowctl-net = { path = "../meowctl-net" }
+meowctl-tui = { path = "../meowctl-tui" }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

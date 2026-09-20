@@ -101,9 +101,15 @@ globals from the first rather than re-evaluating.
 ## Phases
 
 **[R-ENGINE-030]** A phase MUST run its hook for every component in order, and
-a hook failure MUST fail the phase. The phase MUST collect every failure rather
-than stopping at the first, and report them together; `PhaseError` carries a
-list.
+MUST stop at the first component that fails.
+
+An earlier draft of this requirement said the opposite: collect every failure
+and report them together. `RunPhase` used to do that, and
+`fix(lifecycle): fail-fast on component failure and trigger rollback` changed
+it, because a component failing early makes every component that depended on
+it fail too -- fifty tools reporting "mise: executable file not found" when
+mise is what failed. `PhaseError` still carries a list because one failure is
+a list of one.
 
 **[R-ENGINE-031]** A phase set MUST run its phases in the order
 [R-COMMON-011] gives, and MUST stop at the first failed phase.
@@ -114,6 +120,21 @@ disabled it, and the outcome MUST be recorded; see [R-OPS-024].
 **[R-ENGINE-033]** A component whose hook is absent MUST be recorded as
 completed, not skipped. Absence means the component has nothing to do in this
 phase, which is a success; see [R-STAR-031].
+
+It MUST also be reported as finishing with nothing to do rather than as
+succeeding, so a reader can tell a component that did work from one that had
+none.
+
+**[R-ENGINE-034]** During a dry run the engine MUST give each phase an
+executor built for that phase, because whether a command runs depends on
+whether the phase is read-only; see [R-EXEC-011]. Choosing an implementation
+per phase is not the same as a method branching on a flag: no code below
+`meowctl-cli` asks whether this is a dry run while it is doing something, and
+[R-CTX-014] still holds.
+
+The engine is the only place that knows both the flag and the phase. The
+command line knows the flag and not the phases; the executor knows the phase
+it was built for and not the flag.
 
 ## Sentinel and staleness
 

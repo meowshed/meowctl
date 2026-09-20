@@ -96,8 +96,24 @@ impl Loader for NoLoader {
 /// knows how to allocate itself on the evaluation's heap. The heap is scoped
 /// to the evaluation, which is why this is a callback rather than a value.
 pub trait HookArgument {
-    /// Allocates the argument.
+    /// Allocates the `ctx` value, which every call takes first.
     fn allocate<'v>(&self, heap: Heap<'v>) -> Value<'v>;
+
+    /// Anything after it, positionally.
+    ///
+    /// Empty for a lifecycle hook, which takes `ctx` alone. A
+    /// package-manager handler takes `install_pkg(ctx, name, version)`; see
+    /// [R-STAR-030] and [R-PM-010].
+    fn positional<'v>(&self, heap: Heap<'v>) -> Vec<Value<'v>> {
+        let _ = heap;
+        Vec::new()
+    }
+
+    /// And by keyword.
+    fn keywords<'v>(&self, heap: Heap<'v>) -> Vec<(String, Value<'v>)> {
+        let _ = heap;
+        Vec::new()
+    }
 }
 
 /// Evaluates configuration files.
@@ -110,7 +126,11 @@ pub struct Evaluator<'a> {
     /// see [R-STAR-023].
     cache: RefCell<HashMap<String, FrozenModule>>,
     /// Where `query_pm` sends its question; see [R-STAR-005].
-    package_managers: Arc<dyn PackageManagers>,
+    ///
+    /// Swappable because `query_pm` passes the asking component's `ctx`, so
+    /// the answer depends on who is asking, while the evaluation cache this
+    /// evaluator holds must survive across components; see [R-STAR-023].
+    package_managers: RefCell<Arc<dyn PackageManagers>>,
 }
 
 impl std::fmt::Debug for Evaluator<'_> {
@@ -133,6 +153,12 @@ pub struct Evaluated {
     pub callables: Vec<String>,
     /// Those bound to a string, with their values; see [R-STAR-033].
     pub strings: BTreeMap<String, String>,
+    /// What a called hook returned, when it returned a list of strings.
+    ///
+    /// `interrogate` returns the packages a manager has installed, and a
+    /// Starlark value cannot leave the heap it was allocated on, so it is
+    /// copied out while the heap is still open; see [R-PM-020].
+    pub returned: Option<Vec<String>>,
     /// Those bound to a list of strings; see [R-STAR-034].
     ///
     /// A list holding anything else is absent rather than partial: a
@@ -157,7 +183,7 @@ impl<'a> Evaluator<'a> {
             platform,
             loader,
             cache: RefCell::new(HashMap::new()),
-            package_managers: Arc::new(NoPackageManagers),
+            package_managers: RefCell::new(Arc::new(NoPackageManagers)),
         }
     }
 
@@ -166,9 +192,17 @@ impl<'a> Evaluator<'a> {
     /// Without it `query_pm` refuses, which is right for an evaluation that
     /// has no components to ask.
     #[must_use]
-    pub fn with_package_managers(mut self, managers: Arc<dyn PackageManagers>) -> Self {
-        self.package_managers = managers;
+    pub fn with_package_managers(self, managers: Arc<dyn PackageManagers>) -> Self {
+        self.set_package_managers(managers);
         self
+    }
+
+    /// Points `query_pm` somewhere else for the calls that follow.
+    ///
+    /// The engine does this per component, because `query_pm` runs a handler
+    /// with the asking component's `ctx`; see [R-PM-020].
+    pub fn set_package_managers(&self, managers: Arc<dyn PackageManagers>) {
+        *self.package_managers.borrow_mut() = managers;
     }
 
     /// Evaluates a file and reports what it declared.
@@ -204,6 +238,27 @@ impl<'a> Evaluator<'a> {
         Ok(called)
     }
 
+    /// Evaluates a file, calls one of its functions, and reports what the
+    /// whole evaluation declared.
+    ///
+    /// The accumulator is per evaluation and the hook runs inside it, so a
+    /// `pkg()` the hook made is in the result alongside the ones the file
+    /// made at its top level. The engine needs both: it dispatches them in
+    /// declaration order; see [R-PM-015].
+    ///
+    /// # Errors
+    ///
+    /// Whatever [`Evaluator::call_hook`] fails with.
+    pub fn call_hook_collecting(
+        &self,
+        name: &str,
+        source: &str,
+        hook: &str,
+        argument: &dyn HookArgument,
+    ) -> StarlarkResult<(Evaluated, bool)> {
+        self.run(name, source, Some(argument), Some(hook))
+    }
+
     /// Evaluates, and optionally calls a hook, inside one heap.
     ///
     /// One function because a module's heap is scoped to a closure: the hook
@@ -219,7 +274,7 @@ impl<'a> Evaluator<'a> {
         let context = Context {
             accumulator: Accumulator::new(),
             platform: self.platform.clone(),
-            package_managers: Arc::clone(&self.package_managers),
+            package_managers: Arc::clone(&self.package_managers.borrow()),
         };
         let loader = CachingLoader {
             inner: self.loader,
@@ -284,6 +339,7 @@ impl<'a> Evaluator<'a> {
                 callables,
                 strings,
                 lists,
+                returned: None,
             };
 
             let Some(hook) = hook else {
@@ -301,16 +357,41 @@ impl<'a> Evaluator<'a> {
                 });
             }
 
-            let arg = argument.map(|a| a.allocate(module.heap()));
+            let mut positional: Vec<Value<'_>> = Vec::new();
+            let mut keywords: Vec<(String, Value<'_>)> = Vec::new();
+            if let Some(argument) = argument {
+                positional.push(argument.allocate(module.heap()));
+                positional.extend(argument.positional(module.heap()));
+                keywords = argument.keywords(module.heap());
+            }
+            let borrowed: Vec<(&str, Value<'_>)> = keywords
+                .iter()
+                .map(|(name, value)| (name.as_str(), *value))
+                .collect();
+
             let mut eval = StarlarkEvaluator::new(&module);
             eval.set_loader(&loader);
             eval.extra = Some(&context);
-            eval.eval_function(function, arg.as_slice(), &[])
+            let returned = eval
+                .eval_function(function, &positional, &borrowed)
                 .map_err(|e| evaluation_error(&e, &loader.chain.borrow()))?;
+
+            // What the function returned, when it returned a list of
+            // strings. `interrogate` does, and the value cannot leave the
+            // heap, so it is copied out here; see [R-PM-020] and
+            // [R-STAR-011].
+            let returned_strings =
+                starlark::values::list::ListRef::from_value(returned).and_then(|items| {
+                    items
+                        .iter()
+                        .map(|item| item.unpack_str().map(str::to_owned))
+                        .collect::<Option<Vec<String>>>()
+                });
 
             Ok((
                 Evaluated {
                     declarations: context.accumulator.declarations(),
+                    returned: returned_strings,
                     ..evaluated
                 },
                 true,
@@ -376,7 +457,7 @@ struct CachingLoader<'a> {
     globals: &'a Globals,
     platform: &'a Platform,
     /// Where a `query_pm` inside a loaded file sends its question.
-    package_managers: &'a Arc<dyn PackageManagers>,
+    package_managers: &'a RefCell<Arc<dyn PackageManagers>>,
     /// The files being loaded, outermost first, for a diagnostic.
     chain: RefCell<Vec<String>>,
 }
@@ -398,7 +479,7 @@ impl FileLoader for CachingLoader<'_> {
         let context = Context {
             accumulator: Accumulator::new(),
             platform: self.platform.clone(),
-            package_managers: Arc::clone(self.package_managers),
+            package_managers: Arc::clone(&self.package_managers.borrow()),
         };
 
         let frozen = Module::with_temp_heap(|module| {

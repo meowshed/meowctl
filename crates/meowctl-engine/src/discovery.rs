@@ -7,6 +7,7 @@
 //! [R-PM-003].
 
 use std::collections::{BTreeMap, VecDeque};
+use std::path::PathBuf;
 
 use meowctl_common::ComponentId;
 use meowctl_pm::{Registration, Registry, scan};
@@ -30,10 +31,13 @@ pub struct Component {
     pub id: ComponentId,
     /// Components it must run after, as written.
     pub after: Vec<String>,
-    /// What the first pass found in its file.
-    ///
-    /// Kept so the second pass calls a hook without evaluating the file
-    /// again; see [R-ENGINE-021].
+    /// The file's source, kept so the second pass calls a hook without
+    /// fetching it again; see [R-ENGINE-021].
+    pub source: String,
+    /// The directory the file came from, which is what `ctx.component_dir`
+    /// reports and what `render_file` reads against; see [R-CTX-003].
+    pub directory: PathBuf,
+    /// What the first pass found in it.
     pub evaluated: Evaluated,
     /// Whether the configuration declared it, or something reached it
     /// through an `after` list.
@@ -114,12 +118,21 @@ pub trait Sources {
     /// When an entry point cannot be read or evaluated.
     fn declared(&self) -> EngineResult<Vec<Declaration>>;
 
-    /// The source of one component's file.
+    /// One component's file: its source, and the directory it came from.
     ///
     /// # Errors
     ///
     /// When it cannot be read.
-    fn source(&self, id: &ComponentId) -> EngineResult<String>;
+    fn source(&self, id: &ComponentId) -> EngineResult<ComponentSource>;
+}
+
+/// Where a component's file is, and what is in it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComponentSource {
+    /// The file's text.
+    pub text: String,
+    /// The directory holding it.
+    pub directory: PathBuf,
 }
 
 /// One `component()` call.
@@ -189,9 +202,9 @@ pub fn discover(
             continue;
         }
 
-        let source = sources.source(&id)?;
+        let found = sources.source(&id)?;
         let evaluated = evaluator
-            .evaluate(&declaration.name, &source)
+            .evaluate(&declaration.name, &found.text)
             .map_err(|e| EngineError::Configuration {
                 path: declaration.name.clone(),
                 reason: e.to_string(),
@@ -217,6 +230,8 @@ pub fn discover(
         let component = Component {
             id: id.clone(),
             after: after.clone(),
+            source: found.text,
+            directory: found.directory,
             evaluated,
             declared,
         };

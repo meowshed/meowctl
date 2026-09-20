@@ -8,7 +8,9 @@
 
 use std::collections::BTreeMap;
 
-use meowctl_engine::{Declaration, EngineError, EngineResult, Graph, Sources, discover};
+use meowctl_engine::{
+    ComponentSource, Declaration, EngineError, EngineResult, Graph, Sources, discover,
+};
 use meowctl_starlark::{LoadedFile, Loader, Platform, StarlarkError, StarlarkResult};
 
 /// A configuration written out as a table.
@@ -44,10 +46,15 @@ impl Sources for Config {
         Ok(self.declared.clone())
     }
 
-    fn source(&self, id: &meowctl_common::ComponentId) -> EngineResult<String> {
+    fn source(&self, id: &meowctl_common::ComponentId) -> EngineResult<ComponentSource> {
         self.files
             .get(id.as_str())
-            .cloned()
+            .map(|text| ComponentSource {
+                text: text.clone(),
+                directory: std::path::Path::new(HOME)
+                    .join("components")
+                    .join(id.logical_name()),
+            })
             .ok_or_else(|| EngineError::Configuration {
                 path: id.as_str().to_owned(),
                 reason: "there is no such file".to_owned(),
@@ -101,4 +108,106 @@ pub fn graph_of(config: &Config, platform: &Platform) -> EngineResult<Graph> {
     let loader = NoLoads;
     let discovered = discover(config, &loader, platform)?;
     Graph::build(&discovered)
+}
+
+/// An absolute home directory for the platform the test runs on.
+///
+/// `/home/u` is not absolute on Windows, and [R-CTX-012] refuses a path that
+/// is not absolute once `~` expands, so a test that hard-coded a Unix path
+/// would fail there for a reason that has nothing to do with the engine.
+#[cfg(unix)]
+pub const HOME: &str = "/home/u";
+#[cfg(not(unix))]
+pub const HOME: &str = r"C:\Users\u";
+
+#[cfg(unix)]
+pub const STATE_ROOT: &str = "/state";
+#[cfg(not(unix))]
+pub const STATE_ROOT: &str = r"C:\state";
+
+/// A world a runner can run against: an in-memory filesystem, a scripted
+/// executor, and a recorder for the events.
+pub struct World {
+    pub fs: std::sync::Arc<meowctl_fs::MemFs>,
+    pub exec: std::sync::Arc<meowctl_exec::ScriptedExecutor>,
+    pub events: std::sync::Arc<std::sync::Mutex<Vec<meowctl_common::Event>>>,
+    pub journal: Option<std::sync::Arc<std::sync::Mutex<meowctl_ops::Journal>>>,
+}
+
+impl World {
+    /// The events, as the sink would have seen them.
+    #[must_use]
+    pub fn seen(&self) -> Vec<meowctl_common::Event> {
+        self.events.lock().expect("the recorder").clone()
+    }
+
+    /// Which components finished, and how.
+    #[must_use]
+    pub fn finished(&self) -> Vec<(String, meowctl_common::Outcome)> {
+        self.seen()
+            .into_iter()
+            .filter_map(|event| match event {
+                meowctl_common::Event::ComponentFinished {
+                    component, outcome, ..
+                } => Some((component.as_str().to_owned(), outcome)),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+/// Builds the effects a runner needs.
+#[must_use]
+pub fn world(
+    runs: Vec<meowctl_exec::ScriptedRun>,
+    journal: Option<std::path::PathBuf>,
+) -> (meowctl_ctx::Effects, World) {
+    use meowctl_fs::FileSystem as _;
+
+    let fs = std::sync::Arc::new(meowctl_fs::MemFs::new());
+    fs.create_dir_all(std::path::Path::new(HOME)).expect("home");
+    let exec = std::sync::Arc::new(meowctl_exec::ScriptedExecutor::new(runs));
+    let events: std::sync::Arc<std::sync::Mutex<Vec<meowctl_common::Event>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorder = std::sync::Arc::clone(&events);
+    let opened = journal.map(|path| {
+        std::sync::Arc::new(std::sync::Mutex::new(
+            meowctl_ops::Journal::open(path).expect("the journal opens"),
+        ))
+    });
+
+    let effects = meowctl_ctx::Effects {
+        fs: std::sync::Arc::clone(&fs) as std::sync::Arc<dyn meowctl_fs::FileSystem + Send + Sync>,
+        exec: std::sync::Arc::clone(&exec)
+            as std::sync::Arc<dyn meowctl_exec::Executor + Send + Sync>,
+        http: std::sync::Arc::new(meowctl_net::ScriptedHttp::new()),
+        interaction: std::sync::Arc::new(std::sync::Mutex::new(meowctl_tui::Always(true))),
+        journal: opened.clone(),
+        events: std::sync::Arc::new(std::sync::Mutex::new(move |event| {
+            recorder.lock().expect("the recorder").push(event);
+        })),
+    };
+
+    (
+        effects,
+        World {
+            fs,
+            exec,
+            events,
+            journal: opened,
+        },
+    )
+}
+
+/// Settings for a run against that world.
+#[must_use]
+pub fn settings(platform: &Platform, rollback: bool) -> meowctl_engine::Settings {
+    meowctl_engine::Settings {
+        home: std::path::PathBuf::from(HOME),
+        state_root: std::path::PathBuf::from(STATE_ROOT),
+        platform: platform.clone(),
+        environment: std::collections::BTreeMap::new(),
+        dry_run: false,
+        rollback,
+    }
 }
