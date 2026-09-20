@@ -9,6 +9,7 @@ description = "Discovery, the component graph, the plan, and the runner"
 
 [dependencies]
 meowctl-common = { path = "../meowctl-common" }
+meowctl-config = { path = "../meowctl-config" }
 meowctl-pm = { path = "../meowctl-pm" }
 meowctl-starlark = { path = "../meowctl-starlark" }
 thiserror = { workspace = true }

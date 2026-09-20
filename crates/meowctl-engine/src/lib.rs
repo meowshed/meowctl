@@ -16,7 +16,9 @@
 mod discovery;
 mod error;
 mod graph;
+mod plan;
 
 pub use discovery::{Component, Declaration, Discovered, Sources, discover};
 pub use error::{EngineError, EngineResult};
 pub use graph::Graph;
+pub use plan::{Inputs, Plan};
