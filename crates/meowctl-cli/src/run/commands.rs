@@ -4,6 +4,7 @@
 //! domain crate, and report. Nothing here decides anything a domain crate
 //! could have decided.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use meowctl_common::{ComponentId, Event, Level, Phase, PhaseSet};
@@ -324,6 +325,86 @@ fn resolve(session: &Session<'_>, loader: &ModuleLoader<'_>) -> CliResult<Discov
     Ok(discover(&sources, loader, &session.platform)?)
 }
 
+/// The components `local.star` declares, by logical name.
+///
+/// Which file a component was declared in decides which of the two package
+/// locks its packages land in, and nothing else needs to know; see
+/// [R-CONFIG-025].
+fn local_declarations(session: &Session<'_>, loader: &dyn Loader) -> CliResult<BTreeSet<String>> {
+    let Ok(bytes) = session.fs.read(&session.layout.local_entry()) else {
+        return Ok(BTreeSet::new());
+    };
+    let Ok(text) = String::from_utf8(bytes) else {
+        return Ok(BTreeSet::new());
+    };
+    let path = session.layout.local_entry();
+    let name = path.display().to_string();
+    let evaluated = Evaluator::new(session.platform.clone(), loader)
+        .evaluate(&name, &text)
+        .map_err(|e| CliError::Configuration {
+            message: format!("{name}: {e}"),
+            span: e.span().cloned(),
+        })?;
+    Ok(evaluated
+        .declarations
+        .components
+        .iter()
+        .map(|decl| ComponentId::logical_of(&decl.name).to_owned())
+        .collect())
+}
+
+/// Records what a run declared in `pkgs.lock` and `pkgs.local.lock`.
+///
+/// Merged into whatever is there rather than replacing it, and a file with
+/// nothing new is left alone, which is what `appendPkgsLock` does. `v0.1.0`
+/// records the constraint as both the requested and the installed version,
+/// because nothing interrogates the manager for what it actually put down;
+/// see [R-CONFIG-025].
+fn record_packages(
+    session: &mut Session<'_>,
+    packages: &BTreeMap<String, Vec<meowctl_starlark::PackageDecl>>,
+    local: &BTreeSet<String>,
+) -> CliResult<()> {
+    if packages.is_empty() {
+        return Ok(());
+    }
+
+    let mut shared = LockFile::read(session.fs.as_ref(), &session.layout.packages_lock())?;
+    let mut owned = LockFile::read(session.fs.as_ref(), &session.layout.local_packages_lock())?;
+    let (mut shared_dirty, mut owned_dirty) = (false, false);
+
+    for (component, declarations) in packages {
+        let into = if local.contains(component) {
+            owned_dirty = true;
+            &mut owned
+        } else {
+            shared_dirty = true;
+            &mut shared
+        };
+        for declaration in declarations {
+            into.packages
+                .entry(declaration.manager.clone())
+                .or_default()
+                .insert(
+                    declaration.name.clone(),
+                    meowctl_config::PackageEntry {
+                        requested: declaration.version.clone(),
+                        installed: declaration.version.clone(),
+                        note: String::new(),
+                    },
+                );
+        }
+    }
+
+    if shared_dirty {
+        shared.write(session.fs.as_ref(), &session.layout.packages_lock())?;
+    }
+    if owned_dirty {
+        owned.write(session.fs.as_ref(), &session.layout.local_packages_lock())?;
+    }
+    Ok(())
+}
+
 /// Runs a phase set.
 pub(super) fn apply(
     session: &mut Session<'_>,
@@ -411,6 +492,12 @@ pub(super) fn apply(
     .recording(progress);
 
     let report = runner.run(&plan);
+
+    // Recorded even when the run failed, because a package installed before
+    // the failure is installed; `appendPkgsLock` runs on the same footing.
+    let local = local_declarations(session, &loader)?;
+    record_packages(session, &report.packages, &local)?;
+
     match report.failure {
         None => Ok(()),
         Some(failure) => Err(CliError::General(failure.to_string())),

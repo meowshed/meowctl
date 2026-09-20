@@ -57,6 +57,13 @@ pub struct Report {
     ///
     /// `None` when nothing failed, or when the caller turned rollback off.
     pub rolled_back: Option<RolledBack>,
+    /// What each component declared, for the components whose `install` or
+    /// `upgrade` ran, keyed by logical name.
+    ///
+    /// Reported rather than written, because a lock file is the CLI's to
+    /// write: nothing below `meowctl-cli` knows where the configuration
+    /// directory is. `pkgsPins` is the same collection; see [R-CONFIG-025].
+    pub packages: BTreeMap<String, Vec<meowctl_starlark::PackageDecl>>,
 }
 
 /// How undoing a failed run went.
@@ -217,6 +224,21 @@ impl<'a> Runner<'a> {
                 report
                     .finished
                     .push((phase, component.id.clone(), outcome.clone()));
+
+                // What a component declared, once its install or upgrade has
+                // run. Only those two phases, and only a component that has
+                // declarations, which is what `pkgsPins` records; see
+                // [R-CONFIG-025].
+                if matches!(phase, Phase::Install | Phase::Upgrade)
+                    && !matches!(outcome, Outcome::Failed { .. })
+                    && !component.evaluated.declarations.packages.is_empty()
+                {
+                    report
+                        .packages
+                        .entry(component.logical_name().to_owned())
+                        .or_default()
+                        .extend(component.evaluated.declarations.packages.iter().cloned());
+                }
 
                 // Recorded as soon as it succeeds, so a run interrupted at
                 // the next component resumes here rather than at the start of
