@@ -127,15 +127,46 @@ fn a_dry_run_renders_the_plan_with_its_reasons() {
     );
 }
 
-/// [R-CLI-071] `self-update` says why it cannot, rather than reporting
-/// success or pretending the command is missing.
+/// [R-CLI-071] a release publishing no checksums is refused, because a
+/// release nothing can be verified against is not one that needs no
+/// verification.
 #[test]
-fn self_update_says_why_it_cannot() {
+fn self_update_refuses_a_release_with_no_checksums() {
     let root = sandbox("selfupdate");
-    let output = run(&root, &["self-update"]);
+    let served = root.join("release.json");
+    std::fs::write(
+        &served,
+        concat!(
+            r#"{"tag_name":"v9.9.9","html_url":"https://h/r","assets":"#,
+            r#"[{"name":"meowctl-x","browser_download_url":"https://h/x"}]}"#,
+        ),
+    )
+    .expect("the release");
 
-    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let output = Command::new(env!("CARGO_BIN_EXE_meowctl"))
+        .args(["--config", &root.display().to_string(), "self-update"])
+        .env("MEOWCTL_RELEASES", format!("file://{}", served.display()))
+        .output()
+        .expect("the binary runs");
+
+    // `file://` is not https, so the fetch is refused before anything else --
+    // which is itself the point: [R-NET-003] reaches self-update too.
+    assert!(!output.status.success(), "{output:?}");
+    assert_eq!(output.status.code(), Some(4), "a module error");
+}
+
+/// [R-CLI-072] and [R-CLI-076]: the release is asked for where the variable
+/// says, and a plaintext URL is refused there as everywhere.
+#[test]
+fn self_update_will_not_fetch_a_release_over_plaintext() {
+    let root = sandbox("plaintext");
+    let output = Command::new(env!("CARGO_BIN_EXE_meowctl"))
+        .args(["--config", &root.display().to_string(), "self-update"])
+        .env("MEOWCTL_RELEASES", "http://example.invalid/releases/latest")
+        .output()
+        .expect("the binary runs");
+
+    assert_eq!(output.status.code(), Some(4), "{output:?}");
     let said = stderr(&output);
-    assert!(said.contains("checksum"), "{said}");
-    assert!(said.contains("install"), "{said}");
+    assert!(said.contains("example.invalid"), "{said}");
 }

@@ -27,3 +27,10 @@ pub const STRING: &str = concat!(
 pub fn string() -> String {
     STRING.to_owned()
 }
+
+/// Just the version, for comparing against a release tag.
+pub const NUMBER: &str = env!("CARGO_PKG_VERSION");
+
+/// The target triple this build is for, which names the asset it updates
+/// from; see [R-CLI-073].
+pub const TARGET: &str = env!("MEOWCTL_TARGET");

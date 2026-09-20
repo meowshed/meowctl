@@ -14,7 +14,7 @@ meowctl-cli = { path = "crates/meowctl-cli" }
 workspace = true
 
 [workspace]
-members = ["crates/meowctl-common", "crates/meowctl-ctx", "crates/meowctl-engine", "crates/meowctl-cli", "crates/meowctl-config", "crates/meowctl-exec", "crates/meowctl-fs", "crates/meowctl-module", "crates/meowctl-net", "crates/meowctl-ops", "crates/meowctl-pm", "crates/meowctl-starlark", "crates/meowctl-tui"]
+members = ["crates/meowctl-common", "crates/meowctl-ctx", "crates/meowctl-engine", "crates/meowctl-cli", "crates/meowctl-config", "crates/meowctl-exec", "crates/meowctl-fs", "crates/meowctl-module", "crates/meowctl-net", "crates/meowctl-ops", "crates/meowctl-pm", "crates/meowctl-release", "crates/meowctl-starlark", "crates/meowctl-tui"]
 resolver = "3"
 
 [workspace.package]

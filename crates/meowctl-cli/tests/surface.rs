@@ -344,3 +344,31 @@ fn the_version_names_the_build() {
         "a build from a checkout knows its commit: {version}"
     );
 }
+
+/// [R-CLI-075] `self-update` runs alone. It is the one command that changes
+/// the tool rather than the machine, and a run that updated itself halfway
+/// through an apply would finish under a binary that did not start it.
+///
+/// Checked against the source, because what the requirement forbids is a
+/// call that does not exist: the only reference is the one the dispatcher
+/// makes for `Command::SelfUpdate`.
+#[test]
+fn nothing_but_the_self_update_command_updates_the_binary() {
+    for source in [
+        include_str!("../src/run/commands.rs"),
+        include_str!("../src/run/writing.rs"),
+        include_str!("../src/run.rs"),
+    ] {
+        for (number, line) in source.lines().enumerate() {
+            let code = line.split("//").next().unwrap_or(line);
+            if !code.contains("self_update") {
+                continue;
+            }
+            assert!(
+                code.contains("Command::SelfUpdate"),
+                "line {} reaches self_update from somewhere else: {line}",
+                number + 1
+            );
+        }
+    }
+}

@@ -1,0 +1,17 @@
+[package]
+name = "meowctl-release"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "What a release is, and whether these bytes are the one for this machine"
+
+[dependencies]
+meowctl-common = { path = "../meowctl-common" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

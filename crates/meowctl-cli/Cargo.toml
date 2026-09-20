@@ -19,6 +19,7 @@ meowctl-fs = { path = "../meowctl-fs" }
 meowctl-module = { path = "../meowctl-module" }
 meowctl-net = { path = "../meowctl-net" }
 meowctl-ops = { path = "../meowctl-ops" }
+meowctl-release = { path = "../meowctl-release" }
 meowctl-starlark = { path = "../meowctl-starlark" }
 meowctl-tui = { path = "../meowctl-tui" }
 signal-hook = { workspace = true }
