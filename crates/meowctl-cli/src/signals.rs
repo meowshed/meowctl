@@ -10,13 +10,6 @@
 //! a signal may do anything. `signal-hook`'s iterator is what turns one into
 //! the other.
 
-/// The sequence that puts the cursor back.
-///
-/// Written rather than asking the sink, because the sink belongs to the
-/// thread that was interrupted and taking its lock here would deadlock
-/// against it.
-const SHOW_CURSOR: &[u8] = b"\x1b[?25h";
-
 /// Watches for the signals that stop a process, and restores the cursor.
 ///
 /// A machine that will not let us watch is one where the cursor stays hidden
@@ -25,6 +18,13 @@ const SHOW_CURSOR: &[u8] = b"\x1b[?25h";
 pub fn restore_cursor_on_signal() {
     #[cfg(unix)]
     {
+        /// The sequence that puts the cursor back.
+        ///
+        /// Written rather than asked of the sink, because the sink belongs to
+        /// the thread that was interrupted and taking its lock here would
+        /// deadlock against it.
+        const SHOW_CURSOR: &[u8] = b"\x1b[?25h";
+
         use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM, SIGTSTP};
         use signal_hook::iterator::Signals;
 
