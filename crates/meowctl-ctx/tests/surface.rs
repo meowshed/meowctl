@@ -59,10 +59,10 @@ struct World {
 
 fn build(runs: Vec<ScriptedRun>, responses: ScriptedHttp, phase: Phase) -> (Ctx, World) {
     let fs = Arc::new(MemFs::new());
-    fs.create_dir_all(Path::new("/home/u")).expect("home");
-    fs.create_dir_all(Path::new("/component"))
+    fs.create_dir_all(Path::new(HOME)).expect("home");
+    fs.create_dir_all(Path::new(COMPONENT_DIR))
         .expect("component dir");
-    fs.create_dir_all(Path::new("/state")).expect("state dir");
+    fs.create_dir_all(Path::new(STATE_DIR)).expect("state dir");
 
     let exec = Arc::new(ScriptedExecutor::new(runs).with_path(["git"]));
     let events: Arc<Mutex<Vec<Event>>> = Arc::new(Mutex::new(Vec::new()));
@@ -264,12 +264,7 @@ fn a_relative_path_is_refused_and_a_tilde_is_expanded() {
         Surface::Full,
         "    ctx.write_file(\"~/.zshrc\", \"export A=1\\n\")",
     )
-    .unwrap_or_else(|e| {
-        panic!(
-            "the tilde expands: {e}\nhome = {HOME:?}\ntree = {:?}",
-            world.fs.paths()
-        )
-    });
+    .expect("the tilde expands");
     assert_eq!(
         world.fs.read(&under_home(".zshrc")).expect("written"),
         b"export A=1\n"
