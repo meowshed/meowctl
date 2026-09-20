@@ -36,6 +36,20 @@ impl ScriptedRun {
         }
     }
 
+    /// A run that died without an exit code, as a process killed by a signal
+    /// does.
+    #[must_use]
+    pub fn killed(command: impl Into<String>) -> Self {
+        ScriptedRun {
+            command: command.into(),
+            output: Output {
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: None,
+            },
+        }
+    }
+
     /// A command that exits non-zero.
     #[must_use]
     pub fn fails(command: impl Into<String>, code: i32, stderr: impl Into<String>) -> Self {

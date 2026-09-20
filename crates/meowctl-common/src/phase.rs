@@ -298,4 +298,30 @@ mod tests {
             assert!(!in_a_set.contains(&phase), "{phase} is in a phase set");
         }
     }
+
+    /// [R-COMMON-011] and [R-CONFIG-042]: the phase set's name is what
+    /// `state.toml` records as `last_run.phase_set`, so it is a format field
+    /// rather than a label.
+    #[test]
+    fn the_phase_set_names_are_the_ones_the_sentinel_records() {
+        for (set, written) in [
+            (PhaseSet::Install, "install"),
+            (PhaseSet::Update, "update"),
+            (PhaseSet::Upgrade, "upgrade"),
+            (PhaseSet::Uninstall, "uninstall"),
+            (PhaseSet::Verify, "verify"),
+        ] {
+            assert_eq!(set.as_str(), written);
+            assert_eq!(set.to_string(), written);
+        }
+    }
+
+    /// [R-COMMON-010] and a phase renders as the hook name a component
+    /// defines, because that is what a message about it has to say.
+    #[test]
+    fn a_phase_renders_as_the_hook_it_names() {
+        assert_eq!(Phase::InstallCheck.to_string(), "install_check");
+        assert_eq!(Phase::Shell.to_string(), "shell");
+        assert_eq!(Phase::UninstallCleanup.to_string(), "uninstall_cleanup");
+    }
 }

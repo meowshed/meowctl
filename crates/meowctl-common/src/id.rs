@@ -430,4 +430,88 @@ mod tests {
         assert!(sri.matches(b"one"));
         assert!(!sri.matches(b"onf"));
     }
+
+    /// [R-COMMON-002] each half of a GitHub reference has to be there, and a
+    /// missing one is a typo rather than a module.
+    ///
+    /// Mutation testing is what asked for this: every `||` in the guard could
+    /// become `&&` and nothing noticed, which would have let
+    /// `github:/repo@v1` through as a module with no owner.
+    #[test]
+    fn every_part_of_a_github_reference_is_required() {
+        for wrong in [
+            "github:/repo@v1",
+            "github:owner/@v1",
+            "github:owner/repo@",
+            "github:owner/repo/deeper@v1",
+            "github:owner@v1",
+            "github:owner/repo",
+        ] {
+            assert!(
+                wrong.parse::<ModuleRef>().is_err(),
+                "{wrong} should not parse"
+            );
+        }
+
+        let right: ModuleRef = "github:owner/repo@v1.2.3".parse().expect("the whole form");
+        assert_eq!(
+            right,
+            ModuleRef::GitHub {
+                owner: "owner".to_owned(),
+                repo: "repo".to_owned(),
+                reference: "v1.2.3".to_owned(),
+            }
+        );
+    }
+
+    /// [R-COMMON-002] and a registry name is letters, digits and three
+    /// punctuation marks, so a typo does not become a confusing index lookup.
+    #[test]
+    fn a_registry_name_takes_only_what_a_name_takes() {
+        for wrong in ["", "has space", "has/slash", "has:colon", "has@at"] {
+            assert!(
+                wrong.parse::<ModuleRef>().is_err(),
+                "{wrong:?} should not parse"
+            );
+        }
+        for right in ["stdlib", "my-dotfiles", "my_module", "v0.2"] {
+            assert!(right.parse::<ModuleRef>().is_ok(), "{right} should parse");
+        }
+    }
+
+    /// [R-COMMON-001] and [R-COMMON-004]: both types render as what was
+    /// written, because a message quotes the user's own text back at them.
+    #[test]
+    fn a_reference_and_a_hash_render_as_they_were_written() {
+        let registry: ModuleRef = "stdlib".parse().expect("a name");
+        assert_eq!(registry.to_string(), "stdlib");
+
+        let github: ModuleRef = "github:owner/repo@v1".parse().expect("a reference");
+        assert_eq!(github.to_string(), "github:owner/repo@v1");
+
+        let hash: Integrity = "sha384-AAAA".parse().expect("a hash");
+        assert_eq!(hash.to_string(), "sha384-AAAA");
+    }
+
+    /// [R-COMMON-006] the logical name is what an `after` list refers to and
+    /// what `state.toml` records, so it is the identity a component has
+    /// across a run rather than a display convenience.
+    ///
+    /// `logicalName` strips a path and keeps a sigil: `@dotmeow` is
+    /// `@dotmeow`, and `@dotmeow//components/x` is `x`.
+    #[test]
+    fn the_logical_name_is_the_last_segment_and_keeps_its_sigil() {
+        for (written, logical) in [
+            ("zsh", "zsh"),
+            ("@dotmeow", "@dotmeow"),
+            ("@stdlib//components/git", "git"),
+            ("@dotmeow//components/bat-config", "bat-config"),
+            ("github.com/o/r//components/x", "x"),
+        ] {
+            assert_eq!(ComponentId::logical_of(written), logical, "{written}");
+            let id: ComponentId = written.parse().expect(written);
+            assert_eq!(id.logical_name(), logical, "{written}");
+            assert_eq!(id.as_str(), written, "the identifier is kept as written");
+        }
+    }
 }

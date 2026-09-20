@@ -271,3 +271,262 @@ fn a_record_is_on_disk_before_its_operation_runs() {
     let reopened = Journal::open(&path).expect("reopen");
     assert_eq!(reopened.len(), 1);
 }
+
+/// Journals one operation and returns the record it wrote.
+fn record_for(forward: &Op, inverse: &Op) -> serde_json::Value {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut journal = journal_at(&dir);
+    journal
+        .append("install", "c", forward, inverse)
+        .expect("append");
+    let text = std::fs::read_to_string(dir.path().join("rollback.jsonl")).expect("read");
+    serde_json::from_str(text.trim()).expect("parse")
+}
+
+/// [R-OPS-020] every journalled variant, not just the first one.
+///
+/// The record is what a *different binary* replays, so each variant's payload
+/// is an interface. Mutation testing is what found this: the arms that carry
+/// the prior value -- the content, the target, the backup, the setting --
+/// could each be deleted and only `write_file` had a test that noticed.
+#[test]
+fn every_journalled_variant_writes_the_payload_v0_1_0_reads() {
+    let path = PathBuf::from("/home/u/.zshrc");
+    let other = PathBuf::from("/home/u/source");
+
+    // A download that replaced a file carries what was there.
+    let download = record_for(
+        &Op::Download {
+            path: path.clone(),
+            contents: b"fetched\n".to_vec(),
+        },
+        &Op::WriteFile {
+            path: path.clone(),
+            contents: b"original\n".to_vec(),
+        },
+    );
+    assert_eq!(download["kind"], "download");
+    assert_eq!(download["inverse"]["dst"], "/home/u/.zshrc");
+    assert_eq!(download["inverse"]["prior_content"], "original\n");
+    assert_eq!(download["inverse"]["had_prior"], true);
+
+    // And one that created a file says so, or the replay would write an
+    // empty file where there was none.
+    let fresh = record_for(
+        &Op::Download {
+            path: path.clone(),
+            contents: b"fetched\n".to_vec(),
+        },
+        &Op::Remove { path: path.clone() },
+    );
+    assert_eq!(fresh["inverse"]["had_prior"], false);
+
+    // A symlink that re-pointed an existing one carries the old target.
+    let symlink = record_for(
+        &Op::Symlink {
+            target: other.clone(),
+            link: path.clone(),
+        },
+        &Op::Symlink {
+            target: PathBuf::from("/home/u/was-here"),
+            link: path.clone(),
+        },
+    );
+    assert_eq!(symlink["kind"], "symlink");
+    assert_eq!(symlink["inverse"]["dst"], "/home/u/.zshrc");
+    assert_eq!(symlink["inverse"]["prior_target"], "/home/u/was-here");
+    assert_eq!(symlink["inverse"]["had_prior"], true);
+
+    // A link_file that moved the user's file aside carries where it went.
+    let backup = PathBuf::from("/home/u/.zshrc.backup");
+    let linked = record_for(
+        &Op::LinkFile {
+            target: other.clone(),
+            link: path.clone(),
+            backup: backup.clone(),
+        },
+        &Op::RestoreBackup {
+            backup: backup.clone(),
+            link: path.clone(),
+        },
+    );
+    assert_eq!(linked["kind"], "link_file");
+    assert_eq!(linked["inverse"]["backup_path"], "/home/u/.zshrc.backup");
+    assert_eq!(linked["inverse"]["was_backed_up"], true);
+
+    // A defaults write carries the value to put back, and its type: `-bool`
+    // and `-int` are different settings with the same string.
+    let defaults = record_for(
+        &Op::DefaultsWrite {
+            domain: "com.apple.dock".to_owned(),
+            key: "autohide".to_owned(),
+            value: "1".to_owned(),
+            value_type: "-bool".to_owned(),
+        },
+        &Op::DefaultsWrite {
+            domain: "com.apple.dock".to_owned(),
+            key: "autohide".to_owned(),
+            value: "0".to_owned(),
+            value_type: "-bool".to_owned(),
+        },
+    );
+    assert_eq!(defaults["kind"], "defaults_write");
+    assert_eq!(defaults["inverse"]["value"], "0");
+    assert_eq!(defaults["inverse"]["value_type"], "-bool");
+
+    // And a plist set carries the value alone.
+    let plist = record_for(
+        &Op::PlistSet {
+            path: PathBuf::from("/home/u/Library/Preferences/x.plist"),
+            key: "Enabled".to_owned(),
+            value: "true".to_owned(),
+        },
+        &Op::PlistSet {
+            path: PathBuf::from("/home/u/Library/Preferences/x.plist"),
+            key: "Enabled".to_owned(),
+            value: "false".to_owned(),
+        },
+    );
+    assert_eq!(plist["kind"], "plist_set");
+    assert_eq!(plist["inverse"]["key"], "Enabled");
+    assert_eq!(plist["inverse"]["value"], "false");
+}
+
+/// [R-OPS-024] nothing applied is `failed`, not `partial`.
+///
+/// The two are what a user reads to decide whether to finish by hand, and
+/// `partial` where nothing was undone sends them looking for work that was
+/// never done. Mutation testing found this: `applied > 0` could become
+/// `applied >= 0` and every test still passed.
+#[test]
+fn a_replay_where_nothing_applied_reports_failed() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("rollback.jsonl");
+    std::fs::write(
+        &path,
+        concat!(
+            r#"{"seq":1,"phase":"install","component":"a","kind":"nonsense","inverse":{}}"#,
+            "\n",
+        ),
+    )
+    .expect("write");
+
+    let journal = Journal::open(&path).expect("open");
+    let fs = seeded();
+    let exec = ScriptedExecutor::new([]);
+    let mut events = |_| {};
+
+    let outcome = replay(&journal, &fs, &exec, &mut events).expect("replay");
+    assert_eq!(outcome.outcome, Outcome::Failed);
+    assert_eq!(outcome.applied, 0);
+    assert_eq!(outcome.failures.len(), 1);
+}
+
+/// [R-OPS-025] truncating a journal that is not there succeeds and resets the
+/// sequence, because a first run has no journal and still has to be able to
+/// finish.
+#[test]
+fn truncating_a_journal_that_was_never_written_succeeds() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut journal = journal_at(&dir);
+
+    assert!(journal.is_empty(), "a fresh journal holds nothing");
+    journal.truncate().expect("truncating nothing succeeds");
+    assert!(journal.is_empty());
+}
+
+/// [R-OPS-030] the sequence number in an unreadable-record error is the line
+/// it was on, because that is what the reader opens the file to find.
+#[test]
+fn an_unreadable_record_is_numbered_by_its_line() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("rollback.jsonl");
+    std::fs::write(
+        &path,
+        concat!(
+            r#"{"seq":1,"phase":"install","component":"a","kind":"symlink","inverse":{"dst":"/home/u/link","had_prior":false}}"#,
+            "\n",
+            "{ not json\n",
+            "{ also not json\n",
+        ),
+    )
+    .expect("write");
+
+    let journal = Journal::open(&path).expect("open");
+    let (_, broken) = journal.records().expect("records");
+    assert_eq!(broken.len(), 2);
+    assert!(broken[0].to_string().contains('2'), "{}", broken[0]);
+    assert!(broken[1].to_string().contains('3'), "{}", broken[1]);
+}
+
+/// [R-OPS-025] a journal holds something once something is appended, which is
+/// what `interrupted_run` reads to report a run that stopped partway.
+#[test]
+fn a_journal_holds_something_once_something_is_appended() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut journal = journal_at(&dir);
+    assert!(journal.is_empty());
+
+    journal
+        .append(
+            "install",
+            "c",
+            &Op::WriteFile {
+                path: PathBuf::from("/home/u/.zshrc"),
+                contents: b"x".to_vec(),
+            },
+            &Op::Remove {
+                path: PathBuf::from("/home/u/.zshrc"),
+            },
+        )
+        .expect("append");
+
+    assert!(!journal.is_empty(), "the journal still reports nothing");
+    journal.truncate().expect("truncate");
+    assert!(journal.is_empty(), "truncating did not reset the sequence");
+}
+
+/// [R-OPS-025] a journal file that was never written reads as empty rather
+/// than failing, because a first run has none and still has to start.
+#[test]
+fn a_journal_that_is_not_there_reads_as_empty() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let journal = Journal::open(dir.path().join("never-written.jsonl")).expect("open");
+
+    let (records, broken) = journal.records().expect("records");
+    assert!(records.is_empty(), "{records:?}");
+    assert!(broken.is_empty(), "{broken:?}");
+}
+
+/// [R-OPS-020] the kind strings are what a `v0.1.0` journal carries, so a
+/// record written here replays there and one written there replays here.
+#[test]
+fn the_kind_strings_are_the_ones_v0_1_0_writes() {
+    use meowctl_ops::OpKind;
+
+    for (kind, written) in [
+        (OpKind::WriteFile, "write_file"),
+        (OpKind::AppendFile, "append_file"),
+        (OpKind::CopyFile, "copy_file"),
+        (OpKind::Symlink, "symlink"),
+        (OpKind::LinkFile, "link_file"),
+        (OpKind::Mkdir, "mkdir"),
+        (OpKind::Download, "download"),
+        (OpKind::DefaultsWrite, "defaults_write"),
+        (OpKind::PlistSet, "plist_set"),
+    ] {
+        assert_eq!(kind.as_str(), written);
+        assert_eq!(String::from(kind), written);
+        assert_eq!(kind.to_string(), written);
+    }
+}
+
+/// [R-OPS-024] and [R-CONFIG-044]: the outcome strings are what `state.toml`
+/// records, so a user reading the file and a user reading the screen see the
+/// same word.
+#[test]
+fn the_outcome_strings_are_the_ones_the_sentinel_records() {
+    assert_eq!(Outcome::Ok.as_str(), "ok");
+    assert_eq!(Outcome::Partial.as_str(), "partial");
+    assert_eq!(Outcome::Failed.as_str(), "failed");
+}

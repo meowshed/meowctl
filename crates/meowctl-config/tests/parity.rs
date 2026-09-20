@@ -335,6 +335,19 @@ fn the_file_names_are_the_ones_v0_1_0_uses() {
     assert_eq!(name(layout.local_packages_lock()), "pkgs.local.lock");
     assert_eq!(name(layout.state()), "state.toml");
     assert_eq!(name(layout.installed()), "installed.lock");
+    assert_eq!(name(layout.journal()), "rollback.jsonl");
+    assert_eq!(name(layout.hook_error()), ".hook-error");
+    assert_eq!(name(layout.components()), "components");
+
+    // And each is under the directory it was given, not somewhere absolute.
+    for path in [
+        layout.journal(),
+        layout.hook_error(),
+        layout.components(),
+        layout.state(),
+    ] {
+        assert!(path.starts_with("/cfg"), "{}", path.display());
+    }
 }
 
 /// [R-CONFIG-004] a user who wrote their configuration before the rename needs
@@ -686,4 +699,177 @@ fn a_fingerprint_falls_through_version_then_commit_then_hash() {
         ..ModuleEntry::default()
     };
     assert_eq!(hashed.fingerprint(), "sha384-AAA");
+}
+
+/// [R-CONFIG-043] and [R-ENGINE-041]: recording a completion has to record
+/// it, because the sentinel is what makes an interrupted run resume where it
+/// stopped rather than start over.
+///
+/// Mutation testing asked for this: `Sentinel::record` could be replaced with
+/// a no-op and every test still passed.
+#[test]
+fn recording_a_completion_records_it() {
+    let mut sentinel = Sentinel::default();
+    assert!(!sentinel.is_completed("install", "neovim"));
+
+    sentinel.record("install", "neovim", None);
+    assert!(sentinel.is_completed("install", "neovim"));
+    assert_eq!(sentinel.completed_components.len(), 1);
+    assert_eq!(sentinel.completed_components[0].phase, "install");
+    assert_eq!(sentinel.completed_components[0].component, "neovim");
+
+    // A phase is part of the identity: the same component in another phase is
+    // another record.
+    assert!(!sentinel.is_completed("verify", "neovim"));
+    sentinel.record("verify", "neovim", None);
+    assert_eq!(sentinel.completed_components.len(), 2);
+
+    // And recording the same thing twice records it once, because a phase
+    // that re-ran is not two completions.
+    sentinel.record("install", "neovim", None);
+    assert_eq!(sentinel.completed_components.len(), 2);
+}
+
+/// [R-CONFIG-040] a sentinel that was never written reads as a first run
+/// carrying the current schema version, so the next write does not claim to
+/// be version zero.
+#[test]
+fn a_sentinel_that_is_not_there_is_a_first_run_at_the_current_version() {
+    let fs = memory();
+    let sentinel = Sentinel::read(&fs, Path::new("/cfg/state.toml")).expect("a first run");
+
+    assert_eq!(sentinel.schema_version, 1);
+    assert!(sentinel.completed_components.is_empty());
+    assert!(sentinel.last_run.phase_set.is_empty());
+}
+
+/// [R-CONFIG-044] the four strings, because `v0.1.0` reads this field and an
+/// outcome it does not know is an outcome it ignores.
+#[test]
+fn the_rollback_outcomes_are_the_four_v0_1_0_declares() {
+    use meowctl_config::RolledBack;
+
+    assert_eq!(RolledBack::None.as_str(), "");
+    assert_eq!(RolledBack::Ok.as_str(), "ok");
+    assert_eq!(RolledBack::Partial.as_str(), "partial");
+    assert_eq!(RolledBack::Failed.as_str(), "failed");
+}
+
+/// [R-CONFIG-031] an `installed.lock` from a newer build is refused rather
+/// than rewritten, and one at the current version is read.
+///
+/// The comparison is strictly greater: the current version is not newer than
+/// itself, and refusing it would make every run fail.
+#[test]
+fn an_installed_lock_from_a_newer_build_is_refused_and_the_current_one_is_not() {
+    let fs = memory();
+    let path = Path::new("/cfg/installed.lock");
+
+    fs.write(
+        path,
+        b"schema_version = 3
+components = []
+",
+    )
+    .expect("seed");
+    let err = InstalledLock::read(&fs, path).expect_err("a newer schema should be refused");
+    assert!(err.to_string().contains('3'), "{err}");
+
+    fs.write(
+        path,
+        b"schema_version = 2
+components = []
+",
+    )
+    .expect("seed");
+    InstalledLock::read(&fs, path).expect("the current version is not newer than itself");
+}
+
+/// [R-CONFIG-021] a control character in a value is escaped as `\uXXXX`
+/// rather than written raw, because a lock with a raw one does not parse
+/// back and both binaries have to be able to read what either wrote.
+///
+/// The named escapes are the ones TOML spells out; everything below 0x20
+/// falls through to the numeric form.
+#[test]
+fn a_control_character_is_escaped_numerically() {
+    use meowctl_config::{LockFile, ModuleEntry};
+
+    let fs = memory();
+    let path = Path::new("/cfg/deps.lock");
+    let mut modules = BTreeMap::new();
+    modules.insert(
+        "odd".to_owned(),
+        ModuleEntry {
+            version: "1.0\u{1}0".to_owned(),
+            ..ModuleEntry::default()
+        },
+    );
+    LockFile {
+        modules,
+        ..LockFile::default()
+    }
+    .write(&fs, path)
+    .expect("write");
+
+    let written = String::from_utf8(fs.read(path).expect("read")).expect("utf8");
+    assert!(written.contains("\\u0001"), "{written}");
+    // And 0x20 is a space, which is not a control character: escaping it
+    // would put `\\u0020` in every path in the file.
+    assert!(
+        !written.contains("\\u0020"),
+        "a space was escaped: {written}"
+    );
+    assert!(
+        !written.contains('\u{1}'),
+        "a raw control character reached the file"
+    );
+
+    // And it reads back as what went in.
+    let read = LockFile::read(&fs, path).expect("parse");
+    assert_eq!(read.modules["odd"].version, "1.0\u{1}0");
+}
+
+/// [R-CONFIG-023] an empty array of tables is emitted as nothing, not as a
+/// bare header, because `v0.1.0` omits it and the files are compared byte for
+/// byte.
+#[test]
+fn an_empty_array_of_tables_writes_nothing() {
+    let fs = memory();
+    let path = Path::new("/cfg/state.toml");
+    Sentinel {
+        schema_version: 1,
+        ..Sentinel::default()
+    }
+    .write(&fs, path)
+    .expect("write");
+
+    let written = String::from_utf8(fs.read(path).expect("read")).expect("utf8");
+    assert!(
+        !written.contains("[[completed_components]]"),
+        "an empty array left a header behind: {written}"
+    );
+}
+
+/// [R-CONFIG-014] a space in a manifest value is a space, not `\u0020`.
+///
+/// The boundary is 0x20 exclusive: below it is a control character and gets
+/// the numeric form, and 0x20 itself is a space that every path in the file
+/// may contain.
+#[test]
+fn a_space_in_a_manifest_value_is_not_escaped() {
+    use meowctl_config::{Modfile, Replace};
+
+    let rendered = Modfile {
+        replaces: vec![Replace {
+            name: "stdlib".to_owned(),
+            path: "/local/my checkout".to_owned(),
+            source: String::new(),
+        }],
+        ..Modfile::default()
+    }
+    .render();
+
+    assert!(rendered.contains("/local/my checkout"), "{rendered}");
+    assert!(!rendered.contains("\\u0020"), "{rendered}");
 }
