@@ -133,6 +133,12 @@ pub struct Evaluated {
     pub callables: Vec<String>,
     /// Those bound to a string, with their values; see [R-STAR-033].
     pub strings: BTreeMap<String, String>,
+    /// Those bound to a list of strings; see [R-STAR-034].
+    ///
+    /// A list holding anything else is absent rather than partial: a
+    /// `platforms` that is not a list of names is ignored by `v0.1.0` too,
+    /// and half a guard is worse than none.
+    pub lists: BTreeMap<String, Vec<String>>,
 }
 
 impl Evaluated {
@@ -257,11 +263,27 @@ impl<'a> Evaluator<'a> {
                 })
                 .collect();
 
+            // [R-STAR-034]: `platforms` and `distros` are two, and they
+            // decide whether a component runs on this machine.
+            let lists: BTreeMap<String, Vec<String>> = globals_found
+                .iter()
+                .filter_map(|name| {
+                    let value = module.get(name)?;
+                    let items = starlark::values::list::ListRef::from_value(value)?;
+                    let strings: Option<Vec<String>> = items
+                        .iter()
+                        .map(|item| item.unpack_str().map(str::to_owned))
+                        .collect();
+                    Some((name.clone(), strings?))
+                })
+                .collect();
+
             let evaluated = Evaluated {
                 declarations: context.accumulator.declarations(),
                 globals: globals_found,
                 callables,
                 strings,
+                lists,
             };
 
             let Some(hook) = hook else {
