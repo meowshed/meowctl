@@ -51,7 +51,9 @@ impl Sources for Config {
             .get(id.as_str())
             .map(|text| ComponentSource {
                 text: text.clone(),
-                directory: std::path::PathBuf::from("/components").join(id.logical_name()),
+                directory: std::path::Path::new(HOME)
+                    .join("components")
+                    .join(id.logical_name()),
             })
             .ok_or_else(|| EngineError::Configuration {
                 path: id.as_str().to_owned(),
@@ -107,6 +109,21 @@ pub fn graph_of(config: &Config, platform: &Platform) -> EngineResult<Graph> {
     let discovered = discover(config, &loader, platform)?;
     Graph::build(&discovered)
 }
+
+/// An absolute home directory for the platform the test runs on.
+///
+/// `/home/u` is not absolute on Windows, and [R-CTX-012] refuses a path that
+/// is not absolute once `~` expands, so a test that hard-coded a Unix path
+/// would fail there for a reason that has nothing to do with the engine.
+#[cfg(unix)]
+pub const HOME: &str = "/home/u";
+#[cfg(not(unix))]
+pub const HOME: &str = r"C:\Users\u";
+
+#[cfg(unix)]
+pub const STATE_ROOT: &str = "/state";
+#[cfg(not(unix))]
+pub const STATE_ROOT: &str = r"C:\state";
 
 /// A world a runner can run against: an in-memory filesystem, a scripted
 /// executor, and a recorder for the events.
@@ -187,8 +204,8 @@ pub fn world(
 #[must_use]
 pub fn settings(platform: &Platform, rollback: bool) -> meowctl_engine::Settings {
     meowctl_engine::Settings {
-        home: std::path::PathBuf::from("/home/u"),
-        state_root: std::path::PathBuf::from("/state"),
+        home: std::path::PathBuf::from(HOME),
+        state_root: std::path::PathBuf::from(STATE_ROOT),
         platform: platform.clone(),
         environment: std::collections::BTreeMap::new(),
         dry_run: false,
