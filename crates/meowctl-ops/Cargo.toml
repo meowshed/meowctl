@@ -1,0 +1,24 @@
+[package]
+name = "meowctl-ops"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Reversible operations and the write-ahead journal that undoes them"
+
+[dependencies]
+meowctl-common = { path = "../meowctl-common" }
+meowctl-exec = { path = "../meowctl-exec" }
+meowctl-fs = { path = "../meowctl-fs" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
