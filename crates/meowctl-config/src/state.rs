@@ -132,6 +132,25 @@ impl Sentinel {
             .any(|c| c.phase == phase && c.component == component)
     }
 
+    /// Records a component as having finished a phase.
+    ///
+    /// Appended immediately after the hook succeeds, not at the end of the
+    /// phase, so a run interrupted halfway resumes where it stopped;
+    /// `v0.1.0` records the whole order once the phase is clean, which means
+    /// an interruption loses everything that phase had done. The timestamp is
+    /// a value rather than a reading of the clock, because a component that
+    /// asks the clock cannot be tested; see [R-ENGINE-041].
+    pub fn record(&mut self, phase: &str, component: &str, at: Option<toml::value::Datetime>) {
+        if self.is_completed(phase, component) {
+            return;
+        }
+        self.completed_components.push(CompletedComponent {
+            phase: phase.to_owned(),
+            component: component.to_owned(),
+            completed_at: at,
+        });
+    }
+
     /// Forgets everything recorded for a component, so the next run redoes it.
     ///
     /// Used when the module a component came from has changed; see

@@ -53,6 +53,25 @@ pub struct ModuleEntry {
     pub path: String,
 }
 
+impl ModuleEntry {
+    /// What identifies this resolution, for deciding whether it changed.
+    ///
+    /// The version, then the commit, then the integrity hash.
+    /// `moduleFingerprint` is the same chain, and it is a chain rather than
+    /// one field so a GitHub module re-synced to a new commit invalidates
+    /// even though no version changed; see [R-CONFIG-033].
+    #[must_use]
+    pub fn fingerprint(&self) -> &str {
+        if !self.version.is_empty() {
+            return &self.version;
+        }
+        if !self.commit_sha.is_empty() {
+            return &self.commit_sha;
+        }
+        &self.integrity
+    }
+}
+
 /// One GitHub module's pin.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GitHubEntry {

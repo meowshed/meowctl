@@ -17,10 +17,12 @@ mod discovery;
 mod error;
 mod graph;
 mod plan;
+mod progress;
 mod runner;
 
 pub use discovery::{Component, ComponentSource, Declaration, Discovered, Sources, discover};
 pub use error::{EngineError, EngineResult};
 pub use graph::Graph;
 pub use plan::{Inputs, Plan};
+pub use progress::{Progress, fingerprints, interrupted_run, stale_components};
 pub use runner::{Failure, Report, Runner, Settings};
