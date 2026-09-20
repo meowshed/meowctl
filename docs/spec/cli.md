@@ -103,9 +103,18 @@ against a set of real configurations under both binaries and compare the
 results.
 
 **[R-CLI-041]** The comparison MUST cover the resulting file tree, every file
-meowctl wrote, the exit code, and the JSON event stream. Rendered text MUST NOT
-be compared, because terminal output is the deliberate carve-out; see
-[R-TUI-032].
+meowctl wrote, and the exit code. Rendered text MUST NOT be compared, because
+terminal output is the deliberate carve-out; see [R-TUI-032].
+
+`--format json` is part of that carve-out and MUST NOT be compared either.
+`v0.1.0` has one hand-written JSON body, `doctor --json`, shaped like a list
+of checks; `v0.2.0` emits the event stream from every command, which is what
+§4 of the design says replaces it. A comparison that held the old shape would
+be holding the thing the redesign removes. What checks the new shape is
+[R-TUI-030] and [R-TUI-031], against a recorded stream.
+
+`shell` stays byte-exact, because a user's `~/.zshrc` evaluates it; see
+[R-CLI-021].
 
 **[R-CLI-042]** A machine-written file MUST compare byte for byte; see
 [R-CONFIG-023].
@@ -115,6 +124,15 @@ extensible with a real dotfiles configuration by path.
 
 **[R-CLI-044]** A difference MUST be reported as a diff naming the file or the
 event, not as a boolean.
+
+**[R-CLI-045]** The corpus and every requirement in this section MUST be
+deleted at the cutover, with the `v0.1.0` tree they compare against.
+
+They exist to prove one thing -- that `v0.2.0` does what `v0.1.0` did -- and
+that proof has an end date. After it, the oracle is a brake: every deliberate
+improvement would have to be argued past a corpus that says the old behaviour
+is correct, and the old binary has to stay buildable to produce it. Parity is
+the constraint of the rewrite, not of the tool.
 
 ## Failure paths
 
