@@ -10,6 +10,7 @@ description = "Module resolution: version selection, fetching, integrity, and th
 [dependencies]
 flate2 = { workspace = true }
 meowctl-common = { path = "../meowctl-common" }
+meowctl-config = { path = "../meowctl-config" }
 meowctl-fs = { path = "../meowctl-fs" }
 meowctl-net = { path = "../meowctl-net" }
 meowctl-starlark = { path = "../meowctl-starlark" }
@@ -22,6 +23,7 @@ toml = { workspace = true }
 
 [dev-dependencies]
 meowctl-common = { path = "../meowctl-common" }
+meowctl-config = { path = "../meowctl-config" }
 flate2 = { workspace = true }
 tar = { workspace = true }
 
