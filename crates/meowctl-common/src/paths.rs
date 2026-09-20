@@ -68,15 +68,29 @@ pub fn cache_dir(env: &impl Env) -> Result<PathBuf, Error> {
         .join("modules"))
 }
 
-/// The home directory, from `$HOME`.
+/// The home directory, from `$HOME`, or `$USERPROFILE` on Windows.
+///
+/// The same two `os.UserHomeDir` reads, which is what `v0.1.0` calls. `$HOME`
+/// is tried first on every platform, because a Windows shell that sets it
+/// means it; see [R-COMMON-023].
 ///
 /// # Errors
 ///
-/// Fails when `$HOME` is unset or empty.
+/// Fails when neither is set.
 pub fn home_dir(env: &impl Env) -> Result<PathBuf, Error> {
-    env.var("HOME")
-        .map(PathBuf::from)
-        .ok_or(Error::NoHomeDirectory("HOME"))
+    if let Some(home) = env.var("HOME") {
+        return Ok(PathBuf::from(home));
+    }
+    if cfg!(windows)
+        && let Some(profile) = env.var("USERPROFILE")
+    {
+        return Ok(PathBuf::from(profile));
+    }
+    Err(Error::NoHomeDirectory(if cfg!(windows) {
+        "HOME or USERPROFILE"
+    } else {
+        "HOME"
+    }))
 }
 
 /// Resolves a path written in a configuration to an absolute one.
@@ -218,6 +232,33 @@ mod tests {
     fn an_empty_variable_counts_as_unset() {
         let env = FakeEnv::new(&[("XDG_CONFIG_HOME", ""), ("HOME", HOME)]);
         assert_eq!(config_dir(&env).unwrap(), under_home(".config/meowctl"));
+    }
+
+    /// [R-COMMON-023] `os.UserHomeDir` reads this on Windows, and reading
+    /// only `$HOME` made every invocation there fail before it did anything.
+    #[test]
+    #[cfg(windows)]
+    fn userprofile_is_the_home_directory_on_windows() {
+        let env = FakeEnv::new(&[("USERPROFILE", HOME)]);
+        assert_eq!(home_dir(&env).unwrap(), PathBuf::from(HOME));
+    }
+
+    /// [R-COMMON-023] `$HOME` first on every platform, because a Windows
+    /// shell that sets it means it.
+    #[test]
+    #[cfg(windows)]
+    fn home_wins_over_userprofile() {
+        let env = FakeEnv::new(&[("HOME", HOME), ("USERPROFILE", "C:\\elsewhere")]);
+        assert_eq!(home_dir(&env).unwrap(), PathBuf::from(HOME));
+    }
+
+    /// [R-COMMON-023] and `$USERPROFILE` is not read anywhere else, so a
+    /// Linux container that happens to set it is not redirected.
+    #[test]
+    #[cfg(not(windows))]
+    fn userprofile_is_ignored_off_windows() {
+        let env = FakeEnv::new(&[("USERPROFILE", "/elsewhere")]);
+        assert!(home_dir(&env).is_err());
     }
 
     #[test]
