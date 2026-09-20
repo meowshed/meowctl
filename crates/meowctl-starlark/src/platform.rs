@@ -89,6 +89,17 @@ impl Platform {
 #[derive(Debug, Clone, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct PlatformValue(#[allocative(skip)] pub(crate) Platform);
 
+impl PlatformValue {
+    /// The value for a platform.
+    ///
+    /// `meowctl-ctx` needs one: `ctx.platform` is the same struct
+    /// `platform()` returns; see [R-CTX-002].
+    #[must_use]
+    pub const fn new(platform: Platform) -> Self {
+        PlatformValue(platform)
+    }
+}
+
 impl fmt::Display for PlatformValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "platform(os = {:?})", self.0.os)

@@ -1020,6 +1020,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "meowctl-ctx"
+version = "0.2.0-alpha.0"
+dependencies = [
+ "allocative",
+ "anyhow",
+ "meowctl-common",
+ "meowctl-exec",
+ "meowctl-fs",
+ "meowctl-net",
+ "meowctl-ops",
+ "meowctl-starlark",
+ "meowctl-tui",
+ "starlark",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "meowctl-exec"
 version = "0.2.0-alpha.0"
 dependencies = [

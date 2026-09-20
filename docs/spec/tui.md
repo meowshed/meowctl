@@ -133,6 +133,15 @@ the command on an empty line.
 naming what it wanted, rather than blocking. A CI run that hangs on a prompt
 until it times out is the failure to prevent.
 
+**[R-TUI-063]** The trait MUST also ask a free-text question and return the
+answer, because `ctx.prompt` returns a string; see [R-CTX-026]. It MUST send
+the question to stderr for the same reason a confirmation does, and MUST treat
+end-of-input as an empty answer, which is what `starPrompt` does.
+
+Two methods rather than a confirmation built on the free-text one: a
+confirmation has a default and a fixed vocabulary, and the sink that renders it
+and the session that cannot answer it both need to know which was asked.
+
 ## Failure paths
 
 **[R-TUI-070]** A write to the output destination that fails MUST NOT panic and
