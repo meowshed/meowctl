@@ -197,3 +197,30 @@ fn the_editor_and_the_evaluator_accept_the_same_file() {
         .collect();
     assert_eq!(names, ["@dotmeow", "neovim", "helix", "ripgrep"]);
 }
+
+/// [R-CONFIG-050] a file with Windows line endings keeps them, and a removal
+/// takes the whole `\r\n` rather than leaving a stray carriage return.
+///
+/// Mutation testing asked for this: the two-byte step could become any
+/// arithmetic and only the one-byte case was tested.
+#[test]
+fn removing_from_a_file_with_windows_endings_takes_both_bytes() {
+    let source = "component(\"a\")\r\ncomponent(\"b\")\r\ncomponent(\"c\")\r\n";
+    let edited = edit::remove_component("init.star", source, "b").expect("the removal");
+
+    assert_eq!(edited, "component(\"a\")\r\ncomponent(\"c\")\r\n");
+    assert!(
+        !edited.contains("\r\r"),
+        "a carriage return was left behind: {edited:?}"
+    );
+}
+
+/// [R-CONFIG-050] and a declaration on the last line, with no newline after
+/// it, is removed without taking a byte that is not there.
+#[test]
+fn removing_the_last_declaration_of_a_file_with_no_final_newline() {
+    let source = "component(\"a\")\ncomponent(\"b\")";
+    let edited = edit::remove_component("init.star", source, "b").expect("the removal");
+
+    assert_eq!(edited, "component(\"a\")\n");
+}

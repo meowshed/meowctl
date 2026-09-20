@@ -494,3 +494,157 @@ fn only_the_nine_v0_1_0_knows_are_journalled() {
         );
     }
 }
+
+/// [R-OPS-013] `RemoveDir` stops at the boundary it was given.
+///
+/// Undoing `mkdir -p ~/.config/nvim/lua` removes the three directories it
+/// created and stops. Walking past `until` would climb into the user's home
+/// and remove whatever else happened to be empty. Mutation testing found
+/// this: the `||` in the stop condition could become `&&` and nothing
+/// noticed.
+#[test]
+fn removing_a_directory_chain_stops_at_the_boundary() {
+    let fs = seeded();
+    let exec = nothing_runs();
+    let mut events = |_| {};
+
+    fs.create_dir_all(Path::new("/home/u/.config/nvim/lua"))
+        .expect("the chain");
+
+    Op::RemoveDir {
+        path: PathBuf::from("/home/u/.config/nvim/lua"),
+        until: PathBuf::from("/home/u/.config"),
+    }
+    .apply(&fs, &exec, &mut events)
+    .expect("the removal");
+
+    assert!(
+        fs.entry(Path::new("/home/u/.config"))
+            .expect("ask")
+            .is_some(),
+        "the boundary was removed"
+    );
+    assert!(
+        fs.entry(Path::new("/home/u")).expect("ask").is_some(),
+        "the removal climbed into the home directory"
+    );
+    assert!(
+        fs.entry(Path::new("/home/u/.config/nvim"))
+            .expect("ask")
+            .is_none(),
+        "what meowctl created was left behind"
+    );
+}
+
+/// [R-OPS-013] and it stops at a directory that is not empty, because
+/// something else put a file there.
+#[test]
+fn removing_a_directory_chain_stops_at_what_is_not_empty() {
+    let fs = seeded();
+    let exec = nothing_runs();
+    let mut events = |_| {};
+
+    fs.create_dir_all(Path::new("/home/u/.config/nvim/lua"))
+        .expect("the chain");
+    fs.write(Path::new("/home/u/.config/nvim/init.lua"), b"x")
+        .expect("somebody else's file");
+
+    Op::RemoveDir {
+        path: PathBuf::from("/home/u/.config/nvim/lua"),
+        until: PathBuf::from("/home/u"),
+    }
+    .apply(&fs, &exec, &mut events)
+    .expect("the removal");
+
+    assert!(
+        fs.entry(Path::new("/home/u/.config/nvim"))
+            .expect("ask")
+            .is_some(),
+        "a directory holding a file was removed"
+    );
+}
+
+/// [R-OPS-017] with no prior value the inverse runs `defaults delete`, not
+/// `defaults write` with an empty string, which would leave the machine in a
+/// state it was never in.
+///
+/// The command is asserted rather than the outcome, because a scripted
+/// executor is how the difference is visible at all.
+#[test]
+fn deleting_a_default_runs_delete_rather_than_writing_nothing() {
+    let fs = seeded();
+    let exec = ScriptedExecutor::new([meowctl_exec::ScriptedRun::ok(
+        "defaults delete com.apple.dock autohide",
+        "",
+    )]);
+    let mut events = |_| {};
+
+    Op::DefaultsWrite {
+        domain: "com.apple.dock".to_owned(),
+        key: "autohide".to_owned(),
+        value: String::new(),
+        value_type: "-delete".to_owned(),
+    }
+    .apply(&fs, &exec, &mut events)
+    .expect("the scripted command is the one that ran");
+}
+
+/// [R-OPS-004] an applied operation announces itself, and `Nothing` does not.
+///
+/// A renderer counting `OpApplied` would otherwise report work for a
+/// component whose inverse had nothing to undo.
+#[test]
+fn nothing_announces_nothing_and_everything_else_announces_itself() {
+    let fs = seeded();
+    let exec = nothing_runs();
+
+    let mut seen = Vec::new();
+    Op::Nothing
+        .apply(&fs, &exec, &mut |e| seen.push(e))
+        .expect("nothing happens");
+    assert!(seen.is_empty(), "{seen:?}");
+
+    let mut seen = Vec::new();
+    Op::WriteFile {
+        path: PathBuf::from("/home/u/fresh"),
+        contents: b"x".to_vec(),
+    }
+    .apply(&fs, &exec, &mut |e| seen.push(e))
+    .expect("the write");
+    // The target is what a sink renders beside the kind, so a component
+    // that wrote three files is three lines naming three files.
+    assert!(
+        seen.iter().any(|e| matches!(
+            e,
+            meowctl_common::Event::OpApplied { kind, target }
+                if kind == "write_file" && target.contains("fresh")
+        )),
+        "{seen:?}"
+    );
+}
+
+/// [R-OPS-004] a command that died without an exit code is reported as `-1`
+/// rather than as a success.
+///
+/// A process killed by a signal has no code. Reporting `1` would be a
+/// failure, which is right, but `-1` is what `v0.1.0` reports and what a
+/// component reading `exit_code` compares against.
+#[test]
+fn a_command_that_died_without_a_code_reports_minus_one() {
+    let fs = seeded();
+    let exec = ScriptedExecutor::new([meowctl_exec::ScriptedRun::killed(
+        "defaults write com.apple.dock autohide -bool 1",
+    )]);
+    let mut events = |_| {};
+
+    let err = Op::DefaultsWrite {
+        domain: "com.apple.dock".to_owned(),
+        key: "autohide".to_owned(),
+        value: "1".to_owned(),
+        value_type: "-bool".to_owned(),
+    }
+    .apply(&fs, &exec, &mut events)
+    .expect_err("a killed command is a failure");
+
+    assert!(err.to_string().contains("-1"), "{err}");
+}

@@ -57,19 +57,25 @@ impl Default for RealHttp {
     }
 }
 
+/// The failure a status carries, if it is one.
+///
+/// Only 200 is a body. `http_status_as_error` already turned 4xx and 5xx into
+/// an error; this catches the rest -- a 204 has no body and a 3xx here means
+/// redirects were exhausted, and extracting either as a tarball reports a
+/// corrupt archive rather than what happened. Separate from the request so
+/// the rule is testable without a server; see [R-NET-004].
+fn status_failure(url: &str, code: u16) -> Option<NetError> {
+    (code != 200).then(|| NetError::Status {
+        url: url.to_owned(),
+        code,
+    })
+}
+
 impl Http for RealHttp {
     fn get(&self, url: &str) -> NetResult<Vec<u8>> {
         let mut response = self.agent.get(url).call().map_err(|e| translate(url, e))?;
-        let code = response.status().as_u16();
-        if code != 200 {
-            // `http_status_as_error` already turned 4xx and 5xx into an error.
-            // This catches the rest: a 204 has no body and a 3xx here means
-            // redirects were exhausted, and extracting either as a tarball
-            // reports a corrupt archive rather than what happened.
-            return Err(NetError::Status {
-                url: url.to_owned(),
-                code,
-            });
+        if let Some(failure) = status_failure(url, response.status().as_u16()) {
+            return Err(failure);
         }
         response
             .body_mut()
@@ -152,6 +158,20 @@ mod tests {
     #[test]
     fn the_default_timeout_is_thirty_seconds() {
         assert_eq!(DEFAULT_TIMEOUT, Duration::from_secs(30));
+    }
+
+    /// [R-NET-004] only 200 is a body, and everything else is a failure
+    /// carrying the code, which is what tells a missing module from a
+    /// rate-limited one.
+    #[test]
+    fn only_two_hundred_is_a_body() {
+        assert!(status_failure("https://h/x", 200).is_none());
+
+        for code in [201u16, 204, 301, 302, 400, 404, 429, 500, 503] {
+            let failure = status_failure("https://h/x", code)
+                .unwrap_or_else(|| panic!("{code} should be a failure"));
+            assert_eq!(failure.status(), Some(code));
+        }
     }
 
     /// [R-NET-004] a status that is not 200 is a failure carrying the code,

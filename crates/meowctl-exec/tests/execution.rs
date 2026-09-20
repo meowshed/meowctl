@@ -294,3 +294,86 @@ fn the_terminal_comes_back_when_the_command_fails() {
         "the terminal was not given back: {events:?}"
     );
 }
+
+/// [R-EXEC-020] output is split into the lines a sink renders: a trailing
+/// newline does not become a blank line, and a command that printed nothing
+/// produces no lines at all.
+///
+/// Mutation testing asked for the second half: the filter could become `&&`
+/// and only the trailing-newline case was covered.
+#[test]
+fn a_command_that_printed_nothing_produces_no_lines() {
+    let exec = ScriptedExecutor::new([ScriptedRun::ok("quiet", "")]);
+    let events = record(|sink| {
+        exec.run(&Command::new("quiet"), sink).expect("run");
+    });
+
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, Event::ProcessOutput { .. })),
+        "an empty stdout produced a line: {events:?}"
+    );
+}
+
+/// [R-EXEC-001] and [R-EXEC-010]: a name that is on `PATH` resolves to the
+/// file, not merely to "something was found".
+#[test]
+fn which_answers_with_the_path_it_found() {
+    let exec = RealExecutor::new();
+    let found = exec
+        .which("cargo")
+        .expect("which")
+        .expect("cargo is on PATH in a cargo test");
+
+    assert!(found.is_absolute(), "{}", found.display());
+    assert!(
+        found
+            .file_name()
+            .is_some_and(|n| n.to_string_lossy().starts_with("cargo")),
+        "{}",
+        found.display()
+    );
+}
+
+/// [R-EXEC-012] the scripted executor records what it was asked to run, which
+/// is how a test asserts on a command it did not write itself.
+#[test]
+fn the_scripted_executor_records_what_it_ran() {
+    let exec = ScriptedExecutor::new([
+        ScriptedRun::ok("brew install git", ""),
+        ScriptedRun::ok("brew install jq", ""),
+    ]);
+    let mut events = |_| {};
+
+    assert!(exec.ran().is_empty(), "nothing has run yet");
+    exec.run(&Command::new("brew").args(["install", "git"]), &mut events)
+        .expect("the first");
+    assert_eq!(exec.ran(), ["brew install git"]);
+    assert!(!exec.is_exhausted(), "one of two has run");
+
+    exec.run(&Command::new("brew").args(["install", "jq"]), &mut events)
+        .expect("the second");
+    assert_eq!(exec.ran(), ["brew install git", "brew install jq"]);
+    assert!(exec.is_exhausted(), "both have run");
+}
+
+/// [R-EXEC-020] a blank line in the middle of a command's output is a blank
+/// line, because `brew` separates its sections with them and collapsing them
+/// changes what the user sees.
+#[test]
+fn a_blank_line_inside_the_output_survives() {
+    let exec = ScriptedExecutor::new([ScriptedRun::ok("noisy", "one\n\ntwo\n")]);
+    let events = record(|sink| {
+        exec.run(&Command::new("noisy"), sink).expect("run");
+    });
+
+    let lines: Vec<&str> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::ProcessOutput { line, .. } => Some(line.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(lines, ["one", "", "two"]);
+}

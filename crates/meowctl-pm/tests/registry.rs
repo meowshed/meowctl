@@ -349,3 +349,22 @@ fn a_handler_returning_the_wrong_shape_is_reported_as_the_handlers_defect() {
     assert!(message.contains("interrogate"), "{message}");
     assert!(message.contains("a list of strings"), "{message}");
 }
+
+/// [R-PM-004] the registry answers whether a manager is handled, which is
+/// what a `pkg()` naming an unknown one is checked against.
+///
+/// Mutation testing asked for this: `Registry::has` could return a constant
+/// either way and nothing noticed.
+#[test]
+fn the_registry_says_which_managers_it_handles() {
+    let registry = Registry::new();
+    assert!(!registry.has("brew"), "an empty registry handles nothing");
+
+    let mut registry = Registry::new();
+    registry
+        .register(handler("brew", "brew-component"))
+        .expect("the first registration");
+
+    assert!(registry.has("brew"));
+    assert!(!registry.has("apt"), "a manager nobody registered");
+}
