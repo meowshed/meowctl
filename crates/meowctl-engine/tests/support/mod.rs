@@ -165,8 +165,7 @@ pub fn world(
     use meowctl_fs::FileSystem as _;
 
     let fs = std::sync::Arc::new(meowctl_fs::MemFs::new());
-    fs.create_dir_all(std::path::Path::new("/home/u"))
-        .expect("home");
+    fs.create_dir_all(std::path::Path::new(HOME)).expect("home");
     let exec = std::sync::Arc::new(meowctl_exec::ScriptedExecutor::new(runs));
     let events: std::sync::Arc<std::sync::Mutex<Vec<meowctl_common::Event>>> =
         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
