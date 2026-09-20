@@ -1,0 +1,84 @@
+---
+source: crates/meowctl-tui/tests/live.rs
+expression: out
+---
+--- colour None, unicode true, width 80
+install (1)
+<hide><sync><erase>  ⠋ @stdlib//components/neovim
+</sync><up><erase><cr>  ✓ @stdlib//components/neovim
+<show>
+--- colour None, unicode true, width 30
+install (1)
+<hide><sync><erase>  ⠋ @stdlib//components/neovim
+</sync><up><erase><cr>  ✓ @stdlib//components/neovim
+<show>
+--- colour None, unicode false, width 80
+install (1)
+<hide><sync><erase>  | @stdlib//components/neovim
+</sync><up><erase><cr>  + @stdlib//components/neovim
+<show>
+--- colour None, unicode false, width 30
+install (1)
+<hide><sync><erase>  | @stdlib//components/neovim
+</sync><up><erase><cr>  + @stdlib//components/neovim
+<show>
+--- colour Ansi16, unicode true, width 80
+<esc>[35minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[35m⠋<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[32m✓<esc>[0m @stdlib//components/neovim
+<show>
+--- colour Ansi16, unicode true, width 30
+<esc>[35minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[35m⠋<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[32m✓<esc>[0m @stdlib//components/neovim
+<show>
+--- colour Ansi16, unicode false, width 80
+<esc>[35minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[35m|<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[32m+<esc>[0m @stdlib//components/neovim
+<show>
+--- colour Ansi16, unicode false, width 30
+<esc>[35minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[35m|<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[32m+<esc>[0m @stdlib//components/neovim
+<show>
+--- colour Ansi256, unicode true, width 80
+<esc>[38;5;183minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[38;5;183m⠋<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[38;5;151m✓<esc>[0m @stdlib//components/neovim
+<show>
+--- colour Ansi256, unicode true, width 30
+<esc>[38;5;183minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[38;5;183m⠋<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[38;5;151m✓<esc>[0m @stdlib//components/neovim
+<show>
+--- colour Ansi256, unicode false, width 80
+<esc>[38;5;183minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[38;5;183m|<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[38;5;151m+<esc>[0m @stdlib//components/neovim
+<show>
+--- colour Ansi256, unicode false, width 30
+<esc>[38;5;183minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[38;5;183m|<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[38;5;151m+<esc>[0m @stdlib//components/neovim
+<show>
+--- colour TrueColour, unicode true, width 80
+<esc>[38;2;203;166;247minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[38;2;203;166;247m⠋<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[38;2;166;227;161m✓<esc>[0m @stdlib//components/neovim
+<show>
+--- colour TrueColour, unicode true, width 30
+<esc>[38;2;203;166;247minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[38;2;203;166;247m⠋<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[38;2;166;227;161m✓<esc>[0m @stdlib//components/neovim
+<show>
+--- colour TrueColour, unicode false, width 80
+<esc>[38;2;203;166;247minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[38;2;203;166;247m|<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[38;2;166;227;161m+<esc>[0m @stdlib//components/neovim
+<show>
+--- colour TrueColour, unicode false, width 30
+<esc>[38;2;203;166;247minstall (1)<esc>[0m
+<hide><sync><erase>  <esc>[38;2;203;166;247m|<esc>[0m @stdlib//components/neovim
+</sync><up><erase><cr>  <esc>[38;2;166;227;161m+<esc>[0m @stdlib//components/neovim
+<show>

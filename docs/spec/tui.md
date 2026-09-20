@@ -67,12 +67,26 @@ restore the cursor, and write nothing until `TerminalReleased`; see
 suspension. A command that exits with a hidden cursor leaves the user's shell
 broken.
 
+The sink MUST restore it when it is finished with and when it is dropped,
+which covers a normal exit and a panic. A signal arrives at the process rather
+than at the sink, so `meowctl-cli` installs the handler and calls the sink;
+see [R-CLI-014].
+
 **[R-TUI-024]** Sub-work within a component, such as packages being installed,
 MUST be shown on the component's own status line rather than by indenting
 further, so [R-TUI-002] holds.
 
 **[R-TUI-025]** The terminal width MUST be re-read per frame, so a resize is
 picked up without a signal handler. `Caps.Size` does this.
+
+**[R-TUI-026]** The spinner MUST advance on the events the sink receives, and
+MUST NOT be driven by a timer. `v0.1.0` animates it from a goroutine, which
+means a renderer owns a thread, a mutex and a shutdown path, and a test of the
+output has to wait for wall-clock time to pass.
+
+The cost is real and bounded: a component whose subprocess runs silently for a
+minute shows a still spinner for that minute. Captured output and every other
+event redraw it, so the case is a command that produces nothing at all.
 
 ## The JSON sink
 

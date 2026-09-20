@@ -13,5 +13,8 @@ serde_json = { workspace = true }
 terminal_size = { workspace = true }
 thiserror = { workspace = true }
 
+[dev-dependencies]
+insta = { workspace = true }
+
 [lints]
 workspace = true

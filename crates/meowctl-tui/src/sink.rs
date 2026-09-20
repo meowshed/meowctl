@@ -258,7 +258,7 @@ impl Sink for JsonSink {
 }
 
 /// Why a component was skipped, in words a user can act on.
-fn describe(reason: &SkipReason) -> String {
+pub(crate) fn describe(reason: &SkipReason) -> String {
     match reason {
         SkipReason::AlreadyCompleted => "already done".to_owned(),
         SkipReason::FilteredOut => "not in the filter".to_owned(),
@@ -267,7 +267,7 @@ fn describe(reason: &SkipReason) -> String {
 }
 
 /// Which role a message level renders as.
-const fn role_of(level: Level) -> Role {
+pub(crate) const fn role_of(level: Level) -> Role {
     match level {
         Level::Debug | Level::Info => Role::Info,
         Level::Warn => Role::Warning,
