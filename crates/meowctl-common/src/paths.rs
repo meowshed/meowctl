@@ -261,13 +261,16 @@ mod tests {
         assert!(home_dir(&env).is_err());
     }
 
+    /// The variable the message names differs per platform, because the
+    /// variables do; see [R-COMMON-023]. What matters is that nothing is
+    /// guessed.
     #[test]
     fn a_missing_home_is_an_error_rather_than_a_guess() {
         let env = FakeEnv::new(&[]);
-        assert!(matches!(
-            config_dir(&env),
-            Err(Error::NoHomeDirectory("HOME"))
-        ));
+        let Err(Error::NoHomeDirectory(named)) = config_dir(&env) else {
+            panic!("a missing home should be an error");
+        };
+        assert!(named.contains("HOME"), "{named}");
     }
 
     /// [R-COMMON-021] `v0.1.0` ignores `XDG_CACHE_HOME`; honouring it is the
