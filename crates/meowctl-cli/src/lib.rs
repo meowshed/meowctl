@@ -21,4 +21,5 @@ mod version;
 pub use cli::{Cli, Command, DepCommand, Format, Global, Shell};
 pub use error::{CliError, CliResult};
 pub use run::{main, run};
+pub use shell::snippet as shell_snippet;
 pub use version::string as version;

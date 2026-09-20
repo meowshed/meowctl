@@ -114,3 +114,32 @@ fn an_empty_directory_is_not_a_configuration() {
     fs.write(&layout.entry(), b"# empty\n").expect("the entry");
     assert!(layout.check(&fs).is_ok());
 }
+
+/// [R-CLI-021] the four snippets are byte-exact, because a user's `.zshrc`
+/// evaluates one of them and a changed line is a shell that stops working.
+#[test]
+fn each_shell_gets_its_own_snippet_and_it_is_not_empty() {
+    use meowctl_cli::Shell;
+
+    let mut seen: Vec<&'static str> = Vec::new();
+    for shell in [Shell::Bash, Shell::Zsh, Shell::Fish, Shell::Posix] {
+        let snippet = meowctl_cli::shell_snippet(shell);
+        assert!(!snippet.is_empty(), "{shell} has no snippet");
+        assert!(
+            snippet.contains("meowctl hook shell"),
+            "{shell} does not call the hook: {snippet}"
+        );
+        assert!(!seen.contains(&snippet), "{shell} repeats another shell's");
+        seen.push(snippet);
+    }
+
+    // Fish is the one whose syntax differs enough to need its own.
+    assert!(
+        meowctl_cli::shell_snippet(Shell::Fish).contains("| source"),
+        "fish does not use its own syntax"
+    );
+    assert!(
+        meowctl_cli::shell_snippet(Shell::Zsh).contains("eval"),
+        "zsh does not use eval"
+    );
+}
