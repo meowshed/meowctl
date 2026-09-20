@@ -78,23 +78,28 @@ impl Sink for PlainSink {
     fn handle(&mut self, event: &Event) {
         match event {
             Event::PlanComputed { phase_set, steps } => {
-                let running = steps.iter().filter(|s| s.skipped.is_none()).count();
+                // One line per component rather than one per phase and
+                // component: a configuration with a hundred components and a
+                // three-phase set would otherwise print three hundred lines
+                // to say what a hundred say.
+                let planned = by_component(steps);
+                let running = planned.iter().filter(|(_, skip)| skip.is_none()).count();
                 self.heading(&format!(
                     "{phase_set}: {running} of {} component(s)",
-                    steps.len()
+                    planned.len()
                 ));
-                for step in steps {
-                    match &step.skipped {
+                for (component, skipped) in planned {
+                    match skipped {
                         // Every skip says why: a count alone is not something
                         // a user can act on; see [R-ENGINE-052].
                         Some(reason) => {
                             let separator = self.theme.symbols().separator;
                             self.item(
                                 Role::Muted,
-                                &format!("{} {separator} {}", step.component, describe(reason)),
+                                &format!("{component} {separator} {}", describe(&reason)),
                             );
                         }
-                        None => self.item(Role::Success, &step.component.to_string()),
+                        None => self.item(Role::Success, &component.to_string()),
                     }
                 }
             }
@@ -255,6 +260,36 @@ impl Sink for JsonSink {
     fn finish(&mut self) {
         let _ = self.out.flush();
     }
+}
+
+/// The plan as one entry per component, in the order it was planned.
+///
+/// A component runs when any of its phases will, and carries a reason only
+/// when every one of them is skipped -- a component skipped in `install` and
+/// running in `install_configure` is a component that runs.
+pub(crate) fn by_component(
+    steps: &[meowctl_common::PlannedStep],
+) -> Vec<(meowctl_common::ComponentId, Option<SkipReason>)> {
+    let mut order: Vec<meowctl_common::ComponentId> = Vec::new();
+    let mut reasons: std::collections::BTreeMap<&meowctl_common::ComponentId, Option<SkipReason>> =
+        std::collections::BTreeMap::new();
+
+    for step in steps {
+        if !order.contains(&step.component) {
+            order.push(step.component.clone());
+            reasons.insert(&step.component, step.skipped.clone());
+            continue;
+        }
+        // One phase that runs is enough to make the component one that runs.
+        if step.skipped.is_none() {
+            reasons.insert(&step.component, None);
+        }
+    }
+
+    order
+        .iter()
+        .map(|component| (component.clone(), reasons.get(component).cloned().flatten()))
+        .collect()
 }
 
 /// Why a component was skipped, in words a user can act on.

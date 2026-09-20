@@ -260,18 +260,21 @@ impl Sink for LiveSink {
     fn handle(&mut self, event: &Event) {
         match event {
             Event::PlanComputed { phase_set, steps } => {
-                let running = steps.iter().filter(|s| s.skipped.is_none()).count();
+                // One entry per component, for the reason the plain sink
+                // gives: three hundred lines to say what a hundred say.
+                let planned = crate::sink::by_component(steps);
+                let running = planned.iter().filter(|(_, skip)| skip.is_none()).count();
                 let heading = self.theme.paint(
                     Role::Accent,
-                    &format!("{phase_set}: {running} of {} component(s)", steps.len()),
+                    &format!("{phase_set}: {running} of {} component(s)", planned.len()),
                 );
                 self.commit(&heading);
-                for step in steps {
-                    if let Some(reason) = &step.skipped {
+                for (component, skipped) in planned {
+                    if let Some(reason) = skipped {
                         let separator = self.theme.symbols().separator;
                         let line = self.item(
                             Role::Muted,
-                            &format!("{} {separator} {}", step.component, describe(reason)),
+                            &format!("{component} {separator} {}", describe(&reason)),
                         );
                         self.commit(&line);
                     }

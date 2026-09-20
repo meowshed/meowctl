@@ -183,10 +183,16 @@ const INVOCATIONS: &[Invocation] = &[
         stdout_is_interface: false,
         runs_hooks: false,
     },
+    // `--format json` is part of the output redesign rather than of the
+    // parity contract: `v0.1.0` has one hand-written JSON body shaped like a
+    // list of checks, and `v0.2.0` emits the event stream from every command.
+    // Comparing them would hold the shape the redesign removes; what checks
+    // the new one is [R-TUI-030] against a recorded stream. The exit code and
+    // the file tree are still compared; see [R-CLI-041].
     Invocation {
         slug: "doctor-json",
         args: &["doctor", "--json"],
-        stdout_is_interface: true,
+        stdout_is_interface: false,
         runs_hooks: false,
     },
     Invocation {

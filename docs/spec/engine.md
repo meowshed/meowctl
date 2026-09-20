@@ -89,6 +89,16 @@ point at each other.
 components and their dependencies, and a name matching nothing MUST be an
 error rather than an empty run.
 
+**[R-ENGINE-017]** A component named by a bare name MUST be looked for as
+`components/<name>.star` and then as `components/<name>/init.star`, and its
+`component_dir` MUST be `components/<name>/` when that directory exists and
+`components/` otherwise.
+
+Both layouts are in use: `meowctl-stdlib` lays every component out as a
+directory with an `init.star`, and a hand-written configuration usually has
+one file per component. `cf1774d` added the directory rule so a component's
+`render_file` finds the data files beside its hook.
+
 ## Two passes
 
 **[R-ENGINE-020]** Every component MUST be evaluated once to collect its

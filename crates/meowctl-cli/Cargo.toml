@@ -1,0 +1,28 @@
+[package]
+name = "meowctl-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "The command surface: flags in, exit codes out"
+
+[dependencies]
+clap = { workspace = true }
+clap_complete = { workspace = true }
+meowctl-common = { path = "../meowctl-common" }
+meowctl-config = { path = "../meowctl-config" }
+meowctl-ctx = { path = "../meowctl-ctx" }
+meowctl-engine = { path = "../meowctl-engine" }
+meowctl-exec = { path = "../meowctl-exec" }
+meowctl-fs = { path = "../meowctl-fs" }
+meowctl-module = { path = "../meowctl-module" }
+meowctl-net = { path = "../meowctl-net" }
+meowctl-ops = { path = "../meowctl-ops" }
+meowctl-starlark = { path = "../meowctl-starlark" }
+meowctl-tui = { path = "../meowctl-tui" }
+signal-hook = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
