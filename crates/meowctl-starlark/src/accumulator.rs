@@ -104,6 +104,14 @@ pub struct ModuleDecl {
     pub name: String,
     /// Its version.
     pub version: String,
+    /// The manifest schema the module was written against.
+    ///
+    /// Every `MODULE.meow` in the meowshed organisation carries one, and a
+    /// reader that rejected it would reject every module there is. Absent in
+    /// a `deps.mod`, which meowctl writes itself, and recorded rather than
+    /// acted on: nothing reads it yet, and dropping it would mean a module
+    /// declaring a newer schema is indistinguishable from one that does not.
+    pub compat: Option<i64>,
 }
 
 /// Everything one evaluation declared, in declaration order.
