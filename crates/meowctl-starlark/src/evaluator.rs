@@ -1,7 +1,8 @@
 //! Evaluating a file, and calling a hook in it.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use meowctl_common::Span;
 use starlark::environment::{FrozenModule, Globals, GlobalsBuilder, Module};
@@ -35,6 +36,41 @@ pub struct LoadedFile {
     pub name: String,
     /// Its source.
     pub source: String,
+}
+
+/// Where `query_pm` gets its answer.
+///
+/// Interrogating a package manager means calling a function in another
+/// component's file, which is an evaluation this crate cannot start from
+/// inside a builtin of the evaluation already running. So it arrives as a
+/// trait, the way [`Loader`] does, and the engine supplies one; see
+/// [R-STAR-005] and [R-PM-020].
+pub trait PackageManagers: std::fmt::Debug {
+    /// What the manager reports is installed.
+    ///
+    /// # Errors
+    ///
+    /// When nothing handles the manager, or when its `interrogate` fails.
+    fn interrogate(&self, manager: &str) -> StarlarkResult<Vec<String>>;
+}
+
+/// A set of package managers with nothing in it.
+///
+/// For an evaluation that should not be interrogating anything, and for a
+/// test that wants to prove one does not.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoPackageManagers;
+
+impl PackageManagers for NoPackageManagers {
+    fn interrogate(&self, manager: &str) -> StarlarkResult<Vec<String>> {
+        Err(StarlarkError::Evaluation {
+            message: format!(
+                "query_pm({manager:?}) needs a package-manager registry and this evaluation has none"
+            ),
+            span: None,
+            load_chain: Vec::new(),
+        })
+    }
 }
 
 /// A loader that refuses everything.
@@ -73,6 +109,8 @@ pub struct Evaluator<'a> {
     /// A graph that loads one helper from twenty components pays for it once;
     /// see [R-STAR-023].
     cache: RefCell<HashMap<String, FrozenModule>>,
+    /// Where `query_pm` sends its question; see [R-STAR-005].
+    package_managers: Arc<dyn PackageManagers>,
 }
 
 impl std::fmt::Debug for Evaluator<'_> {
@@ -93,6 +131,8 @@ pub struct Evaluated {
     /// Which of those are functions, so a hook can be found without calling
     /// it; see [R-STAR-032].
     pub callables: Vec<String>,
+    /// Those bound to a string, with their values; see [R-STAR-033].
+    pub strings: BTreeMap<String, String>,
 }
 
 impl Evaluated {
@@ -111,7 +151,18 @@ impl<'a> Evaluator<'a> {
             platform,
             loader,
             cache: RefCell::new(HashMap::new()),
+            package_managers: Arc::new(NoPackageManagers),
         }
+    }
+
+    /// Sends `query_pm` to this registry.
+    ///
+    /// Without it `query_pm` refuses, which is right for an evaluation that
+    /// has no components to ask.
+    #[must_use]
+    pub fn with_package_managers(mut self, managers: Arc<dyn PackageManagers>) -> Self {
+        self.package_managers = managers;
+        self
     }
 
     /// Evaluates a file and reports what it declared.
@@ -162,12 +213,14 @@ impl<'a> Evaluator<'a> {
         let context = Context {
             accumulator: Accumulator::new(),
             platform: self.platform.clone(),
+            package_managers: Arc::clone(&self.package_managers),
         };
         let loader = CachingLoader {
             inner: self.loader,
             cache: &self.cache,
             globals: &globals,
             platform: &self.platform,
+            package_managers: &self.package_managers,
             chain: RefCell::new(Vec::new()),
         };
 
@@ -192,10 +245,23 @@ impl<'a> Evaluator<'a> {
                 .cloned()
                 .collect();
 
+            // [R-STAR-033]: the value of every top-level string, because
+            // `pm_name` is what decides whether a component handles a package
+            // manager, and which one.
+            let strings: BTreeMap<String, String> = globals_found
+                .iter()
+                .filter_map(|name| {
+                    let value = module.get(name)?;
+                    let text = value.unpack_str()?;
+                    Some((name.clone(), text.to_owned()))
+                })
+                .collect();
+
             let evaluated = Evaluated {
                 declarations: context.accumulator.declarations(),
                 globals: globals_found,
                 callables,
+                strings,
             };
 
             let Some(hook) = hook else {
@@ -287,6 +353,8 @@ struct CachingLoader<'a> {
     cache: &'a RefCell<HashMap<String, FrozenModule>>,
     globals: &'a Globals,
     platform: &'a Platform,
+    /// Where a `query_pm` inside a loaded file sends its question.
+    package_managers: &'a Arc<dyn PackageManagers>,
     /// The files being loaded, outermost first, for a diagnostic.
     chain: RefCell<Vec<String>>,
 }
@@ -308,6 +376,7 @@ impl FileLoader for CachingLoader<'_> {
         let context = Context {
             accumulator: Accumulator::new(),
             platform: self.platform.clone(),
+            package_managers: Arc::clone(self.package_managers),
         };
 
         let frozen = Module::with_temp_heap(|module| {

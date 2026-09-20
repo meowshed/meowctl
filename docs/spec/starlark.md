@@ -133,6 +133,12 @@ are optional and most components define two or three of the thirteen.
 **[R-STAR-032]** A global that is present but not callable MUST be an error
 naming the component and the hook.
 
+**[R-STAR-033]** An evaluation MUST report the value of every top-level name
+bound to a string. `pm_name` is one, and it is what decides whether a component
+is a package-manager handler and which manager it handles; see [R-PM-001]. A
+map rather than that one name, because the evaluator has no business knowing
+which strings its callers care about.
+
 ## Diagnostics
 
 **[R-STAR-040]** An evaluation error MUST carry the file, the line, the column,
