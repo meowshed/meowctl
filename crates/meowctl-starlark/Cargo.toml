@@ -1,0 +1,21 @@
+[package]
+name = "meowctl-starlark"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "The Starlark evaluator, builtins, and declaration accumulator"
+
+[dependencies]
+allocative = { workspace = true }
+anyhow = { workspace = true }
+derive_more = { workspace = true, features = ["display"] }
+meowctl-common = { path = "../meowctl-common" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+starlark = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

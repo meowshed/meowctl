@@ -36,13 +36,13 @@
       "Bash(gh issue list:*)",
       "Bash(gh run list:*)",
       "Bash(gh run view:*)",
-      "Bash(./bin/meowctl:*)"
+      "Bash(./bin/meowctl:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)"
     ],
     "ask": [
-      "Bash(git push:*)",
       "Bash(git tag:*)",
       "Bash(gh release:*)",
-      "Bash(gh pr create:*)",
       "Bash(gh pr merge:*)"
     ],
     "deny": [
