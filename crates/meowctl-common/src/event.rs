@@ -191,6 +191,27 @@ pub enum Event {
         span: Option<Span>,
     },
 
+    /// A line of shell code for the calling shell to evaluate.
+    ///
+    /// What `ctx.emit` produces. An event rather than a write to stdout,
+    /// because `ctx` holds no renderer and only the `shell` and `login`
+    /// commands render it at all; see [R-CTX-024] and [R-COMMON-044].
+    ShellLine {
+        /// The line, as the component wrote it.
+        line: String,
+    },
+
+    /// A directory was put first on the `PATH` later commands see.
+    ///
+    /// What `ctx.add_path` produces. An event rather than a call to `setenv`,
+    /// because the process environment is an effect and `ctx` reaches every
+    /// effect through something it was given; see [R-CTX-025] and
+    /// [R-COMMON-044].
+    PathPrepended {
+        /// The directory.
+        directory: String,
+    },
+
     /// Text with no structure of its own.
     ///
     /// The only variant carrying free text, and it carries a level so the sink

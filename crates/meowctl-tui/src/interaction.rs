@@ -37,6 +37,18 @@ pub trait Interaction {
     ///
     /// [`InteractionError::NotInteractive`] when nobody can answer.
     fn confirm(&mut self, question: &str) -> Result<bool, InteractionError>;
+
+    /// Asks a free-text question and returns what was typed.
+    ///
+    /// Separate from [`Interaction::confirm`] rather than underneath it: a
+    /// confirmation has a default and a fixed vocabulary, and the session that
+    /// cannot answer has to say which of the two it is refusing; see
+    /// [R-TUI-063]. `ctx.prompt` is the caller.
+    ///
+    /// # Errors
+    ///
+    /// [`InteractionError::NotInteractive`] when nobody can answer.
+    fn ask(&mut self, question: &str) -> Result<String, InteractionError>;
 }
 
 /// Asks on the real terminal.
@@ -66,6 +78,31 @@ impl<R: BufRead, W: Write> Prompt<R, W> {
 }
 
 impl<R: BufRead, W: Write> Interaction for Prompt<R, W> {
+    fn ask(&mut self, question: &str) -> Result<String, InteractionError> {
+        if !self.interactive {
+            return Err(InteractionError::NotInteractive {
+                question: question.to_owned(),
+            });
+        }
+
+        let io = |source| InteractionError::Io {
+            question: question.to_owned(),
+            source,
+        };
+
+        write!(self.output, "{question} ").map_err(io)?;
+        self.output.flush().map_err(io)?;
+
+        let mut answer = String::new();
+        if self.input.read_line(&mut answer).map_err(io)? == 0 {
+            // End of input is an empty answer, which is what `starPrompt`
+            // returns, and the newline closes the line the question opened.
+            writeln!(self.output).map_err(io)?;
+            return Ok(String::new());
+        }
+        Ok(answer.trim_end_matches(['\r', '\n']).to_owned())
+    }
+
     fn confirm(&mut self, question: &str) -> Result<bool, InteractionError> {
         if !self.interactive {
             return Err(InteractionError::NotInteractive {
@@ -102,10 +139,16 @@ impl<R: BufRead, W: Write> Interaction for Prompt<R, W> {
 }
 
 /// Answers without asking, for a test and for `--yes`.
+///
+/// The free-text answer is empty, which is what end-of-input gives.
 #[derive(Debug, Clone, Copy)]
 pub struct Always(pub bool);
 
 impl Interaction for Always {
+    fn ask(&mut self, _question: &str) -> Result<String, InteractionError> {
+        Ok(String::new())
+    }
+
     fn confirm(&mut self, _question: &str) -> Result<bool, InteractionError> {
         Ok(self.0)
     }
@@ -181,6 +224,50 @@ mod tests {
 
         // Nothing was read: the pipe's contents are not an answer.
         assert!(output.is_empty(), "{output:?}");
+    }
+
+    /// [R-TUI-063] `ctx.prompt` returns what was typed, and the newline is
+    /// not part of it.
+    #[test]
+    fn a_free_text_question_returns_the_line_without_its_newline() {
+        let mut output = Vec::new();
+        let answer = {
+            let mut prompt = Prompt::new("Ada Lovelace\n".as_bytes(), &mut output, true);
+            prompt.ask("Your name?")
+        };
+        assert_eq!(answer.expect("an answer"), "Ada Lovelace");
+        let written = String::from_utf8_lossy(&output).into_owned();
+        assert!(written.contains("Your name?"), "{written:?}");
+        assert!(
+            !written.contains("[y/N]"),
+            "a free-text question is not a confirmation: {written:?}"
+        );
+    }
+
+    /// [R-TUI-063] end of input is an empty answer, which is what `starPrompt`
+    /// returns, rather than a failure.
+    #[test]
+    fn end_of_input_is_an_empty_answer() {
+        let mut output = Vec::new();
+        let answer = {
+            let mut prompt = Prompt::new("".as_bytes(), &mut output, true);
+            prompt.ask("Your name?")
+        };
+        assert_eq!(answer.expect("an answer"), "");
+    }
+
+    /// [R-TUI-062] and a free-text question refuses in a non-interactive
+    /// session for the same reason a confirmation does.
+    #[test]
+    fn a_free_text_question_also_refuses_when_nobody_is_there() {
+        let mut output = Vec::new();
+        let mut prompt = Prompt::new("Ada\n".as_bytes(), &mut output, false);
+        let err = prompt.ask("Your name?").expect_err("should refuse");
+        assert!(
+            matches!(err, InteractionError::NotInteractive { .. }),
+            "{err:?}"
+        );
+        assert!(output.is_empty(), "nothing was read: {output:?}");
     }
 
     /// `--yes` answers without asking.

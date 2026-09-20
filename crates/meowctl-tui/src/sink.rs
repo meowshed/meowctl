@@ -189,6 +189,22 @@ impl Sink for PlainSink {
                 }
             }
 
+            // Shell code goes to the shell, not to a transcript. `meowctl
+            // shell` writes it to stdout itself; a sink rendering a run puts
+            // it where a reader can see what a component contributed; see
+            // [R-COMMON-044].
+            Event::ShellLine { line } => {
+                let text = self.theme.paint(Role::Muted, &format!("      {line}"));
+                self.line(&text);
+            }
+
+            Event::PathPrepended { directory } => {
+                let text = self
+                    .theme
+                    .paint(Role::Muted, &format!("      PATH += {directory}"));
+                self.line(&text);
+            }
+
             Event::Message { level, text } => match level {
                 // Verbose detail is held back rather than shown, because a
                 // plain log that says everything says nothing.
