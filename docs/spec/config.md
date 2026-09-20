@@ -70,10 +70,14 @@ Both MUST use the same dialect. A file one accepts and the other rejects would
 mean `meowctl add` succeeding on a configuration that then fails to apply, so
 the dialect is named in both crates and a test runs one file through both.
 
-**[R-CONFIG-011]** `deps.mod` MUST support the three statements
+**[R-CONFIG-011]** `deps.mod` MUST support the statements
 `internal/modfile/modfile.go` documents: `module(name, version)`,
 `dep(name, version)` for a registry dependency, `dep(name, source)` for a
 GitHub dependency, and `replace(name, path)` or `replace(name, source)`.
+
+A module's own `MODULE.meow` uses the same statements plus `compat` on
+`module()`; see [R-STAR-006]. meowctl writes `deps.mod` and never writes a
+`MODULE.meow`, so this component's writer emits no `compat`.
 
 **[R-CONFIG-012]** A `dep()` MUST carry a version or a source, never both and
 never neither.
