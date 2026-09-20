@@ -675,6 +675,60 @@ fn a_mutation_is_journaled_before_it_happens() {
     assert!(written.contains("\"phase\":\"install\""), "{written}");
 }
 
+/// [R-OPS-032] a journal that cannot be appended to fails the operation.
+///
+/// An effect applied with no record of how to undo it is the state the
+/// journal exists to prevent, so the write must not happen at all. The
+/// journal is opened on a path and then the directory is taken away, which is
+/// how a full disk looks from here.
+#[test]
+fn an_effect_whose_journal_cannot_be_written_does_not_happen() {
+    let temp = tempfile::tempdir().expect("a temporary directory");
+    let journal_path = temp.path().join("gone").join("journal.ndjson");
+    std::fs::create_dir_all(journal_path.parent().expect("a parent")).expect("the directory");
+
+    let fs = Arc::new(MemFs::new());
+    fs.create_dir_all(Path::new(HOME)).expect("home");
+    let journal = meowctl_ops::Journal::open(&journal_path).expect("the journal opens");
+
+    // Taken away after opening, so the append is what fails rather than the
+    // open.
+    std::fs::remove_dir_all(journal_path.parent().expect("a parent")).expect("remove");
+
+    let capabilities = Capabilities {
+        home: PathBuf::from(HOME),
+        dry_run: false,
+        component_dir: PathBuf::from(COMPONENT_DIR),
+        state_dir: PathBuf::from(STATE_DIR),
+        shell: None,
+        platform: Platform::default(),
+        environment: BTreeMap::new(),
+        phase: Phase::Install,
+        component: "neovim".to_owned(),
+    };
+    let effects = Effects {
+        fs: Arc::clone(&fs) as Arc<dyn FileSystem + Send + Sync>,
+        exec: Arc::new(ScriptedExecutor::new(Vec::new())),
+        http: Arc::new(ScriptedHttp::new()),
+        interaction: Arc::new(Mutex::new(Always(true))),
+        journal: Some(Arc::new(Mutex::new(journal))),
+        events: Arc::new(Mutex::new(|_| {})),
+    };
+    let ctx = Ctx::new(capabilities, effects);
+
+    call(
+        &ctx,
+        Surface::Full,
+        "    ctx.write_file(\"~/.zshrc\", \"a\")",
+    )
+    .expect_err("an unrecordable effect must not be applied");
+
+    assert!(
+        fs.read(Path::new(HOME).join(".zshrc").as_path()).is_err(),
+        "the file was written with no way to undo it"
+    );
+}
+
 /// [R-COMMON-012] and [R-CTX-030]: which surface a phase gets follows from
 /// whether the phase is read-only, and nothing else decides it.
 #[test]

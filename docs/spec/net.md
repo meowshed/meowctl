@@ -44,6 +44,11 @@ module from a rate-limited one.
 redirect is the other way a plaintext fetch happens, and it is not visible in
 the URL a caller passed.
 
+This and [R-NET-003] are one setting on the client, which is why the test
+covers both: a caller can check the URL it passed and cannot check where a
+redirect goes, so the rule lives below the call. Holding the redirect half on
+its own needs a server that redirects to plaintext.
+
 **[R-NET-006]** A response body MUST be bounded, and a body that exceeds the
 bound MUST fail rather than being truncated. `v0.1.0` calls `io.ReadAll` on
 every response, so a server that streams forever is an out-of-memory kill with

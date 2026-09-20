@@ -436,3 +436,79 @@ fn a_written_manifest_evaluates() {
     assert_eq!(result.declarations.deps.len(), 2);
     assert_eq!(result.declarations.replaces.len(), 2);
 }
+
+/// [R-CONFIG-061] a hash that is not a W3C Subresource Integrity one fails
+/// where the file is read.
+///
+/// The alternative is what the first implementation did: keep the string,
+/// compare it against a computed hash later, and report a mismatch. A user
+/// then sees "the tarball does not match what the lock records", which is how
+/// tampering looks, for a lock somebody hand-edited.
+#[test]
+fn a_lock_with_a_malformed_integrity_is_refused() {
+    let fs = memory();
+    let path = Path::new("/cfg/deps.lock");
+    fs.write(
+        path,
+        concat!(
+            "[modules]\n",
+            "  [modules.stdlib]\n",
+            "    version = \"0.2.17\"\n",
+            "    source = \"https://r/t.tar.gz\"\n",
+            "    integrity = \"not-a-hash\"\n",
+        )
+        .as_bytes(),
+    )
+    .expect("seed");
+
+    let err = LockFile::read(&fs, path).expect_err("a malformed hash should be refused");
+    let said = err.to_string();
+    assert!(said.contains("stdlib"), "{said}");
+    assert!(said.contains("sha384-"), "{said}");
+}
+
+/// [R-CONFIG-061] and a per-file hash is held to the same form, because that
+/// is what [R-MODULE-041] compares a cached module against.
+#[test]
+fn a_malformed_per_file_hash_is_refused() {
+    let fs = memory();
+    let path = Path::new("/cfg/deps.lock");
+    fs.write(
+        path,
+        concat!(
+            "[modules]\n",
+            "  [modules.stdlib]\n",
+            "    version = \"0.2.17\"\n",
+            "    integrity = \"sha384-AAA\"\n",
+            "    [modules.stdlib.files]\n",
+            "      \"components/git.star\" = \"md5-nope\"\n",
+        )
+        .as_bytes(),
+    )
+    .expect("seed");
+
+    let err = LockFile::read(&fs, path).expect_err("a malformed per-file hash should be refused");
+    assert!(err.to_string().contains("components/git.star"), "{err}");
+}
+
+/// [R-CONFIG-061] an empty hash is not malformed. A replaced module points at
+/// a local path and has nothing to verify.
+#[test]
+fn a_replaced_module_with_no_hash_is_accepted() {
+    let fs = memory();
+    let path = Path::new("/cfg/deps.lock");
+    fs.write(
+        path,
+        concat!(
+            "[modules]\n",
+            "  [modules.stdlib]\n",
+            "    replaced = true\n",
+            "    path = \"../meowctl-stdlib\"\n",
+        )
+        .as_bytes(),
+    )
+    .expect("seed");
+
+    let lock = LockFile::read(&fs, path).expect("a replaced module has no hash to check");
+    assert!(lock.modules["stdlib"].replaced);
+}
