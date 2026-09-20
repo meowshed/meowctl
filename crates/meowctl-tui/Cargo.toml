@@ -11,6 +11,7 @@ description = "Rendering the event stream: live, plain, and JSON sinks"
 meowctl-common = { path = "../meowctl-common" }
 serde_json = { workspace = true }
 terminal_size = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true
