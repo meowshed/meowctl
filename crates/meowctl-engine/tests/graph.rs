@@ -4,94 +4,12 @@
 // binary is test code by construction.
 #![allow(clippy::expect_used)]
 
+mod support;
+
 use std::collections::BTreeMap;
 
-use meowctl_engine::{Declaration, EngineError, EngineResult, Graph, Sources, discover};
-use meowctl_starlark::{LoadedFile, Loader, Platform, StarlarkError, StarlarkResult};
-
-/// A configuration written out as a table.
-#[derive(Default)]
-struct Config {
-    declared: Vec<Declaration>,
-    files: BTreeMap<String, String>,
-}
-
-impl Config {
-    fn new() -> Self {
-        Config::default()
-    }
-
-    /// A component the configuration declares, with the source of its file.
-    fn declaring(mut self, declaration: Declaration, source: &str) -> Self {
-        self.files
-            .insert(declaration.name.clone(), source.to_owned());
-        self.declared.push(declaration);
-        self
-    }
-
-    /// A component file the configuration does not declare, reachable only
-    /// through an `after` list.
-    fn holding(mut self, name: &str, source: &str) -> Self {
-        self.files.insert(name.to_owned(), source.to_owned());
-        self
-    }
-}
-
-impl Sources for Config {
-    fn declared(&self) -> EngineResult<Vec<Declaration>> {
-        Ok(self.declared.clone())
-    }
-
-    fn source(&self, id: &meowctl_common::ComponentId) -> EngineResult<String> {
-        self.files
-            .get(id.as_str())
-            .cloned()
-            .ok_or_else(|| EngineError::Configuration {
-                path: id.as_str().to_owned(),
-                reason: "there is no such file".to_owned(),
-            })
-    }
-}
-
-/// A loader that refuses, because nothing here loads.
-#[derive(Debug)]
-struct NoLoads;
-
-impl Loader for NoLoads {
-    fn load(&self, module: &str) -> StarlarkResult<LoadedFile> {
-        Err(StarlarkError::Load {
-            module: module.to_owned(),
-            reason: "this test loads nothing".to_owned(),
-        })
-    }
-}
-
-fn macos() -> Platform {
-    Platform {
-        os: "macos".to_owned(),
-        ..Platform::default()
-    }
-}
-
-fn linux(distro: &str, like: &str) -> Platform {
-    Platform {
-        os: "linux".to_owned(),
-        distro: distro.to_owned(),
-        distro_like: like.to_owned(),
-        ..Platform::default()
-    }
-}
-
-/// The source of a component file that declares itself and nothing else.
-fn plain(name: &str) -> String {
-    format!("component({name:?})\n")
-}
-
-fn graph_of(config: &Config, platform: &Platform) -> EngineResult<Graph> {
-    let loader = NoLoads;
-    let discovered = discover(config, &loader, platform)?;
-    Graph::build(&discovered)
-}
+use meowctl_engine::{Declaration, EngineError, discover};
+use support::{Config, NoLoads, graph_of, linux, macos, plain};
 
 /// [R-ENGINE-013] declaration order is the tie-break, so two runs of the same
 /// configuration produce the same order and a plan is worth reading.
