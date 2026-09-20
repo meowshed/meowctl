@@ -104,6 +104,9 @@ fn a_registry_module_is_fetched_verified_and_extracted() {
 
 /// [R-MODULE-032] a module ships scripts meowctl runs, and a dropped bit makes
 /// every one of them unusable. `v0.1.0` fixed this once already.
+///
+/// Windows has no bit for any filesystem to carry, so what is checked there is
+/// that extraction reads the entry's mode and asks for it without failing.
 #[test]
 fn the_executable_bit_survives_extraction() {
     let fs = tree();
@@ -119,7 +122,7 @@ fn the_executable_bit_survives_extraction() {
             .expect("the script is there"),
         Some(Entry::File {
             len: 18,
-            executable: true
+            executable: cfg!(unix)
         })
     );
     assert_eq!(

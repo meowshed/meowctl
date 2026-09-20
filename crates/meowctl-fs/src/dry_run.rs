@@ -355,6 +355,9 @@ impl FileSystem for DryRunFs {
                 path: path.to_path_buf(),
             });
         }
+        // A platform with no mode bits cannot carry one, and a plan that said
+        // otherwise would not predict the run; see [R-FS-005].
+        let executable = executable && cfg!(unix);
         // A file this run would write keeps one intent, with the bit folded
         // in: two intents for one path would need an order, and the map has
         // none. A file that is only being chmod'ed gets its own.

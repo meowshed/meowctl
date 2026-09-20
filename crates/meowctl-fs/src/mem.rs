@@ -335,7 +335,11 @@ impl FileSystem for MemFs {
             Some(Node::File {
                 executable: bit, ..
             }) => {
-                *bit = executable;
+                // A platform with no mode bits cannot carry one, and an
+                // in-memory filesystem that carried it anyway would let a test
+                // pass on Windows for behaviour `RealFs` does not have there;
+                // see [R-FS-005].
+                *bit = executable && cfg!(unix);
                 Ok(())
             }
             _ => Err(FsError::NotFound {
