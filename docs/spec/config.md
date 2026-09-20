@@ -109,16 +109,29 @@ A `github-modules` entry MUST carry `commit` and `integrity`. A `packages`
 entry is keyed by manager, then by package, and MUST carry `requested`,
 `installed`, and optionally `note`.
 
-**[R-CONFIG-021]** `files` MUST map each extracted path, relative to the module
-root, to its own integrity hash, so a cached module can be verified file by
-file rather than only as a tarball.
+**[R-CONFIG-021]** `files`, when present, MUST map each extracted path,
+relative to the module root, to its own integrity hash. Nothing writes it:
+`v0.1.0` declares the table and never fills it, and `v0.2.0` records the
+per-file hashes in the cache instead, for the reasons in [R-MODULE-044]. The
+schema keeps it because a lock either binary wrote has to round-trip through
+the other.
 
 **[R-CONFIG-022]** `meta` MUST record the version that wrote the file and an
 RFC 3339 timestamp.
 
+`v0.1.0` declares both fields and sets neither, so every lock it has ever
+written carries two empty strings. Filling them is a deliberate change, and it
+is the one place a user can see which binary last touched their lock -- which
+matters most during a cutover, when two of them share a configuration
+directory. It is also why [R-CONFIG-023] excludes this table.
+
 **[R-CONFIG-023]** A lock file written by `v0.2.0` from the same resolution as
-`v0.1.0` MUST be byte-identical, including key order and table order. The
-compat corpus checks this; see [R-CLI-042].
+`v0.1.0` MUST be byte-identical outside the `meta` table, including key order
+and table order. The compat corpus checks this; see [R-CLI-042].
+
+`meta` is excluded because it is the one table the two binaries are meant to
+disagree about; see [R-CONFIG-022]. Everything a run depends on -- versions,
+sources, hashes, commits, packages -- is inside the comparison.
 
 **[R-CONFIG-024]** `deps.local.lock` MUST have the same schema as `deps.lock`
 and MUST be read as an overlay: an entry present in both wins from the local
