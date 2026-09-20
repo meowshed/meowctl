@@ -12,7 +12,7 @@
 //! the other.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 
 /// The sequence that puts the cursor back.
 ///
@@ -39,6 +39,8 @@ pub fn watch_for_interruption() -> Arc<AtomicBool> {
 
     #[cfg(unix)]
     {
+        use std::sync::atomic::Ordering;
+
         use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM, SIGTSTP};
         use signal_hook::iterator::Signals;
 
