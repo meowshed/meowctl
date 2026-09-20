@@ -5,6 +5,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use meowctl_common::Integrity;
 use meowctl_fs::FileSystem;
 
 use crate::emit::{self, Value};
@@ -131,10 +132,42 @@ impl LockFile {
             Err(e) => return Err(e.into()),
         };
         let text = String::from_utf8_lossy(&bytes);
-        toml::from_str(&text).map_err(|e| ConfigError::Malformed {
+        let lock: LockFile = toml::from_str(&text).map_err(|e| ConfigError::Malformed {
             path: path.to_path_buf(),
             reason: e.to_string(),
-        })
+        })?;
+        lock.check_hashes(path)?;
+        Ok(lock)
+    }
+
+    /// Refuses a hash that is not a W3C Subresource Integrity one.
+    ///
+    /// The field is a `String` rather than an [`Integrity`] because a
+    /// replaced module has no hash and an empty string is not one. Checking
+    /// here gives the same guarantee at the same moment: a malformed hash
+    /// fails where the file is read, rather than comparing unequal forever
+    /// and looking like tampering; see [R-CONFIG-061] and [R-COMMON-004].
+    fn check_hashes(&self, path: &Path) -> ConfigResult<()> {
+        let check = |what: &str, value: &str| -> ConfigResult<()> {
+            if value.is_empty() || value.parse::<Integrity>().is_ok() {
+                return Ok(());
+            }
+            Err(ConfigError::Malformed {
+                path: path.to_path_buf(),
+                reason: format!("{what} is not a sha384- hash: {value}"),
+            })
+        };
+
+        for (name, entry) in &self.modules {
+            check(&format!("the integrity of {name}"), &entry.integrity)?;
+            for (file, hash) in &entry.files {
+                check(&format!("the integrity of {name}'s {file}"), hash)?;
+            }
+        }
+        for (name, entry) in &self.github {
+            check(&format!("the integrity of {name}"), &entry.integrity)?;
+        }
+        Ok(())
     }
 
     /// Writes a lock file in the layout `v0.1.0` emits.

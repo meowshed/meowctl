@@ -124,8 +124,13 @@ fn translate(url: &str, error: ureq::Error) -> NetError {
 mod tests {
     use super::*;
 
-    /// [R-NET-003] the refusal happens before any request, which is why it can
-    /// be checked without a server.
+    /// [R-NET-003] and [R-NET-005]: the refusal happens before any request,
+    /// which is why it can be checked without a server.
+    ///
+    /// One `https_only` on the agent gives both. A caller can check the URL
+    /// it passed; it cannot check where a redirect goes, so the scheme rule
+    /// has to live below the call. That half needs a server that redirects to
+    /// plaintext, and this is the half that can be held here.
     #[test]
     fn a_plaintext_url_is_refused_rather_than_fetched() {
         let err = RealHttp::new()

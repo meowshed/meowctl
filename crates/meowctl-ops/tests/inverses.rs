@@ -365,3 +365,86 @@ fn a_macos_default_with_no_prior_value_is_undone_by_deleting_it() {
         other => panic!("expected a delete, got {other:?}"),
     }
 }
+
+/// [R-OPS-005] the case the property strategy cannot reach, because it seeds
+/// a tree and the operation has to have already happened.
+///
+/// A component that re-links a symlink already pointing where it wants is the
+/// ordinary case on a second `meowctl apply`. If the inverse of that were
+/// `Remove`, the rollback of any later failure would delete a link the user
+/// depends on and that this run did not create.
+#[test]
+fn undoing_a_symlink_that_was_already_correct_restores_it() {
+    let fs = seeded();
+    let exec = nothing_runs();
+    let mut events = |_| {};
+
+    let op = Op::Symlink {
+        target: PathBuf::from("/home/u/source"),
+        link: PathBuf::from("/home/u/link"),
+    };
+    // The link is already there, pointing where the component wants it.
+    op.apply(&fs, &exec, &mut events).expect("the first link");
+
+    let before = fs.snapshot();
+    let inverse = op.inverse(&fs, &exec).expect("the inverse");
+    assert!(
+        !matches!(inverse, Op::Remove { .. }),
+        "re-linking an already-correct symlink journalled a removal: {inverse:?}"
+    );
+
+    op.apply(&fs, &exec, &mut events).expect("the second link");
+    inverse.apply(&fs, &exec, &mut events).expect("the undo");
+    assert_eq!(
+        fs.snapshot(),
+        before,
+        "the link did not survive its own undo"
+    );
+}
+
+/// [R-OPS-005] the same for `LinkFile`, which is what a component uses when
+/// the user already had a file there.
+#[test]
+fn undoing_a_link_file_that_was_already_correct_restores_it() {
+    let fs = seeded();
+    let exec = nothing_runs();
+    let mut events = |_| {};
+
+    let op = Op::LinkFile {
+        target: PathBuf::from("/home/u/source"),
+        link: PathBuf::from("/home/u/.zshrc"),
+        backup: PathBuf::from("/home/u/.zshrc.backup"),
+    };
+    op.apply(&fs, &exec, &mut events).expect("the first link");
+
+    let before = fs.snapshot();
+    let inverse = op.inverse(&fs, &exec).expect("the inverse");
+    op.apply(&fs, &exec, &mut events).expect("the second link");
+    inverse.apply(&fs, &exec, &mut events).expect("the undo");
+
+    assert_eq!(
+        fs.snapshot(),
+        before,
+        "re-linking an already-linked file did not survive its own undo"
+    );
+}
+
+/// [R-OPS-005] and for a write whose content is already what the component
+/// wants: the inverse restores the same bytes rather than removing the file.
+#[test]
+fn undoing_a_write_of_content_already_there_keeps_the_file() {
+    let fs = seeded();
+    let exec = nothing_runs();
+    let mut events = |_| {};
+
+    let op = Op::WriteFile {
+        path: PathBuf::from("/home/u/.zshrc"),
+        contents: b"original\n".to_vec(),
+    };
+    let before = fs.snapshot();
+    let inverse = op.inverse(&fs, &exec).expect("the inverse");
+    op.apply(&fs, &exec, &mut events).expect("the write");
+    inverse.apply(&fs, &exec, &mut events).expect("the undo");
+
+    assert_eq!(fs.snapshot(), before);
+}
