@@ -42,6 +42,22 @@ meowctl status          # what the last run did
 
 `meowctl --help` lists the rest.
 
+Add `eval "$(meowctl shell zsh)"` to your shell's startup file and components
+can contribute to it: a `shell` hook runs on every spawn and emits what it
+wants exported.
+
+Colours come from `theme.toml` beside `init.star`, when you write one. A table
+per role over the built-in palette, and a role you leave out keeps its
+default:
+
+```toml
+[accent]
+r = 203
+g = 166
+b = 247
+ansi16 = 35
+```
+
 ## Status
 
 **0.2.0** — Rust, and the version to use. It replaced the Go implementation

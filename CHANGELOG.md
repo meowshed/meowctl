@@ -10,28 +10,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Rewritten in Rust. `v0.2.0` is a ground-up rewrite, not a port: the Starlark
-  evaluator is `starlark-rust`, effects sit behind `FileSystem` and `Executor`
-  traits constructed once at the binary, every reversible effect is an `Op`
-  with an inverse, and the engine emits an event stream that three sinks
-  render. `docs/design/0.2.0-rust-rewrite.md` says why each of those is a
-  rewrite rather than a refactor.
+  evaluator is `starlark-rust`, effects sit behind `FileSystem`, `Executor`
+  and `Http` traits constructed once at the binary, every reversible effect is
+  an `Op` with an inverse, and the engine emits an event stream that four
+  sinks render. `docs/design/0.2.0-rust-rewrite.md` says why each of those is
+  a rewrite rather than a refactor.
 - Terminal output redesigned. A live region renders what is running, the
   finished work is committed above it, and `--format json` emits the same
   event stream on every command rather than only on `doctor`.
 - `--dry-run` no longer claims work the runner skips. A dry run is a
   `FileSystem` and an `Executor` that cannot write, so it predicts exactly
   what a real run would do.
+- An interrupt stops the run rather than killing the process. The first one
+  asks it to stop before the next component and leaves the journal for the
+  next run to find; the second stops the process at once.
+- `self-update` verifies what it downloaded before replacing the running
+  binary. `v0.1.0` renamed an unverified download over it; a release now
+  publishes `checksums.sri` and a release without one is refused.
+- A `deps.mod` naming both a version and a source for one dependency is
+  refused when it is read, not only when `meowctl dep add` writes it.
+- A lock file naming an integrity hash that is not a W3C SRI one fails to
+  parse, rather than failing later as a hash mismatch.
 
 The Starlark API, the command surface, and every config and lock format are
 unchanged. A configuration that `v0.1.0` applied applies here.
+
+### Added
+
+- `theme.toml` in the configuration directory: a table per role over the
+  built-in palette. A role it leaves out keeps its default; a malformed file
+  warns and falls back rather than stopping the command.
+- A release workflow that builds four targets and publishes the checksums
+  `self-update` verifies against.
 
 ### Removed
 
 - The Go implementation, and the compatibility corpus that compared the two
   binaries. The corpus existed to prove the rewrite does what `v0.1.0` did,
   and that proof had an end date.
-- `self-update`. The command reports that it is not implemented rather than
-  pretending to work.
+
+### Fixed
+
+- `meowctl hook shell` and `meowctl hook login` run again. They were a stub
+  through most of the rewrite, which would have left a shell without its
+  `PATH`, its `mise`, its `direnv` and every variable its components
+  contribute.
+- A component inside a module can name its siblings without the module
+  prefix, which is what `@dotmeow`'s components do.
+- `pkgs.lock` and `pkgs.local.lock` are written again after an apply.
+- Every lifecycle command takes the flags `v0.1.0` gives it. Five were
+  missing `--no-rollback`, two `--force`, and `verify` `--dry-run`.
+- The home directory is found on Windows, where it comes from
+  `%USERPROFILE%` rather than `$HOME`.
 
 ## [0.1.0] - 2026-09-19
 
