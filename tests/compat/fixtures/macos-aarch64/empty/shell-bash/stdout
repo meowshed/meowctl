@@ -1,0 +1,12 @@
+# meowctl shell integration for bash
+# Add this to your ~/.bashrc:
+#   eval "$(meowctl shell bash)"
+
+meowctl_shell_init() {
+    export MEOWCTL_SHELL=bash
+    if [ -z "$_MEOWCTL_SHELL_DONE" ]; then
+        export _MEOWCTL_SHELL_DONE=1
+        eval "$(meowctl hook shell)"
+    fi
+}
+meowctl_shell_init

@@ -171,6 +171,15 @@ struct Invocation {
 /// run repeatedly, so the corpus does not run it at all; `apply --dry-run`
 /// already covers evaluation, the graph, and planning.
 const INVOCATIONS: &[Invocation] = &[
+    // `init` scaffolds five files and every one of them is machine-written,
+    // so they compare byte for byte. It runs against the empty configuration
+    // only: it refuses to write over an `init.star` that is already there.
+    Invocation {
+        slug: "init",
+        args: &["init"],
+        stdout_is_interface: false,
+        runs_hooks: false,
+    },
     Invocation {
         slug: "version",
         args: &["version"],
@@ -256,11 +265,21 @@ fn repo_root() -> Result<PathBuf> {
 }
 
 fn cases(root: &Path) -> Result<Vec<Case>> {
-    let mut cases = vec![Case {
-        name: "smoke",
-        config: root.join("tests/compat/configs/smoke"),
-        hooks_are_ours: true,
-    }];
+    let mut cases = vec![
+        Case {
+            name: "smoke",
+            config: root.join("tests/compat/configs/smoke"),
+            hooks_are_ours: true,
+        },
+        // A directory with nothing in it, so `init` has somewhere to
+        // scaffold: every other case already holds an `init.star`, which it
+        // refuses to write over.
+        Case {
+            name: "empty",
+            config: root.join("tests/compat/configs/empty"),
+            hooks_are_ours: true,
+        },
+    ];
 
     if let Ok(extra) = std::env::var("MEOWCTL_COMPAT_EXTRA") {
         let path = PathBuf::from(&extra);

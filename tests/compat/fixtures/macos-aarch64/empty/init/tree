@@ -1,0 +1,10 @@
+  config
+a4eba53d02436d6e54748ba66e33d020fa2ded8da750e7ece3ee6a46179727b7  config/.gitignore
+fc4bd8298b6c2dcca86616f0a85294086b2f6918351050715f6911085636d8ac  config/.keep
+  config/components
+74492941cc731560ea00b2ce3cc0c44ced32e6b59cc691cb0b58ca3a63e18b3d  config/deps.local.mod
+935977b0fd3b21cfabc8d535dbb53b9d2593dd657b2d6c9bc28b962b3576b2e1  config/deps.mod
+  config/hooks
+bdc59e04d5d27741c133855baf91b81744a55b3b8fee00d4d5e9abc6950de711  config/init.star
+f26232c009a5f520b16d0f21245e6a85d48e5a99cc22d54205b8bca590e42c4d  config/local.star
+  home

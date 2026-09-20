@@ -1,0 +1,17 @@
+[
+  {
+    "name": "init.star",
+    "status": "error",
+    "detail": "load init.star: parse error: open <CONFIG>/init.star: no such file or directory"
+  },
+  {
+    "name": "lock-file",
+    "status": "ok",
+    "detail": "0 module(s)"
+  },
+  {
+    "name": "state",
+    "status": "ok",
+    "detail": "<CONFIG>/state.toml"
+  }
+]

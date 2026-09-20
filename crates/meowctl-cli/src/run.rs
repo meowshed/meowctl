@@ -16,6 +16,7 @@ use crate::cli::{Cli, Format};
 use crate::{CliError, CliResult};
 
 mod commands;
+mod writing;
 
 /// Parses, runs, and reports.
 ///

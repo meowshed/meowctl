@@ -136,8 +136,15 @@ the constraint of the rewrite, not of the tool.
 
 ## Failure paths
 
-**[R-CLI-050]** A command run outside a configured directory MUST say so and
-suggest `meowctl init`, rather than reporting a missing file.
+**[R-CLI-050]** A command that needs a configuration and is run outside one
+MUST say so and suggest `meowctl init`, rather than reporting a missing file,
+and MUST exit with the configuration code.
+
+A command that only reports MUST NOT refuse. `status` in an empty directory
+says no runs are recorded and exits zero, and `dep list` prints an empty
+list; both are answers to the question asked. `apply`, `add`, `remove`,
+`upgrade`, `verify`, `update` and the `dep` subcommands that write all need a
+configuration and refuse without one.
 
 **[R-CLI-051]** An interrupt MUST reach the engine, which stops cleanly; see
 [R-ENGINE-062]. The sink MUST restore the terminal on the way out; see
