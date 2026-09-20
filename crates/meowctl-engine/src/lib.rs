@@ -17,8 +17,10 @@ mod discovery;
 mod error;
 mod graph;
 mod plan;
+mod runner;
 
-pub use discovery::{Component, Declaration, Discovered, Sources, discover};
+pub use discovery::{Component, ComponentSource, Declaration, Discovered, Sources, discover};
 pub use error::{EngineError, EngineResult};
 pub use graph::Graph;
 pub use plan::{Inputs, Plan};
+pub use runner::{Failure, Report, Runner, Settings};

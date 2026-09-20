@@ -125,7 +125,12 @@ shared helper from twenty components pays for it once.
 ## Calling hooks
 
 **[R-STAR-030]** The evaluator MUST call a named global function in an
-evaluated file, passing the `ctx` value as its single argument.
+evaluated file, passing the `ctx` value first and whatever else the caller
+supplies after it, positionally and by keyword.
+
+A lifecycle hook takes `ctx` alone. A package-manager handler takes
+`install_pkg(ctx, name, version, **kwargs)`, so "its single argument" -- which
+an earlier draft said -- would make [R-PM-010] unimplementable.
 
 **[R-STAR-031]** A hook that is absent MUST be a success, not an error. Hooks
 are optional and most components define two or three of the thirteen.

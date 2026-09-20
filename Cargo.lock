@@ -1072,8 +1072,16 @@ version = "0.2.0-alpha.0"
 dependencies = [
  "meowctl-common",
  "meowctl-config",
+ "meowctl-ctx",
+ "meowctl-exec",
+ "meowctl-fs",
+ "meowctl-net",
+ "meowctl-ops",
  "meowctl-pm",
  "meowctl-starlark",
+ "meowctl-tui",
+ "starlark",
+ "tempfile",
  "thiserror",
 ]
 
