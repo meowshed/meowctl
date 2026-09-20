@@ -55,18 +55,42 @@ pub(super) fn run(cli: &Cli, session: &mut Session<'_>) -> CliResult<()> {
             *force,
             !*no_rollback,
         ),
-        Command::Upgrade { components, .. } => {
-            apply(session, PhaseSet::Upgrade, components, false, true)
+        Command::Upgrade {
+            components,
+            force,
+            no_rollback,
+            ..
+        } => apply(
+            session,
+            PhaseSet::Upgrade,
+            components,
+            *force,
+            !*no_rollback,
+        ),
+        // `verify` forces, because a check that skipped what it checked last
+        // time is not a check. It never rolls back whatever `--no-rollback`
+        // says: its one phase is read-only, so there is nothing journalled to
+        // undo; see [R-COMMON-012].
+        Command::Verify { components, .. } => {
+            apply(session, PhaseSet::Verify, components, true, false)
         }
-        Command::Verify { components } => apply(session, PhaseSet::Verify, components, true, false),
         Command::Hook { phase } => hook(session, phase),
 
         Command::Init { repo_url, force } => match repo_url {
             Some(url) => super::writing::bootstrap(session, url, *force),
             None => super::writing::init(session, *force),
         },
-        Command::Add { components, .. } => super::writing::add(session, components),
-        Command::Remove { components, .. } => super::writing::remove(session, components),
+        Command::Add {
+            components,
+            force,
+            no_rollback,
+            ..
+        } => super::writing::add(session, components, *force, !*no_rollback),
+        Command::Remove {
+            components,
+            no_rollback,
+            ..
+        } => super::writing::remove(session, components, !*no_rollback),
         Command::Dep {
             command:
                 DepCommand::Add {
@@ -92,7 +116,9 @@ pub(super) fn run(cli: &Cli, session: &mut Session<'_>) -> CliResult<()> {
         Command::Dep {
             command: DepCommand::Tidy { .. },
         } => super::writing::dep_tidy(session),
-        Command::Update { yes, .. } => super::writing::update(session, *yes),
+        Command::Update {
+            yes, no_rollback, ..
+        } => super::writing::update(session, *yes, !*no_rollback),
 
         // Not absent, and not pretending. `v0.1.0` renames an unverified
         // download over the running binary; reproducing that would ship the

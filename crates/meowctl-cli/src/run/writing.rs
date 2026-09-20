@@ -106,19 +106,28 @@ fn ignore(session: &Session<'_>, layout: &Layout) -> CliResult<()> {
 }
 
 /// Adds components to `local.star` and installs them.
-pub(super) fn add(session: &mut Session<'_>, components: &[String]) -> CliResult<()> {
+pub(super) fn add(
+    session: &mut Session<'_>,
+    components: &[String],
+    force: bool,
+    rollback: bool,
+) -> CliResult<()> {
     edit_local(session, components, true)?;
     // Scoped to what was added, and to what those depend on; see
     // [R-ENGINE-016].
-    apply(session, PhaseSet::Install, components, false, true)
+    apply(session, PhaseSet::Install, components, force, rollback)
 }
 
 /// Removes components from `local.star` and uninstalls them.
-pub(super) fn remove(session: &mut Session<'_>, components: &[String]) -> CliResult<()> {
+pub(super) fn remove(
+    session: &mut Session<'_>,
+    components: &[String],
+    rollback: bool,
+) -> CliResult<()> {
     // Uninstalled first, while the declaration is still there to run the
     // hooks from: a component removed from the file is a component nothing
     // can uninstall.
-    apply(session, PhaseSet::Uninstall, components, false, true)?;
+    apply(session, PhaseSet::Uninstall, components, false, rollback)?;
     edit_local(session, components, false)
 }
 
@@ -367,7 +376,7 @@ fn referenced_modules(session: &Session<'_>) -> CliResult<std::collections::BTre
 }
 
 /// Re-downloads the dotfiles repository and applies what changed.
-pub(super) fn update(session: &mut Session<'_>, yes: bool) -> CliResult<()> {
+pub(super) fn update(session: &mut Session<'_>, yes: bool, rollback: bool) -> CliResult<()> {
     session.require_configured()?;
 
     let sentinel = meowctl_config::Sentinel::read(session.fs.as_ref(), &session.layout.state())?;
@@ -438,5 +447,5 @@ pub(super) fn update(session: &mut Session<'_>, yes: bool) -> CliResult<()> {
     let owned: Vec<meowctl_module::archive::ArchiveFile> = changed.into_iter().cloned().collect();
     meowctl_module::archive::write_into(session.fs.as_ref(), &root, &owned)?;
     super::commands::dep_sync(session, &meowctl_module::Upgrade::Nothing)?;
-    apply(session, PhaseSet::Install, &[], false, true)
+    apply(session, PhaseSet::Install, &[], false, rollback)
 }
