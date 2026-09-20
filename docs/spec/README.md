@@ -18,6 +18,7 @@ in. Numbers are allocated once per area and never reused.
 | `CONFIG` | `config.md` | On-disk schemas, atomic writes, schema versioning, the Starlark editor |
 | `FS` | `fs.md` | The `FileSystem` trait and its implementations |
 | `EXEC` | `exec.md` | Process execution, env merging, terminal hand-off |
+| `NET` | `net.md` | The `Http` trait and its implementations |
 | `OPS` | `ops.md` | The `Op` enum, inverses, the write-ahead journal |
 | `STAR` | `starlark.md` | Evaluator, builtins, accumulator, `load()` resolution, diagnostics |
 | `MODULE` | `module.md` | Module graph, MVS, loaders, cache, integrity |

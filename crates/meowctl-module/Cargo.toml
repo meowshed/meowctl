@@ -8,8 +8,22 @@ publish.workspace = true
 description = "Module resolution: version selection, fetching, integrity, and the cache"
 
 [dependencies]
+flate2 = { workspace = true }
+meowctl-common = { path = "../meowctl-common" }
+meowctl-fs = { path = "../meowctl-fs" }
+meowctl-net = { path = "../meowctl-net" }
+meowctl-starlark = { path = "../meowctl-starlark" }
 semver = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tar = { workspace = true }
 thiserror = { workspace = true }
+toml = { workspace = true }
+
+[dev-dependencies]
+meowctl-common = { path = "../meowctl-common" }
+flate2 = { workspace = true }
+tar = { workspace = true }
 
 [lints]
 workspace = true

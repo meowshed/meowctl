@@ -322,3 +322,206 @@ fn every_error_names_its_path() {
         assert!(err.to_string().contains("absent"), "{}: {err}", s.name);
     });
 }
+
+/// [R-FS-005] a module tarball ships scripts meowctl later runs, and the bit
+/// is what makes them runnable. Every implementation has to agree on it, or a
+/// dry run reports a plan the real run does not produce.
+///
+/// Windows has no bit, so what is checked there is that asking and setting are
+/// both answerable rather than a panic.
+#[test]
+fn the_executable_bit_is_set_and_reported() {
+    for_each(|s| {
+        let path = s.path("script.sh");
+        s.fs.write(&path, b"#!/bin/sh\n").expect(s.name);
+
+        assert_eq!(
+            s.fs.entry(&path).expect(s.name),
+            Some(Entry::File {
+                len: 10,
+                executable: false
+            }),
+            "{}: a written file starts unexecutable",
+            s.name
+        );
+
+        s.fs.set_executable(&path, true).expect(s.name);
+        let expected = cfg!(unix);
+        assert_eq!(
+            s.fs.entry(&path).expect(s.name),
+            Some(Entry::File {
+                len: 10,
+                executable: expected
+            }),
+            "{}: after setting the bit",
+            s.name
+        );
+
+        s.fs.set_executable(&path, false).expect(s.name);
+        assert_eq!(
+            s.fs.entry(&path).expect(s.name),
+            Some(Entry::File {
+                len: 10,
+                executable: false
+            }),
+            "{}: after clearing the bit",
+            s.name
+        );
+    });
+}
+
+/// Setting the bit on nothing is a mistake worth reporting: the caller thinks
+/// it extracted a file and did not.
+#[test]
+fn making_a_missing_file_executable_fails() {
+    for_each(|s| {
+        let err =
+            s.fs.set_executable(&s.path("absent"), true)
+                .expect_err(s.name);
+        assert!(matches!(err, FsError::NotFound { .. }), "{}: {err}", s.name);
+    });
+}
+
+/// [R-FS-005] a copy creates a file and [R-FS-004] gives a created file
+/// `0o600`, so the bit does not travel. A rename moves the file, so it does.
+/// The two differ, and a caller that copies a script has to set it again.
+#[test]
+fn a_copy_drops_the_executable_bit_and_a_rename_keeps_it() {
+    for_each(|s| {
+        let from = s.path("from.sh");
+        s.fs.write(&from, b"x").expect(s.name);
+        s.fs.set_executable(&from, true).expect(s.name);
+
+        let copied = s.path("copied.sh");
+        s.fs.copy(&from, &copied).expect(s.name);
+        assert_eq!(
+            s.fs.entry(&copied).expect(s.name),
+            Some(Entry::File {
+                len: 1,
+                executable: false
+            }),
+            "{}: a copy creates a file",
+            s.name
+        );
+
+        let moved = s.path("moved.sh");
+        s.fs.rename(&from, &moved).expect(s.name);
+        assert_eq!(
+            s.fs.entry(&moved).expect(s.name),
+            Some(Entry::File {
+                len: 1,
+                executable: cfg!(unix)
+            }),
+            "{}: a rename moves the file",
+            s.name
+        );
+    });
+}
+
+/// [R-FS-006] `Op::RemoveDir` walks the chain of directories a `mkdir -p`
+/// created and stops at the first one that is not empty, which only works if
+/// `remove` refuses a directory with something in it and removes an empty one.
+#[test]
+fn removing_a_directory_takes_an_empty_one_and_refuses_the_rest() {
+    for_each(|s| {
+        let dir = s.path("a/b");
+        s.fs.create_dir_all(&dir).expect(s.name);
+        s.fs.write(&dir.join("file"), b"x").expect(s.name);
+
+        let err = s.fs.remove(&dir).expect_err(s.name);
+        assert!(matches!(err, FsError::Io { .. }), "{}: {err}", s.name);
+
+        s.fs.remove(&dir.join("file")).expect(s.name);
+        s.fs.remove(&dir).expect(s.name);
+        assert_eq!(s.fs.entry(&dir).expect(s.name), None, "{}", s.name);
+    });
+}
+
+/// [R-FS-006] the module cache replaces a module's directory when what is in
+/// it no longer matches what was recorded, and nothing there is worth keeping.
+#[test]
+fn removing_a_directory_recursively_takes_the_whole_subtree() {
+    for_each(|s| {
+        let root = s.path("cache");
+        s.fs.create_dir_all(&root.join("mod/components"))
+            .expect(s.name);
+        s.fs.write(&root.join("mod/MODULE.meow"), b"x")
+            .expect(s.name);
+        s.fs.write(&root.join("mod/components/a.star"), b"y")
+            .expect(s.name);
+
+        s.fs.remove_dir_all(&root.join("mod")).expect(s.name);
+
+        assert_eq!(
+            s.fs.entry(&root.join("mod")).expect(s.name),
+            None,
+            "{}",
+            s.name
+        );
+        assert_eq!(
+            s.fs.entry(&root.join("mod/MODULE.meow")).expect(s.name),
+            None,
+            "{}",
+            s.name
+        );
+        assert_eq!(
+            s.fs.entry(&root.join("mod/components/a.star"))
+                .expect(s.name),
+            None,
+            "{}",
+            s.name
+        );
+        assert!(
+            s.fs.exists(&root).expect(s.name),
+            "{}: the root stays",
+            s.name
+        );
+    });
+}
+
+/// Removing what is not there is what the caller wanted, so it succeeds.
+#[test]
+fn removing_a_missing_directory_recursively_succeeds() {
+    for_each(|s| {
+        s.fs.remove_dir_all(&s.path("never-existed")).expect(s.name);
+    });
+}
+
+/// Renaming a directory takes everything under it. The module cache stages an
+/// extraction beside its destination and renames it into place, so a rename
+/// that moved only the directory itself would leave an empty module; see
+/// [R-MODULE-063].
+#[test]
+fn renaming_a_directory_moves_everything_under_it() {
+    for_each(|s| {
+        let staging = s.path("staging");
+        s.fs.create_dir_all(&staging.join("components"))
+            .expect(s.name);
+        s.fs.write(&staging.join("MODULE.meow"), b"m")
+            .expect(s.name);
+        s.fs.write(&staging.join("components/a.star"), b"a")
+            .expect(s.name);
+
+        let landed = s.path("landed");
+        s.fs.rename(&staging, &landed).expect(s.name);
+
+        assert_eq!(
+            s.fs.read(&landed.join("components/a.star")).expect(s.name),
+            b"a",
+            "{}",
+            s.name
+        );
+        assert_eq!(
+            s.fs.read(&landed.join("MODULE.meow")).expect(s.name),
+            b"m",
+            "{}",
+            s.name
+        );
+        assert_eq!(s.fs.entry(&staging).expect(s.name), None, "{}", s.name);
+        assert!(
+            s.fs.read(&staging.join("MODULE.meow")).is_err(),
+            "{}: nothing is left on the old side",
+            s.name
+        );
+    });
+}

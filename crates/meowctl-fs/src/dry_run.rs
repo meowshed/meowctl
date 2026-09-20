@@ -25,6 +25,13 @@ pub enum Intent {
     Wrote {
         /// What would have been written.
         contents: Vec<u8>,
+        /// Whether the file would end up executable; see [R-FS-005].
+        executable: bool,
+    },
+    /// An existing file's executable bit would be changed, and nothing else.
+    MadeExecutable {
+        /// What it would become.
+        executable: bool,
     },
     /// The path would be removed.
     Removed,
@@ -35,6 +42,13 @@ pub enum Intent {
     },
     /// A directory would be created.
     CreatedDirectory,
+}
+
+impl Intent {
+    /// Whether this intent leaves nothing at the path.
+    const fn is_removal(&self) -> bool {
+        matches!(self, Intent::Removed)
+    }
 }
 
 /// Records what a run would do and performs none of it.
@@ -74,6 +88,77 @@ impl DryRunFs {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    /// Whether a path would be executable once the recorded intents apply.
+    ///
+    /// A copy and a rename carry the bit, which is what `RealFs` does, so the
+    /// plan has to say the same.
+    fn would_be_executable(&self, path: &Path) -> bool {
+        matches!(
+            self.entry(path),
+            Ok(Some(Entry::File {
+                executable: true,
+                ..
+            }))
+        )
+    }
+
+    /// Whether anything would still be under `path` once the intents apply.
+    fn has_children(&self, path: &Path) -> FsResult<bool> {
+        if self
+            .lock()
+            .iter()
+            .any(|(held, intent)| held != path && held.starts_with(path) && !intent.is_removal())
+        {
+            return Ok(true);
+        }
+        let removed: Vec<PathBuf> = self
+            .lock()
+            .iter()
+            .filter(|(_, intent)| intent.is_removal())
+            .map(|(held, _)| held.clone())
+            .collect();
+        Ok(self
+            .underlying
+            .read_dir(path)
+            .unwrap_or_default()
+            .into_iter()
+            .any(|held| !removed.contains(&held)))
+    }
+
+    /// Every path under `path`, from the intents and from the filesystem
+    /// beneath them, excluding `path` itself and anything already removed.
+    fn paths_under(&self, path: &Path) -> Vec<PathBuf> {
+        let mut found: Vec<PathBuf> = self
+            .lock()
+            .iter()
+            .filter(|(held, intent)| {
+                held.as_path() != path && held.starts_with(path) && !intent.is_removal()
+            })
+            .map(|(held, _)| held.clone())
+            .collect();
+        for held in self.underlying_tree(path) {
+            if !found.contains(&held) && !matches!(self.entry(&held), Ok(None)) {
+                found.push(held);
+            }
+        }
+        found
+    }
+
+    /// Every path the underlying filesystem holds under `path`, recursively.
+    fn underlying_tree(&self, path: &Path) -> Vec<PathBuf> {
+        let mut found = Vec::new();
+        let mut pending = vec![path.to_path_buf()];
+        while let Some(dir) = pending.pop() {
+            for entry in self.underlying.read_dir(&dir).unwrap_or_default() {
+                if matches!(self.underlying.entry(&entry), Ok(Some(Entry::Directory))) {
+                    pending.push(entry.clone());
+                }
+                found.push(entry);
+            }
+        }
+        found
+    }
+
     fn record(&self, path: &Path, intent: Intent) {
         self.lock().insert(path.to_path_buf(), intent);
     }
@@ -106,7 +191,7 @@ impl DryRunFs {
 impl FileSystem for DryRunFs {
     fn read(&self, path: &Path) -> FsResult<Vec<u8>> {
         match self.lock().get(path) {
-            Some(Intent::Wrote { contents }) => Ok(contents.clone()),
+            Some(Intent::Wrote { contents, .. }) => Ok(contents.clone()),
             Some(Intent::Removed) => Err(FsError::NotFound {
                 path: path.to_path_buf(),
             }),
@@ -120,6 +205,7 @@ impl FileSystem for DryRunFs {
             path,
             Intent::Wrote {
                 contents: contents.to_vec(),
+                executable: self.would_be_executable(path),
             },
         );
         Ok(())
@@ -133,19 +219,63 @@ impl FileSystem for DryRunFs {
             Err(e) => return Err(e),
         };
         existing.extend_from_slice(contents);
-        self.record(path, Intent::Wrote { contents: existing });
+        let executable = self.would_be_executable(path);
+        self.record(
+            path,
+            Intent::Wrote {
+                contents: existing,
+                executable,
+            },
+        );
         Ok(())
     }
 
     fn remove(&self, path: &Path) -> FsResult<()> {
+        if matches!(self.entry(path)?, Some(Entry::Directory)) && self.has_children(path)? {
+            return Err(FsError::io(
+                "removing",
+                path,
+                std::io::Error::new(
+                    std::io::ErrorKind::DirectoryNotEmpty,
+                    "the directory is not empty",
+                ),
+            ));
+        }
         self.record(path, Intent::Removed);
+        Ok(())
+    }
+
+    fn remove_dir_all(&self, path: &Path) -> FsResult<()> {
+        // Every path the underlying filesystem holds under this one, plus
+        // every path this run would have created under it. Recording each
+        // removal is what keeps a later read from seeing a file this run
+        // decided to discard.
+        let mut under: Vec<PathBuf> = self
+            .lock()
+            .keys()
+            .filter(|held| held.starts_with(path))
+            .cloned()
+            .collect();
+        under.extend(self.underlying_tree(path));
+        under.push(path.to_path_buf());
+        for held in under {
+            self.record(&held, Intent::Removed);
+        }
         Ok(())
     }
 
     fn copy(&self, from: &Path, to: &Path) -> FsResult<()> {
         let contents = self.read(from)?;
         self.require_parent(to)?;
-        self.record(to, Intent::Wrote { contents });
+        // Not the source's bit: a copy creates a file, and `RealFs` sets the
+        // mode of what it created; see [R-FS-004].
+        self.record(
+            to,
+            Intent::Wrote {
+                contents,
+                executable: false,
+            },
+        );
         Ok(())
     }
 
@@ -217,23 +347,100 @@ impl FileSystem for DryRunFs {
         Ok(true)
     }
 
+    fn set_executable(&self, path: &Path, executable: bool) -> FsResult<()> {
+        // [R-FS-033]: `RealFs` fails on a path that is not a file, so the
+        // prediction has to fail there too.
+        if !matches!(self.entry(path)?, Some(Entry::File { .. })) {
+            return Err(FsError::NotFound {
+                path: path.to_path_buf(),
+            });
+        }
+        // A platform with no mode bits cannot carry one, and a plan that said
+        // otherwise would not predict the run; see [R-FS-005].
+        let executable = executable && cfg!(unix);
+        // A file this run would write keeps one intent, with the bit folded
+        // in: two intents for one path would need an order, and the map has
+        // none. A file that is only being chmod'ed gets its own.
+        let mut intents = self.lock();
+        match intents.get_mut(path) {
+            Some(Intent::Wrote {
+                executable: bit, ..
+            }) => *bit = executable,
+            _ => {
+                intents.insert(path.to_path_buf(), Intent::MadeExecutable { executable });
+            }
+        }
+        Ok(())
+    }
+
     fn read_dir(&self, path: &Path) -> FsResult<Vec<PathBuf>> {
         self.underlying.read_dir(path)
     }
 
     fn rename(&self, from: &Path, to: &Path) -> FsResult<()> {
-        let contents = self.read(from)?;
         self.require_parent(to)?;
+        if matches!(self.entry(from)?, Some(Entry::Directory)) {
+            // A directory takes everything under it. The paths are mirrored
+            // one by one because the intents are a map of paths, and a run
+            // that renamed a tree without them would answer a later read from
+            // the old side of the move.
+            let mut under = self.paths_under(from);
+            under.sort();
+            for held in under {
+                let rest = held.strip_prefix(from).unwrap_or(&held).to_path_buf();
+                let moved = to.join(rest);
+                match self.entry(&held)? {
+                    Some(Entry::Directory) => self.record(&moved, Intent::CreatedDirectory),
+                    Some(Entry::Symlink { target }) => {
+                        self.record(&moved, Intent::Linked { target });
+                    }
+                    Some(Entry::File { executable, .. }) => {
+                        let contents = self.read(&held)?;
+                        self.record(
+                            &moved,
+                            Intent::Wrote {
+                                contents,
+                                executable,
+                            },
+                        );
+                    }
+                    None => {}
+                }
+                self.record(&held, Intent::Removed);
+            }
+            self.record(to, Intent::CreatedDirectory);
+            self.record(from, Intent::Removed);
+            return Ok(());
+        }
+        let contents = self.read(from)?;
+        let executable = self.would_be_executable(from);
         self.record(from, Intent::Removed);
-        self.record(to, Intent::Wrote { contents });
+        self.record(
+            to,
+            Intent::Wrote {
+                contents,
+                executable,
+            },
+        );
         Ok(())
     }
 
     fn entry(&self, path: &Path) -> FsResult<Option<Entry>> {
         match self.lock().get(path) {
-            Some(Intent::Wrote { contents }) => Ok(Some(Entry::File {
+            Some(Intent::Wrote {
+                contents,
+                executable,
+            }) => Ok(Some(Entry::File {
                 len: contents.len() as u64,
+                executable: *executable,
             })),
+            Some(Intent::MadeExecutable { executable }) => match self.underlying.entry(path)? {
+                Some(Entry::File { len, .. }) => Ok(Some(Entry::File {
+                    len,
+                    executable: *executable,
+                })),
+                other => Ok(other),
+            },
             Some(Intent::Removed) => Ok(None),
             Some(Intent::Linked { target }) => Ok(Some(Entry::Symlink {
                 target: target.clone(),

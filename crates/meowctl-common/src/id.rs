@@ -3,6 +3,10 @@
 use std::fmt;
 use std::str::FromStr;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
+use sha2::{Digest as _, Sha384};
+
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
@@ -179,6 +183,29 @@ impl Integrity {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The hash of some bytes: SHA-384 in standard base64.
+    ///
+    /// What `computeSRI` in `internal/starlark/loader/github.go` produces, and
+    /// what every published `index.toml` carries. Here rather than at the two
+    /// call sites that hash bytes, so there is one encoding of one hash; see
+    /// [R-COMMON-005].
+    #[must_use]
+    pub fn compute(data: &[u8]) -> Integrity {
+        let digest = Sha384::digest(data);
+        Integrity(format!("sha384-{}", STANDARD.encode(digest)))
+    }
+
+    /// Whether some bytes hash to this.
+    ///
+    /// `v0.1.0` decodes the base64 and compares digests. Comparing the strings
+    /// agrees with that whenever both sides came from [`Integrity::compute`],
+    /// and makes a hash recorded in another encoding a mismatch rather than a
+    /// silent success.
+    #[must_use]
+    pub fn matches(&self, data: &[u8]) -> bool {
+        &Integrity::compute(data) == self
+    }
 }
 
 impl FromStr for Integrity {
@@ -336,5 +363,31 @@ mod tests {
         for raw in ["", "sha384-", "sha256-abc", "abc123", "sha384-abc!"] {
             assert!(raw.parse::<Integrity>().is_err(), "accepted {raw:?}");
         }
+    }
+
+    /// [R-COMMON-005] the expected value comes from `sha384sum` rather than
+    /// from either implementation, so the test checks the algorithm and not
+    /// one program's opinion of it.
+    #[test]
+    fn the_hash_is_sha384_in_standard_base64() {
+        assert_eq!(
+            Integrity::compute(b"meowctl\n").as_str(),
+            "sha384-sHD4keTTvwX8wx5/hCy2/TVcFU1hORRQylCB/BOwkey8SPs7BxZw4NFSd5q6uEIq"
+        );
+    }
+
+    /// A computed hash is one a lock file could hold, which is what lets the
+    /// same type carry both.
+    #[test]
+    fn a_computed_hash_is_a_valid_one() {
+        let computed = Integrity::compute(b"");
+        assert!(computed.as_str().parse::<Integrity>().is_ok());
+    }
+
+    #[test]
+    fn a_changed_byte_is_a_mismatch() {
+        let sri = Integrity::compute(b"one");
+        assert!(sri.matches(b"one"));
+        assert!(!sri.matches(b"onf"));
     }
 }
