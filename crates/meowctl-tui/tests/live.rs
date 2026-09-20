@@ -394,3 +394,88 @@ fn the_spinner_advances_on_events_and_not_on_time() {
     // the same frame, whatever the clock has done in between.
     assert_eq!(render(&started, terminal), second);
 }
+
+/// [R-TUI-020] a component name longer than the terminal is truncated, and
+/// its note goes rather than wrapping.
+///
+/// A line that wraps costs the region a row it did not account for, and the
+/// cursor-up that follows then walks to the wrong place and tears the frame.
+#[test]
+fn a_name_longer_than_the_terminal_is_truncated_and_loses_its_note() {
+    let narrow = caps(ColourDepth::Ansi16, true, 24, 24);
+    let long = "@stdlib//components/a-component-with-a-very-long-name";
+
+    let rendered = render(
+        &[
+            Event::ComponentStarted {
+                component: component(long),
+                phase: Phase::Install,
+            },
+            Event::PathPrepended {
+                directory: "/opt/homebrew/bin".to_owned(),
+            },
+        ],
+        narrow,
+    );
+
+    // Truncated rather than wrapped: the ellipsis is the mark that the name
+    // was cut, and the whole name is not there.
+    assert!(rendered.contains('\u{2026}'), "{rendered}");
+    assert!(
+        !rendered.contains(long),
+        "the whole name was drawn: {rendered}"
+    );
+    assert!(
+        !rendered.contains("/opt/homebrew/bin"),
+        "the note survived a name that filled the line: {rendered}"
+    );
+}
+
+/// [R-TUI-020] a note is shown when there is room for it, so the width
+/// arithmetic is not simply dropping everything.
+#[test]
+fn a_note_is_shown_when_the_line_has_room() {
+    let wide = caps(ColourDepth::Ansi16, true, 120, 24);
+    let rendered = render(
+        &[
+            Event::ComponentStarted {
+                component: component("zsh"),
+                phase: Phase::Install,
+            },
+            Event::PathPrepended {
+                directory: "/opt/homebrew/bin".to_owned(),
+            },
+        ],
+        wide,
+    );
+
+    assert!(
+        rendered.contains("/opt/homebrew/bin"),
+        "the note was dropped on a wide terminal: {rendered}"
+    );
+}
+
+/// [R-TUI-024] a phase that failed says how many, and one that did not says
+/// nothing. A count of zero failures is a line nobody needs.
+#[test]
+fn a_phase_reports_its_failures_and_only_when_there_are_some() {
+    let terminal = caps(ColourDepth::Ansi16, true, 80, 24);
+
+    let quiet = render(
+        &[Event::PhaseFinished {
+            phase: Phase::Install,
+            failed: 0,
+        }],
+        terminal,
+    );
+    assert!(!quiet.contains("failed"), "{quiet}");
+
+    let noisy = render(
+        &[Event::PhaseFinished {
+            phase: Phase::Install,
+            failed: 2,
+        }],
+        terminal,
+    );
+    assert!(noisy.contains("2 failed"), "{noisy}");
+}

@@ -96,6 +96,33 @@ pub fn github_tarball(root: &str, entries: &[Entry]) -> Vec<u8> {
 ///
 /// If the archive cannot be written.
 #[must_use]
+/// A tarball whose single entry carries the name it is given, whatever the
+/// `tar` crate would refuse to write.
+///
+/// The names this is used with are the ones a hostile archive carries, and
+/// the writer refuses them for the same reason the reader must; see
+/// [R-MODULE-033].
+pub fn tarball_named(name: &str) -> Vec<u8> {
+    let mut builder = tar::Builder::new(Vec::new());
+    let payload = b"pwned";
+    let mut header = tar::Header::new_gnu();
+    header.set_size(payload.len() as u64);
+    header.set_mode(0o644);
+    header.set_cksum();
+    builder
+        .append_data(&mut header, "placeholder", &payload[..])
+        .expect("appending to the test archive");
+    let mut raw = builder.into_inner().expect("finishing the test archive");
+
+    overwrite_name(&mut raw[..512], name.as_bytes());
+
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+    encoder
+        .write_all(&raw)
+        .expect("compressing the test archive");
+    encoder.finish().expect("compressing the test archive")
+}
+
 pub fn escaping_tarball() -> Vec<u8> {
     let mut builder = tar::Builder::new(Vec::new());
     let payload = b"pwned";

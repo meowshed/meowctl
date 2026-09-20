@@ -642,3 +642,70 @@ fn a_fetch_fills_the_cache_whether_or_not_anything_will_be_applied() {
         .expect("the cache directory exists");
     assert!(!entries.is_empty(), "nothing was cached");
 }
+
+/// [R-MODULE-033] every way an entry can climb out of the module directory.
+///
+/// A tarball is remote input, so this is the guard that stands between a
+/// published module and the user's home directory. Table-driven because the
+/// failure to catch is a deleted arm: one component kind slipping through is
+/// the whole defence.
+#[test]
+fn every_shape_of_escaping_path_is_refused() {
+    for escaping in [
+        "../outside",
+        "components/../../outside",
+        "/absolute/path",
+        "..",
+        "./..",
+        "a/../../b",
+    ] {
+        let tar = support::tarball_named(escaping);
+        meowctl_module::archive::read("m", &tar)
+            .expect_err(&format!("{escaping} should be refused"));
+    }
+}
+
+/// [R-MODULE-033] and a path that only looks like one is kept: `./a` is `a`,
+/// which is how a tar writer that prefixes everything with `./` is read.
+#[test]
+fn a_leading_dot_is_normalised_rather_than_refused() {
+    let tar = support::tarball_named("./components/git.star");
+    let files = meowctl_module::archive::read("m", &tar).expect("a normal tarball");
+
+    assert!(
+        files.iter().any(|f| f.path == "components/git.star"),
+        "{:?}",
+        files.iter().map(|f| &f.path).collect::<Vec<_>>()
+    );
+}
+
+/// [R-MODULE-011] every part of a `github://` URL is required, and a URL
+/// missing one is a mistake rather than a module with an empty name.
+///
+/// Table-driven for the same reason as the archive guard: each `||` in the
+/// check could be flipped on its own, and one hole is the whole check.
+#[test]
+fn every_part_of_a_github_url_is_required() {
+    for wrong in [
+        "github:///repo@v1//x",
+        "github://owner/@v1//x",
+        "github://owner/repo@//x",
+        "github://owner/repo/deeper@v1//x",
+        "github://owner@v1//x",
+        "github://owner/repo//x",
+    ] {
+        assert!(ModuleUrl::parse(wrong).is_err(), "{wrong} should not parse");
+    }
+
+    let right = ModuleUrl::parse("github://owner/repo@v1.2.3//components/git.star")
+        .expect("the whole form");
+    assert_eq!(
+        right,
+        ModuleUrl::GitHub {
+            owner: "owner".to_owned(),
+            repo: "repo".to_owned(),
+            reference: "v1.2.3".to_owned(),
+            path: "components/git.star".to_owned(),
+        }
+    );
+}

@@ -204,4 +204,101 @@ mod tests {
         };
         assert!(!macos.matches("//platform:linux-arch"));
     }
+
+    /// [R-STAR-008] every condition `matchesPlatform` knows, each answering
+    /// on the machine it names and on one it does not.
+    ///
+    /// Table-driven because the failure this is here to catch is a deleted
+    /// arm: a `select()` on `//platform:windows` that quietly falls through
+    /// to the default installs the wrong thing rather than nothing.
+    #[test]
+    fn every_condition_answers_for_the_machine_it_names() {
+        let macos = Platform {
+            os: "macos".to_owned(),
+            ..Platform::default()
+        };
+        let windows = Platform {
+            os: "windows".to_owned(),
+            ..Platform::default()
+        };
+        let mut wsl = linux("ubuntu", "debian");
+        wsl.wsl = true;
+
+        for (condition, machine, expected) in [
+            ("//platform:macos", &macos, true),
+            ("//platform:macos", &windows, false),
+            ("//platform:linux", &linux("arch", ""), true),
+            ("//platform:linux", &macos, false),
+            ("//platform:windows", &windows, true),
+            ("//platform:windows", &macos, false),
+            ("//platform:linux-debian", &linux("debian", ""), true),
+            ("//platform:linux-debian", &linux("ubuntu", ""), true),
+            ("//platform:linux-debian", &linux("arch", ""), false),
+            ("//platform:linux-arch", &linux("arch", ""), true),
+            ("//platform:linux-arch", &linux("debian", ""), false),
+            ("//platform:linux-fedora", &linux("fedora", ""), true),
+            ("//platform:linux-fedora", &linux("rhel", ""), true),
+            ("//platform:linux-fedora", &linux("debian", ""), false),
+            ("//platform:wsl", &wsl, true),
+            ("//platform:wsl", &linux("ubuntu", "debian"), false),
+        ] {
+            assert_eq!(
+                machine.matches(condition),
+                expected,
+                "{condition} against {} / {}",
+                machine.os,
+                machine.distro
+            );
+        }
+    }
+
+    /// [R-STAR-008] `//platform:macos-arm64` is false on every machine.
+    ///
+    /// `v0.1.0` detects no architecture, so matching would be worse than not:
+    /// a component meant for Apple silicon would install on an Intel one.
+    #[test]
+    fn the_architecture_condition_matches_nothing() {
+        let macos = Platform {
+            os: "macos".to_owned(),
+            ..Platform::default()
+        };
+        assert!(!macos.matches("//platform:macos-arm64"));
+        assert!(!linux("arch", "").matches("//platform:macos-arm64"));
+    }
+
+    /// [R-STAR-008] a condition this build does not know is false rather than
+    /// an error, so a configuration written for a newer meowctl falls through
+    /// to its default instead of failing to evaluate.
+    #[test]
+    fn an_unknown_condition_falls_through_rather_than_failing() {
+        let macos = Platform {
+            os: "macos".to_owned(),
+            ..Platform::default()
+        };
+        assert!(!macos.matches("//platform:haiku"));
+        assert!(!macos.matches("not a condition at all"));
+        assert!(!macos.matches(""));
+    }
+
+    /// [R-STAR-008] the `ID_LIKE` arm is what makes a Mint machine match a
+    /// `debian` case, and a distribution that is neither still does not.
+    #[test]
+    fn a_distribution_matches_through_id_like() {
+        assert!(linux("linuxmint", "ubuntu debian").matches("//platform:linux-debian"));
+        assert!(linux("centos", "rhel fedora").matches("//platform:linux-fedora"));
+        assert!(!linux("gentoo", "").matches("//platform:linux-debian"));
+    }
+
+    /// [R-STAR-008] and a distribution name on a machine that is not Linux
+    /// matches nothing, because `ID_LIKE` is a Linux notion.
+    #[test]
+    fn a_distribution_condition_needs_a_linux_machine() {
+        let pretending = Platform {
+            os: "macos".to_owned(),
+            distro: "debian".to_owned(),
+            distro_like: "debian".to_owned(),
+            ..Platform::default()
+        };
+        assert!(!pretending.matches("//platform:linux-debian"));
+    }
 }
