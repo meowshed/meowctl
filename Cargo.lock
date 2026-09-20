@@ -1162,6 +1162,7 @@ dependencies = [
  "meowctl-module",
  "meowctl-net",
  "meowctl-ops",
+ "meowctl-release",
  "meowctl-starlark",
  "meowctl-tui",
  "signal-hook",
@@ -1293,6 +1294,16 @@ name = "meowctl-pm"
 version = "0.2.0"
 dependencies = [
  "meowctl-starlark",
+ "thiserror",
+]
+
+[[package]]
+name = "meowctl-release"
+version = "0.2.0"
+dependencies = [
+ "meowctl-common",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

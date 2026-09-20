@@ -135,6 +135,7 @@ table is the index, not the decision.
 | `meowctl-ctx` | The Starlark `ctx` value — binding only |
 | `meowctl-engine` | Phases, graph, the `Plan` as a value, the runner, sentinel state, rollback driving |
 | `meowctl-tui` | Live, plain, and JSON sinks; theme as data; the `Interaction` trait |
+| `meowctl-release` | What a release is, which asset belongs to this platform, and whether these bytes are it |
 | `meowctl-cli` | The clap surface and exit-code mapping |
 
 Three boundaries carry the design, and crossing one is a defect however small

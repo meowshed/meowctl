@@ -128,9 +128,7 @@ buries it.
 
 ## Updating the binary
 
-**[R-CLI-070]** *Forward obligation, with [R-CLI-071] holding until the
-release pipeline publishes a checksum.* `self-update` MUST NOT install a
-binary it has not verified.
+**[R-CLI-070]** `self-update` MUST NOT install a binary it has not verified.
 It MUST check the integrity of what it downloaded against a checksum the
 release publishes, and MUST refuse rather than replace the running binary when
 the two disagree; see [R-COMMON-005] and [R-MODULE-030], which is the rule
@@ -138,20 +136,41 @@ everything else meowctl downloads already follows.
 
 `v0.1.0` does not. `runSelfUpdate` fetches a release asset over HTTPS and
 renames it over `os.Executable()` with no check of any kind, and the source
-says so: `SRI verification deferred (TODO below)`. Anything that can answer
-for the download URL replaces the user's `meowctl`. This is the one place the
-parity constraint does not reach, because reproducing it would mean shipping
-the weakness deliberately, in the one crate that already knows how to verify a
-download.
+says so: `TODO: verify SHA-256 of data against a .sha256 sidecar asset before
+replacing binary`. Anything that can answer for the download URL replaces the
+user's `meowctl`. This is the one place the parity constraint does not reach,
+because reproducing it would mean shipping the weakness deliberately, in a
+binary that already knows how to verify a download.
 
-**[R-CLI-071]** Until a release publishes a checksum, `self-update` MUST say
-that it cannot update this build and how to update it by hand, and MUST exit
-with the general code.
+**[R-CLI-071]** A release MUST publish `checksums.sri`, one line per asset,
+each `<sri>  <asset name>`, and `self-update` MUST refuse to proceed when it
+is absent. A release with no checksums is a release that cannot be verified,
+and treating it as one that needs no verification is the weakness this
+section exists to close.
 
-Saying so is not the same as the command being absent: [R-CLI-001] keeps it on
-the surface, and a script that calls it gets an error it can read rather than
-"unknown command". The repository publishes no release assets yet, so there is
-nothing to verify against and nothing to download.
+**[R-CLI-072]** `self-update` MUST ask for the latest release, MUST compare
+its tag with the running version, and MUST report being up to date and change
+nothing when they match.
+
+**[R-CLI-073]** The asset MUST be the one named for this platform, and a
+release with none MUST say which platform was looked for and where the
+release is, rather than reporting a network failure.
+
+**[R-CLI-074]** Replacing the running binary MUST be atomic: written beside
+it, made executable, then renamed over it. A partial write over the binary
+leaves a machine with no working `meowctl` and no way to fetch one.
+
+**[R-CLI-076]** `MEOWCTL_RELEASES` MUST override where the latest release is
+asked for.
+
+For a fork that publishes its own, and for the tests: a release that does not
+exist yet cannot be asked of GitHub, and a `self-update` that could only be
+checked against the real thing would be checked once and then not again.
+
+**[R-CLI-075]** `self-update` MUST NOT run as part of anything else. It is
+the one command that changes the tool rather than the machine, and a run that
+updated itself halfway through an apply would finish under a binary that did
+not start it.
 
 ## Runtime hooks
 

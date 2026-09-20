@@ -121,15 +121,9 @@ pub(super) fn run(cli: &Cli, session: &mut Session<'_>) -> CliResult<()> {
             yes, no_rollback, ..
         } => super::writing::update(session, *yes, !*no_rollback),
 
-        // Not absent, and not pretending. `v0.1.0` renames an unverified
-        // download over the running binary; reproducing that would ship the
-        // weakness deliberately, and there is no published checksum to verify
-        // against yet. See [R-CLI-070] and [R-CLI-071].
-        Command::SelfUpdate => Err(CliError::General(
-            "self-update cannot update this build: no release publishes a checksum to verify a \
-             download against. Install the new release the way you installed this one"
-                .to_owned(),
-        )),
+        // The one command that changes the tool rather than the machine, so
+        // it runs alone; see [R-CLI-075].
+        Command::SelfUpdate => crate::update::self_update(session),
     }
 }
 
@@ -137,7 +131,7 @@ impl Session<'_> {
     /// Says something through the sink.
     ///
     /// The only route to standard output there is; see [R-CLI-020].
-    pub(super) fn say(&mut self, text: &str) {
+    pub(crate) fn say(&mut self, text: &str) {
         self.sink.handle(&Event::Message {
             level: Level::Info,
             text: text.to_owned(),
@@ -145,7 +139,7 @@ impl Session<'_> {
     }
 
     /// Says something the reader should act on.
-    pub(super) fn warn(&mut self, text: &str) {
+    pub(crate) fn warn(&mut self, text: &str) {
         self.sink.handle(&Event::Message {
             level: Level::Warn,
             text: text.to_owned(),
