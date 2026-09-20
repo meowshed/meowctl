@@ -20,7 +20,9 @@ mod plan;
 mod progress;
 mod runner;
 
-pub use discovery::{Component, ComponentSource, Declaration, Discovered, Sources, discover};
+pub use discovery::{
+    Component, ComponentSource, Declaration, Discovered, Sources, discover, resolve_bare,
+};
 pub use error::{EngineError, EngineResult};
 pub use graph::Graph;
 pub use plan::{Inputs, Plan};
