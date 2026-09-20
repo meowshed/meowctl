@@ -12,7 +12,7 @@ Architecture-level decisions. These change rarely and always deliberately.
 | [`design/0.2.0-rust-rewrite.md`](design/0.2.0-rust-rewrite.md) | The plan for the Rust rewrite: why it is a rewrite rather than a port, the ten defects it fixes, the crate layout, the terminal output redesign, the Starlark parity risk, and the milestone order |
 | [`design/0.2.0-decisions.md`](design/0.2.0-decisions.md) | The architecture decisions and what each costs, and the thirty requirements where a different answer was available |
 | [`design/0.2.0-requirement-tradeoffs.md`](design/0.2.0-requirement-tradeoffs.md) | Every one of the 337 requirements, with the alternative that was available, why it lost, and what would reverse it |
-| [`design/0.2.0-execution-plan.md`](design/0.2.0-execution-plan.md) | The 337 requirements decomposed into 46 issues with dependencies, sizes, and a coverage check |
+| [`design/0.2.0-execution-plan.md`](design/0.2.0-execution-plan.md) | The 337 requirements decomposed into 47 issues with dependencies, sizes, and a coverage check |
 
 ## Specifications
 
