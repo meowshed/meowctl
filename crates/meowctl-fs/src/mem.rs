@@ -13,7 +13,13 @@ use crate::{Displaced, Entry, FileSystem, FsError, FsResult};
 /// What a path holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Node {
-    File(Vec<u8>),
+    File {
+        bytes: Vec<u8>,
+        /// Tracked so an extraction that sets the bit can be asserted on, and
+        /// so a snapshot notices when an undo does not put it back; see
+        /// [R-FS-005].
+        executable: bool,
+    },
     Directory,
     Symlink(PathBuf),
 }
@@ -53,7 +59,13 @@ impl MemFs {
             nodes.entry(d.to_path_buf()).or_insert(Node::Directory);
             dir = d.parent();
         }
-        nodes.insert(path, Node::File(contents.as_ref().to_vec()));
+        nodes.insert(
+            path,
+            Node::File {
+                bytes: contents.as_ref().to_vec(),
+                executable: false,
+            },
+        );
     }
 
     /// Every path, sorted, for a test that asserts on the whole tree.
@@ -78,7 +90,11 @@ impl MemFs {
             .iter()
             .map(|(path, node)| {
                 let described = match node {
-                    Node::File(bytes) => format!("file:{}", String::from_utf8_lossy(bytes)),
+                    Node::File { bytes, executable } => format!(
+                        "{}:{}",
+                        if *executable { "exec" } else { "file" },
+                        String::from_utf8_lossy(bytes)
+                    ),
                     Node::Directory => "dir".to_owned(),
                     Node::Symlink(target) => format!("link:{}", target.display()),
                 };
@@ -107,10 +123,17 @@ impl MemFs {
     }
 }
 
+/// Whether anything is stored under `path`.
+fn has_children(nodes: &BTreeMap<PathBuf, Node>, path: &Path) -> bool {
+    nodes
+        .keys()
+        .any(|held| held != path && held.starts_with(path))
+}
+
 impl FileSystem for MemFs {
     fn read(&self, path: &Path) -> FsResult<Vec<u8>> {
         match self.lock().get(path) {
-            Some(Node::File(bytes)) => Ok(bytes.clone()),
+            Some(Node::File { bytes, .. }) => Ok(bytes.clone()),
             Some(_) | None => Err(FsError::NotFound {
                 path: path.to_path_buf(),
             }),
@@ -120,7 +143,23 @@ impl FileSystem for MemFs {
     fn write(&self, path: &Path, contents: &[u8]) -> FsResult<()> {
         let mut nodes = self.lock();
         Self::require_parent(&nodes, path)?;
-        nodes.insert(path.to_path_buf(), Node::File(contents.to_vec()));
+        // A replacement keeps the bit: `RealFs` rewrites the contents and
+        // leaves the mode, and a memory filesystem that disagreed would hide
+        // that difference from every test.
+        let executable = matches!(
+            nodes.get(path),
+            Some(Node::File {
+                executable: true,
+                ..
+            })
+        );
+        nodes.insert(
+            path.to_path_buf(),
+            Node::File {
+                bytes: contents.to_vec(),
+                executable,
+            },
+        );
         Ok(())
     }
 
@@ -128,28 +167,60 @@ impl FileSystem for MemFs {
         let mut nodes = self.lock();
         Self::require_parent(&nodes, path)?;
         match nodes.get_mut(path) {
-            Some(Node::File(existing)) => existing.extend_from_slice(contents),
+            Some(Node::File { bytes, .. }) => bytes.extend_from_slice(contents),
             _ => {
-                nodes.insert(path.to_path_buf(), Node::File(contents.to_vec()));
+                nodes.insert(
+                    path.to_path_buf(),
+                    Node::File {
+                        bytes: contents.to_vec(),
+                        executable: false,
+                    },
+                );
             }
         }
         Ok(())
     }
 
     fn remove(&self, path: &Path) -> FsResult<()> {
-        self.lock().remove(path);
+        let mut nodes = self.lock();
+        if matches!(nodes.get(path), Some(Node::Directory)) && has_children(&nodes, path) {
+            return Err(FsError::io(
+                "removing",
+                path,
+                std::io::Error::new(
+                    std::io::ErrorKind::DirectoryNotEmpty,
+                    "the directory is not empty",
+                ),
+            ));
+        }
+        nodes.remove(path);
+        Ok(())
+    }
+
+    fn remove_dir_all(&self, path: &Path) -> FsResult<()> {
+        let mut nodes = self.lock();
+        nodes.retain(|held, _| held != path && !held.starts_with(path));
         Ok(())
     }
 
     fn copy(&self, from: &Path, to: &Path) -> FsResult<()> {
         let mut nodes = self.lock();
-        let Some(Node::File(bytes)) = nodes.get(from).cloned() else {
+        let Some(Node::File { bytes, .. }) = nodes.get(from).cloned() else {
             return Err(FsError::NotFound {
                 path: from.to_path_buf(),
             });
         };
         Self::require_parent(&nodes, to)?;
-        nodes.insert(to.to_path_buf(), Node::File(bytes));
+        // A copy creates a file, and [R-FS-004] gives a created file `0o600`:
+        // `RealFs` sets the mode after `fs::copy`, so the bit does not travel.
+        // A rename moves the file and does carry it.
+        nodes.insert(
+            to.to_path_buf(),
+            Node::File {
+                bytes,
+                executable: false,
+            },
+        );
         Ok(())
     }
 
@@ -241,14 +312,47 @@ impl FileSystem for MemFs {
             });
         };
         Self::require_parent(&nodes, to)?;
+        // A directory takes everything under it, which is what `fs::rename`
+        // does and what the module cache depends on when it moves a staged
+        // extraction into place; see [R-MODULE-063].
+        let moved: Vec<PathBuf> = nodes
+            .keys()
+            .filter(|held| held.starts_with(from))
+            .cloned()
+            .collect();
+        for held in moved {
+            let rest = held.strip_prefix(from).unwrap_or(&held).to_path_buf();
+            if let Some(child) = nodes.remove(&held) {
+                nodes.insert(to.join(rest), child);
+            }
+        }
         nodes.insert(to.to_path_buf(), node);
         Ok(())
     }
 
+    fn set_executable(&self, path: &Path, executable: bool) -> FsResult<()> {
+        match self.lock().get_mut(path) {
+            Some(Node::File {
+                executable: bit, ..
+            }) => {
+                // A platform with no mode bits cannot carry one, and an
+                // in-memory filesystem that carried it anyway would let a test
+                // pass on Windows for behaviour `RealFs` does not have there;
+                // see [R-FS-005].
+                *bit = executable && cfg!(unix);
+                Ok(())
+            }
+            _ => Err(FsError::NotFound {
+                path: path.to_path_buf(),
+            }),
+        }
+    }
+
     fn entry(&self, path: &Path) -> FsResult<Option<Entry>> {
         Ok(self.lock().get(path).map(|node| match node {
-            Node::File(bytes) => Entry::File {
+            Node::File { bytes, executable } => Entry::File {
                 len: bytes.len() as u64,
+                executable: *executable,
             },
             Node::Directory => Entry::Directory,
             Node::Symlink(target) => Entry::Symlink {

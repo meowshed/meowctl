@@ -34,6 +34,10 @@ pub enum Entry {
     File {
         /// Length in bytes.
         len: u64,
+        /// Whether the file is executable.
+        ///
+        /// Always `false` on a platform with no mode bits; see [R-FS-005].
+        executable: bool,
     },
     /// A directory.
     Directory,
@@ -110,15 +114,29 @@ pub trait FileSystem: Debug {
     /// [`FsError::Io`].
     fn append(&self, path: &Path, contents: &[u8]) -> FsResult<()>;
 
-    /// Removes a file or a symlink.
+    /// Removes a file, a symlink, or an empty directory.
     ///
     /// Removing something that is not there succeeds, because the caller
-    /// wanted it gone and it is.
+    /// wanted it gone and it is. A directory with anything in it is refused,
+    /// per [R-FS-006]: the caller that meant to discard a subtree says so with
+    /// [`FileSystem::remove_dir_all`].
     ///
     /// # Errors
     ///
     /// [`FsError::Io`] when it is there and cannot be removed.
     fn remove(&self, path: &Path) -> FsResult<()>;
+
+    /// Removes a directory and everything under it.
+    ///
+    /// Separate from [`FileSystem::remove`] because discarding a subtree is a
+    /// different decision from undoing one `mkdir`, and a single method would
+    /// make the dangerous one the default; see [R-FS-006]. Removing something
+    /// that is not there succeeds.
+    ///
+    /// # Errors
+    ///
+    /// [`FsError::Io`] when it is there and cannot be removed.
+    fn remove_dir_all(&self, path: &Path) -> FsResult<()>;
 
     /// Copies a file.
     ///
@@ -166,6 +184,17 @@ pub trait FileSystem: Debug {
     ///
     /// [`FsError::Io`] when the directory cannot be created.
     fn create_dir_all(&self, path: &Path) -> FsResult<bool>;
+
+    /// Marks a file executable, or stops it being one.
+    ///
+    /// The one exception to [R-FS-004]'s `0o600`, and it exists because a
+    /// module tarball ships scripts meowctl later runs; see [R-MODULE-032].
+    /// A no-op on a platform with no mode bits.
+    ///
+    /// # Errors
+    ///
+    /// [`FsError::NotFound`] when nothing is there, or [`FsError::Io`].
+    fn set_executable(&self, path: &Path, executable: bool) -> FsResult<()>;
 
     /// Lists a directory's entries, sorted by name.
     ///
@@ -218,6 +247,9 @@ impl<T: FileSystem + ?Sized> FileSystem for std::sync::Arc<T> {
     fn remove(&self, path: &Path) -> FsResult<()> {
         (**self).remove(path)
     }
+    fn remove_dir_all(&self, path: &Path) -> FsResult<()> {
+        (**self).remove_dir_all(path)
+    }
     fn copy(&self, from: &Path, to: &Path) -> FsResult<()> {
         (**self).copy(from, to)
     }
@@ -232,6 +264,9 @@ impl<T: FileSystem + ?Sized> FileSystem for std::sync::Arc<T> {
     }
     fn create_dir_all(&self, path: &Path) -> FsResult<bool> {
         (**self).create_dir_all(path)
+    }
+    fn set_executable(&self, path: &Path, executable: bool) -> FsResult<()> {
+        (**self).set_executable(path, executable)
     }
     fn read_dir(&self, path: &Path) -> FsResult<Vec<PathBuf>> {
         (**self).read_dir(path)

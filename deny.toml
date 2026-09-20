@@ -34,6 +34,12 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "BSL-1.0",
+    # The Mozilla CA root list, which `webpki-roots` ships as data. A data
+    # licence rather than a code one, and permissive: it allows redistribution
+    # of the list in a binary, which is the whole use here. It arrives with
+    # `ureq` whichever TLS verifier is chosen, so the alternative is not
+    # another licence but no TLS.
+    "CDLA-Permissive-2.0",
     "ISC",
     "MIT",
     "MPL-2.0",
