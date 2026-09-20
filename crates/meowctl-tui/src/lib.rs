@@ -16,9 +16,11 @@ pub mod caps;
 pub mod theme;
 
 mod interaction;
+mod live;
 mod sink;
 
 pub use caps::{Caps, ColourDepth, Env, Mode, SystemEnv};
 pub use interaction::{Always, Interaction, InteractionError, Prompt};
+pub use live::LiveSink;
 pub use sink::{JsonSink, PlainSink, Sink};
 pub use theme::{Palette, Role, Symbols, Theme};

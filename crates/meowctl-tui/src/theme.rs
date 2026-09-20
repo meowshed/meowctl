@@ -65,6 +65,11 @@ pub struct Symbols {
     pub arrow: &'static str,
     /// A list item.
     pub bullet: &'static str,
+    /// The frames a running item cycles through.
+    ///
+    /// Part of the tier for the same reason the separator is: a braille frame
+    /// on a terminal that cannot show one is a mojibake risk on every redraw.
+    pub spinner: &'static [&'static str],
     /// Between a subject and a remark about it.
     ///
     /// Part of the tier rather than written into the text, because a line
@@ -86,6 +91,7 @@ pub const UNICODE: Symbols = Symbols {
     removed: "−",
     arrow: "→",
     bullet: "·",
+    spinner: &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
     separator: "—",
 };
 
@@ -105,6 +111,7 @@ pub const ASCII: Symbols = Symbols {
     removed: "-",
     arrow: "->",
     bullet: "*",
+    spinner: &["|", "/", "-", "\\"],
     separator: "--",
 };
 
@@ -278,6 +285,7 @@ mod tests {
 
     fn theme(colour: ColourDepth, unicode: bool) -> Theme {
         Theme::new(Caps {
+            height: None,
             tty: true,
             motion: false,
             unicode,
