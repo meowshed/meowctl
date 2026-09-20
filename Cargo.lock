@@ -853,7 +853,9 @@ version = "0.2.0-alpha.0"
 dependencies = [
  "meowctl-common",
  "meowctl-fs",
+ "meowctl-starlark",
  "serde",
+ "starlark_syntax",
  "tempfile",
  "thiserror",
  "toml",

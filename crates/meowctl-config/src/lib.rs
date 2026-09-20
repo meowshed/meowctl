@@ -9,15 +9,18 @@
 //! during the rewrite, and a serializer that reorders keys breaks
 //! reproducibility without breaking a test; see [`emit`].
 
+pub mod edit;
 pub mod emit;
 mod error;
 mod installed;
 mod layout;
 mod lock;
+mod modfile;
 mod state;
 
 pub use error::{ConfigError, ConfigResult};
 pub use installed::{InstalledComponent, InstalledLock};
 pub use layout::{LEGACY_ENTRY, Layout};
 pub use lock::{GitHubEntry, LockFile, LockMeta, ModuleEntry, PackageEntry};
+pub use modfile::{Dep, Modfile, Module, Replace};
 pub use state::{CompletedComponent, LastRun, RolledBack, Sentinel};
