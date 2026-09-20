@@ -210,5 +210,14 @@ pub fn settings(platform: &Platform, rollback: bool) -> meowctl_engine::Settings
         dry_run: false,
         rollback,
         shell: Some("fish".to_owned()),
+        interrupted: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    }
+}
+
+/// The same settings, with the run already asked to stop.
+pub fn interrupted_settings(platform: &Platform) -> meowctl_engine::Settings {
+    meowctl_engine::Settings {
+        interrupted: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
+        ..settings(platform, true)
     }
 }

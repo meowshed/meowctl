@@ -24,10 +24,6 @@ mod writing;
 /// not do happens here.
 #[must_use]
 pub fn main() -> ExitCode {
-    // Before anything is drawn, so an interrupt during the first frame still
-    // puts the cursor back; see [R-CLI-014].
-    crate::signals::restore_cursor_on_signal();
-
     let parsed = match Cli::try_parse() {
         Ok(parsed) => parsed,
         Err(error) => {
@@ -49,8 +45,12 @@ pub fn main() -> ExitCode {
 /// Separate from [`main`] so a test drives it without a process.
 #[must_use]
 pub fn run(cli: Cli) -> ExitCode {
+    // Before anything is drawn, so an interrupt during the first frame still
+    // puts the cursor back; see [R-CLI-014].
+    let interrupted = crate::signals::watch_for_interruption();
+
     let mut sink = build_sink(&cli);
-    let outcome = dispatch(&cli, sink.as_mut());
+    let outcome = dispatch(&cli, sink.as_mut(), interrupted);
     sink.finish();
 
     match outcome {
@@ -156,6 +156,8 @@ pub struct Session<'a> {
     pub verbose: bool,
     /// The sink, for a command that renders something itself.
     pub sink: &'a mut dyn Sink,
+    /// Set when the user has asked the run to stop; see [R-CLI-051].
+    pub interrupted: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl std::fmt::Debug for Session<'_> {
@@ -172,7 +174,11 @@ impl std::fmt::Debug for Session<'_> {
 /// This is the only place a `FileSystem` or an `Executor` is constructed, and
 /// `--dry-run` chooses which, rather than being passed down as a boolean; see
 /// [R-CLI-010] and [R-CLI-011].
-fn dispatch(cli: &Cli, sink: &mut dyn Sink) -> CliResult<()> {
+fn dispatch(
+    cli: &Cli,
+    sink: &mut dyn Sink,
+    interrupted: Arc<std::sync::atomic::AtomicBool>,
+) -> CliResult<()> {
     let environment: BTreeMap<String, String> = std::env::vars().collect();
     let env = paths::SystemEnv;
     let home = paths::home_dir(&env)?;
@@ -218,6 +224,7 @@ fn dispatch(cli: &Cli, sink: &mut dyn Sink) -> CliResult<()> {
         dry_run,
         verbose,
         sink,
+        interrupted,
     };
 
     let outcome = commands::run(cli, &mut session);

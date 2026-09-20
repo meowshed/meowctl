@@ -215,8 +215,25 @@ underlying error.
 inverses failed and MUST record the `partial` outcome.
 
 **[R-ENGINE-062]** A run interrupted by a signal MUST stop before starting the
-next component, flush the sentinel, and leave the journal intact for the next
-run to find.
+next component, and MUST leave the journal intact for the next run to find; see
+[R-ENGINE-042].
+
+The engine learns of the interrupt through a flag the caller owns and the
+runner reads, in the same way it learns everything else from outside: nothing
+below `meowctl-cli` installs a signal handler. What the flag interrupts is the
+gap between components, not a component. A hook that is halfway through
+`brew install` is not something the engine can stop, and a terminal's
+interrupt reaches the whole process group anyway, so the subprocess gets its
+own.
+
+The sentinel needs no flush, because [R-ENGINE-041] writes each completion as
+it happens rather than at the end of the phase. That is the same property
+stated from the other side: an interrupted run resumes where it stopped
+because there was never anything held back.
+
+**[R-ENGINE-064]** An interrupted run MUST NOT roll back. The journal is what
+the next run finds and reports, and undoing work the user stopped is not what
+stopping asked for; see [R-OPS-025].
 
 **[R-ENGINE-063]** A component that fails MUST NOT prevent the phase from
 reporting the components that already succeeded.

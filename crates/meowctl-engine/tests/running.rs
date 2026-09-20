@@ -626,3 +626,85 @@ fn a_failing_runtime_hook_stops_and_says_which_component() {
         "the run stopped at the first failure"
     );
 }
+
+/// [R-ENGINE-062] a run the user has stopped does not start another
+/// component.
+#[test]
+fn an_interrupted_run_starts_no_further_component() {
+    let config = Config::new()
+        .declaring(Declaration::new("first"), &writes("first", "~/a"))
+        .declaring(Declaration::new("second"), &writes("second", "~/b"));
+
+    let loader = NoLoads;
+    let platform = macos();
+    let discovered = discover(&config, &loader, &platform).expect("discovery");
+    let graph = Graph::build(&discovered).expect("the graph builds");
+    let plan = Plan::compute(&graph, PhaseSet::Install, &Inputs::default());
+
+    let (effects, world) = world(Vec::new(), None);
+    let evaluator = Evaluator::new(platform.clone(), &loader);
+    let mut runner = Runner::new(
+        &graph,
+        &discovered.registry,
+        evaluator,
+        effects,
+        support::interrupted_settings(&platform),
+    );
+
+    let report = runner.run(&plan);
+    assert!(report.interrupted, "{report:?}");
+    assert!(
+        report.finished.is_empty(),
+        "a stopped run ran a component: {:?}",
+        report.finished
+    );
+    assert!(
+        !world
+            .seen()
+            .iter()
+            .any(|e| matches!(e, Event::ComponentStarted { .. })),
+        "a stopped run started a component"
+    );
+}
+
+/// [R-ENGINE-064] and it keeps its journal, because the next run reports it
+/// and undoing work the user stopped is not what stopping asked for.
+#[test]
+fn an_interrupted_run_does_not_roll_back() {
+    let config = Config::new().declaring(Declaration::new("zsh"), &writes("zsh", "~/.zshrc"));
+
+    let loader = NoLoads;
+    let platform = macos();
+    let discovered = discover(&config, &loader, &platform).expect("discovery");
+    let graph = Graph::build(&discovered).expect("the graph builds");
+    let plan = Plan::compute(&graph, PhaseSet::Install, &Inputs::default());
+
+    let (effects, _world) = world(Vec::new(), None);
+    let evaluator = Evaluator::new(platform.clone(), &loader);
+    let mut runner = Runner::new(
+        &graph,
+        &discovered.registry,
+        evaluator,
+        effects,
+        support::interrupted_settings(&platform),
+    );
+
+    let report = runner.run(&plan);
+    assert!(report.interrupted);
+    assert!(
+        report.rolled_back.is_none(),
+        "a stopped run rolled back: {:?}",
+        report.rolled_back
+    );
+}
+
+/// [R-ENGINE-062] a run nobody stopped is unaffected, which is the case that
+/// would break if the flag were read the wrong way round.
+#[test]
+fn a_run_nobody_stopped_finishes() {
+    let config = Config::new().declaring(Declaration::new("zsh"), &writes("zsh", "~/.zshrc"));
+    let (report, _) = run(&config, Vec::new(), false, None);
+
+    assert!(!report.interrupted, "{report:?}");
+    assert!(report.succeeded(), "{report:?}");
+}

@@ -10,6 +10,8 @@
 //! callback; see [R-ENGINE-051].
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use meowctl_common::{ComponentId, Event, Level, Outcome, Phase};
 use meowctl_ctx::{Capabilities, Ctx, Effects, Restricted, Surface};
@@ -44,6 +46,13 @@ pub struct Settings {
     /// `None` everywhere else, which is how a component tests whether it is
     /// being asked to contribute to a shell; see [R-CTX-002].
     pub shell: Option<String>,
+    /// Set when the user has asked the run to stop.
+    ///
+    /// Read between components and nowhere else. The engine installs no
+    /// signal handler: a signal arrives at the process, so whoever owns the
+    /// process sets this and the runner reads it; see [R-ENGINE-062] and
+    /// [R-CLI-014].
+    pub interrupted: Arc<AtomicBool>,
 }
 
 /// How a run went.
@@ -57,6 +66,8 @@ pub struct Report {
     ///
     /// `None` when nothing failed, or when the caller turned rollback off.
     pub rolled_back: Option<RolledBack>,
+    /// Whether the run stopped because the user asked it to.
+    pub interrupted: bool,
     /// What each component declared, for the components whose `install` or
     /// `upgrade` ran, keyed by logical name.
     ///
@@ -199,6 +210,14 @@ impl<'a> Runner<'a> {
 
             let mut failed = 0;
             for step in plan.steps.iter().filter(|s| s.phase == phase) {
+                // Between components, which is the whole of what an
+                // interrupt can stop: a hook halfway through `brew install`
+                // is not ours to interrupt, and the terminal has already sent
+                // the subprocess its own; see [R-ENGINE-062].
+                if self.settings.interrupted.load(Ordering::Relaxed) {
+                    report.interrupted = true;
+                    break;
+                }
                 if let Some(reason) = &step.skipped {
                     self.effects.emit(Event::ComponentSkipped {
                         component: step.component.clone(),
@@ -271,12 +290,15 @@ impl<'a> Runner<'a> {
             self.effects.emit(Event::PhaseFinished { phase, failed });
             // A phase set stops at the first failed phase; see
             // [R-ENGINE-031].
-            if report.failure.is_some() {
+            if report.failure.is_some() || report.interrupted {
                 break;
             }
         }
 
-        if report.failure.is_some() && self.settings.rollback {
+        // An interrupted run keeps its journal for the next run to find and
+        // report. Undoing work the user stopped is not what stopping asked
+        // for; see [R-ENGINE-064].
+        if report.failure.is_some() && !report.interrupted && self.settings.rollback {
             report.rolled_back = self.roll_back();
         }
         report
