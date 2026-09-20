@@ -79,9 +79,13 @@ because they are the hook names a component author writes and they appear in
 | `verify` | `verify` |
 
 **[R-COMMON-012]** `Phase` MUST report whether it is read-only. The read-only
-phases are `install_check`, `upgrade_check`, `uninstall_check`, and `verify`,
-matching the `validCheckPhases` set in `internal/ctx/methods.go`. A read-only
-phase gets a restricted `ctx`; see [R-CTX-030].
+phases are `install_check`, `upgrade_check`, `uninstall_check`, and `verify`. A
+read-only phase gets a restricted `ctx`; see [R-CTX-030].
+
+An earlier draft of this requirement cited a `validCheckPhases` set in
+`internal/ctx/methods.go`. There is no such set: `v0.1.0` never asks whether a
+phase is read-only, and every hook in every phase gets the full `ctx`. The four
+names are what the phases mean, not what a Go identifier says.
 
 **[R-COMMON-013]** `Phase` MUST report whether it is a runtime hook phase. The
 runtime hook phases are `shell` and `login`. Only in those does `ctx.emit`
@@ -144,6 +148,13 @@ that a sink renders. At minimum: `PlanComputed`, `PhaseStarted`,
 `OpApplied`, `ProcessStarted`, `ProcessOutput`, `ProcessFinished`,
 `TerminalRequested`, `TerminalReleased`, `Diagnostic`, and
 `Message { severity, text }`.
+
+**[R-COMMON-044]** The set MUST include `ShellLine` and `PathPrepended`, which
+`ctx.emit` and `ctx.add_path` produce. Both are effects on the process rather
+than on the filesystem, and `ctx` reaches every effect through something it was
+given; see [R-CTX-024] and [R-CTX-025]. `v0.1.0` writes to stdout and calls
+`setenv` from inside the method, which is why neither can be dry-run, rendered
+as JSON, or tested without a process.
 
 **[R-COMMON-041]** An `Event` MUST be serializable to JSON, because `JsonSink`
 emits one object per event; see [R-TUI-030].
