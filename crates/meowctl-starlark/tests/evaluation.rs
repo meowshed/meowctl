@@ -528,3 +528,143 @@ fn the_value_of_every_top_level_string_list_is_reported() {
     );
     assert!(!result.lists.contains_key("notalist"));
 }
+
+/// [R-STAR-004] `repo()` records a repository against a named manager, which
+/// is how a component adds a tap or a PPA before its packages resolve.
+#[test]
+fn a_repo_declaration_names_its_manager() {
+    // `repo(manager = ..., **rest)`, which is how the standard library calls
+    // it: `repo(manager = "dnf", copr = "jdxcode/mise")`.
+    let evaluated =
+        evaluate("repo(manager = \"dnf\", copr = \"jdxcode/mise\")\n").expect("evaluates");
+
+    let repos = &evaluated.declarations.repos;
+    assert_eq!(repos.len(), 1, "{repos:?}");
+    assert_eq!(repos[0].manager, "dnf");
+    assert_eq!(
+        repos[0].arguments.get("copr"),
+        Some(&meowctl_starlark::Argument::String(
+            "jdxcode/mise".to_owned()
+        )),
+        "{:?}",
+        repos[0].arguments
+    );
+}
+
+/// [R-STAR-011] the accumulator holds owned data, so what a declaration
+/// carries outlives the evaluation that produced it.
+///
+/// `go.starlark.net` did not impose this and `starlark-rust` does: a value
+/// borrowed from the heap cannot leave, and M0 is where that was found. The
+/// check is that the declarations are still readable here, after the
+/// evaluator and its heap are gone.
+#[test]
+fn what_an_evaluation_declared_outlives_it() {
+    let declarations = {
+        let evaluated =
+            evaluate("component(\"zsh\")\npkg(\"brew\", \"git\")\n").expect("evaluates");
+        evaluated.declarations
+    };
+
+    assert_eq!(declarations.components[0].name, "zsh");
+    assert_eq!(declarations.packages[0].name, "git");
+}
+
+/// [R-STAR-042] `fail()` is how a component refuses, and refusing is a
+/// configuration error rather than a crash.
+#[test]
+fn a_fail_becomes_a_configuration_error() {
+    let err = evaluate("fail(\"this machine is not supported\")\n").expect_err("should fail");
+
+    assert!(
+        err.to_string().contains("this machine is not supported"),
+        "the message did not survive: {err}"
+    );
+    assert_eq!(err.severity(), meowctl_common::Severity::Config, "{err}");
+}
+
+/// [R-STAR-051] a builtin called wrongly names the builtin and the argument,
+/// because "invalid arguments" sends the author reading the source of a
+/// binary they do not have.
+#[test]
+fn a_builtin_called_wrongly_names_itself_and_the_argument() {
+    let err = evaluate("pkg()\n").expect_err("should fail");
+    let said = err.to_string();
+    assert!(said.contains("pkg"), "{said}");
+    assert!(
+        said.contains("manager") || said.contains("argument"),
+        "{said}"
+    );
+}
+
+/// [R-STAR-030] `ctx` first, then whatever the caller supplies, positionally
+/// and by keyword.
+///
+/// A lifecycle hook takes `ctx` alone; a package-manager handler takes
+/// `install_pkg(ctx, name, version)`. One call shape has to serve both, or
+/// the two would be dispatched by different code and drift.
+#[test]
+fn a_hook_takes_ctx_first_and_then_what_the_caller_supplies() {
+    struct WithArguments;
+
+    impl meowctl_starlark::HookArgument for WithArguments {
+        fn allocate<'v>(&self, heap: starlark::values::Heap<'v>) -> starlark::values::Value<'v> {
+            heap.alloc("the-ctx")
+        }
+        fn positional<'v>(
+            &self,
+            heap: starlark::values::Heap<'v>,
+        ) -> Vec<starlark::values::Value<'v>> {
+            vec![heap.alloc("git")]
+        }
+        fn keywords<'v>(
+            &self,
+            heap: starlark::values::Heap<'v>,
+        ) -> Vec<(String, starlark::values::Value<'v>)> {
+            vec![("version".to_owned(), heap.alloc("2.43.0"))]
+        }
+    }
+
+    let loader = NoLoader;
+    let called = meowctl_starlark::Evaluator::new(Platform::default(), &loader)
+        .call_hook(
+            "brew.star",
+            concat!(
+                "def install_pkg(ctx, name, version = \"\"):\n",
+                "    if ctx != \"the-ctx\":\n",
+                "        fail(\"ctx was not first: \" + str(ctx))\n",
+                "    if name != \"git\":\n",
+                "        fail(\"the positional did not arrive: \" + str(name))\n",
+                "    if version != \"2.43.0\":\n",
+                "        fail(\"the keyword did not arrive: \" + str(version))\n",
+            ),
+            "install_pkg",
+            &WithArguments,
+        )
+        .expect("the handler is called with all three");
+
+    assert!(called, "the hook was not called at all");
+}
+
+/// [R-STAR-041] an error inside a loaded module names the chain that reached
+/// it, because the innermost file alone does not say which component pulled
+/// it in.
+#[test]
+fn an_error_inside_a_loaded_module_names_the_chain() {
+    let mut loader = MapLoader::default();
+    loader.files.insert(
+        "helper.star".to_owned(),
+        "def boom():\n    fail(\"inside\")\n".to_owned(),
+    );
+
+    let err = Evaluator::new(macos(), &loader)
+        .evaluate("init.star", "load(\"helper.star\", \"boom\")\nboom()\n")
+        .expect_err("should fail");
+
+    let said = err.to_string();
+    assert!(said.contains("inside"), "{said}");
+    assert!(
+        said.contains("helper.star"),
+        "the module is not named: {said}"
+    );
+}

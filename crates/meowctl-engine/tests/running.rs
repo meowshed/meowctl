@@ -1,5 +1,12 @@
 //! Running a plan, against an in-memory world.
 //!
+//! [R-ENGINE-001] is held by the shape of this file rather than by a case in
+//! it: every test walks `discover` to `Graph::build` to `Plan::compute` to
+//! `Runner::run`, in that order, because each takes what the one before
+//! returned. A stage cannot be entered with what an earlier one has not
+//! produced, and there is no test to write for that -- the alternative does
+//! not compile.
+//!
 //! Everything here runs real Starlark hooks against a `MemFs` and a scripted
 //! executor, which is what the effects-behind-traits design buys: a test of
 //! the runner needs no machine to run on.
@@ -176,7 +183,9 @@ fn the_components_that_succeeded_are_still_reported() {
     assert!(report.failure.is_some());
 }
 
-/// [R-ENGINE-032] a failed run undoes what it did, and says how that went.
+/// [R-ENGINE-032] and [R-ENGINE-061]: a failed run undoes what it did, and
+/// says how that went -- the outcome and how many inverses applied, so a user
+/// who has to finish by hand knows where the run left them.
 #[test]
 fn a_failed_run_rolls_back_what_it_did() {
     let temp = tempfile::tempdir().expect("a temporary directory");

@@ -112,7 +112,10 @@ fn an_unscripted_command_fails_the_test() {
     assert!(err.to_string().contains("rm -rf /"), "{err}");
 }
 
-/// [R-EXEC-011] an install_check hook that cannot interrogate the system plans
+/// [R-EXEC-011] and [R-ENGINE-034]: an executor is built for a phase, which
+/// is what the engine does per phase during a dry run -- it is the only place
+/// that knows both the flag and the phase. An install_check hook that cannot
+/// interrogate the system plans
 /// against nothing, so a read-only phase still runs its commands.
 #[test]
 fn a_read_only_phase_still_runs_commands_in_a_dry_run() {

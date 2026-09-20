@@ -48,8 +48,13 @@ fn a_dry_run_opens_no_journal() {
     );
 }
 
-/// [R-CLI-011] and [R-FS-012]: a dry run records nothing either, so the next
-/// real run does the work rather than skipping it as already done.
+/// [R-CLI-010], [R-CLI-011] and [R-FS-012]: the effects are constructed once
+/// from the flags, and a dry run records nothing, so the next real run does
+/// the work rather than skipping it as already done.
+///
+/// Constructed once is what makes this observable at all: if any layer built
+/// its own `FileSystem`, one of them would be the real one and the sentinel
+/// would be here.
 #[test]
 fn a_dry_run_records_no_run() {
     let root = sandbox();

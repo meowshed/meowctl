@@ -161,6 +161,34 @@ fn the_install_flags_reach_the_parsed_command() {
     assert!(force && no_rollback);
 }
 
+/// [R-CLI-015] `--no-rollback` on `verify` parses and carries nothing
+/// further: its one phase is read-only and journals nothing, so there is
+/// never anything to undo. Refusing the flag would break a script that
+/// passes it to every command.
+#[test]
+fn no_rollback_on_verify_is_accepted_and_changes_nothing() {
+    let parsed = parse(&["verify", "--no-rollback"]).expect("verify");
+    let Command::Verify { no_rollback, .. } = parsed.command else {
+        panic!("expected verify");
+    };
+    assert!(no_rollback, "the flag did not reach the parsed command");
+}
+
+/// [R-TUI-011] the sink is chosen once from the flags, and the choice does
+/// not depend on the command: `--format json` is JSON whatever is running.
+#[test]
+fn the_format_flag_decides_the_sink_for_every_command() {
+    for args in [
+        vec!["--format", "json", "apply"],
+        vec!["--format", "json", "status"],
+        vec!["--format", "json", "hook", "shell"],
+        vec!["--format", "json", "dep", "list"],
+    ] {
+        let parsed = parse(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+        assert_eq!(parsed.global.format, Some(Format::Json), "{args:?}");
+    }
+}
+
 /// [R-CLI-016] accepted, and inert. `v0.1.0` declares the flag and reads it
 /// nowhere, so neither binary resolves without the lock, and a test that
 /// asserted it did would be asserting a feature that has never existed.

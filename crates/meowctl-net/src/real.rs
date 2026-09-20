@@ -154,6 +154,21 @@ mod tests {
         assert_eq!(DEFAULT_TIMEOUT, Duration::from_secs(30));
     }
 
+    /// [R-NET-004] a status that is not 200 is a failure carrying the code,
+    /// which is what tells a missing module from a rate-limited one. The
+    /// constructor for that error is here and the `ScriptedHttp` test asserts
+    /// the code survives; what needs a server is producing the status, not
+    /// reporting it.
+    #[test]
+    fn a_status_that_is_not_200_carries_its_code() {
+        let err = NetError::Status {
+            url: "https://h/x".to_owned(),
+            code: 429,
+        };
+        assert_eq!(err.status(), Some(429));
+        assert!(err.to_string().contains("429"), "{err}");
+    }
+
     /// [R-NET-006] a body is bounded, so a URL answering with an endless
     /// stream fails rather than filling the disk. The bound is an order of
     /// magnitude above the largest module published.

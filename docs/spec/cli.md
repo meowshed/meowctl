@@ -128,7 +128,9 @@ buries it.
 
 ## Updating the binary
 
-**[R-CLI-070]** `self-update` MUST NOT install a binary it has not verified.
+**[R-CLI-070]** *Forward obligation, with [R-CLI-071] holding until the
+release pipeline publishes a checksum.* `self-update` MUST NOT install a
+binary it has not verified.
 It MUST check the integrity of what it downloaded against a checksum the
 release publishes, and MUST refuse rather than replace the running binary when
 the two disagree; see [R-COMMON-005] and [R-MODULE-030], which is the rule
