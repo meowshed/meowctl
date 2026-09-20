@@ -1,0 +1,15 @@
+[package]
+name = "meowctl-pm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "The package-manager handler registry and the dispatch of package declarations to it"
+
+[dependencies]
+meowctl-starlark = { path = "../meowctl-starlark" }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

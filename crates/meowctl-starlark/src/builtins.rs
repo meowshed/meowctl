@@ -33,6 +33,8 @@ pub(crate) struct Context {
     pub(crate) accumulator: Accumulator,
     /// The machine, for `platform()` and `select()`.
     pub(crate) platform: Platform,
+    /// Where `query_pm` sends its question; see [R-STAR-005].
+    pub(crate) package_managers: std::sync::Arc<dyn crate::PackageManagers>,
 }
 
 /// The context of the evaluation a builtin is running in.
@@ -183,6 +185,24 @@ pub(crate) fn meowctl_globals(builder: &mut GlobalsBuilder) {
             arguments: flatten_kwargs(&kwargs),
         });
         Ok(NoneType)
+    }
+
+    /// Asks a package manager what it has installed.
+    ///
+    /// The one builtin that runs another component's code during evaluation.
+    /// It goes out through a trait rather than calling the evaluator from
+    /// inside itself, because the handler lives in a different file and
+    /// evaluating that file is the caller's job; see [R-STAR-005] and
+    /// [R-PM-020].
+    fn query_pm<'v>(
+        manager: String,
+        eval: &mut Evaluator<'v, '_, '_>,
+    ) -> anyhow::Result<Vec<String>> {
+        let installed = context(eval)?
+            .package_managers
+            .interrogate(&manager)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        Ok(installed)
     }
 
     /// Declares a module dependency.

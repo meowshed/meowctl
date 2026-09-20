@@ -1077,6 +1077,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "meowctl-pm"
+version = "0.2.0-alpha.0"
+dependencies = [
+ "meowctl-starlark",
+ "thiserror",
+]
+
+[[package]]
 name = "meowctl-starlark"
 version = "0.2.0-alpha.0"
 dependencies = [
