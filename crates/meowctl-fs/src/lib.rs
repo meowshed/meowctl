@@ -114,15 +114,29 @@ pub trait FileSystem: Debug {
     /// [`FsError::Io`].
     fn append(&self, path: &Path, contents: &[u8]) -> FsResult<()>;
 
-    /// Removes a file or a symlink.
+    /// Removes a file, a symlink, or an empty directory.
     ///
     /// Removing something that is not there succeeds, because the caller
-    /// wanted it gone and it is.
+    /// wanted it gone and it is. A directory with anything in it is refused,
+    /// per [R-FS-006]: the caller that meant to discard a subtree says so with
+    /// [`FileSystem::remove_dir_all`].
     ///
     /// # Errors
     ///
     /// [`FsError::Io`] when it is there and cannot be removed.
     fn remove(&self, path: &Path) -> FsResult<()>;
+
+    /// Removes a directory and everything under it.
+    ///
+    /// Separate from [`FileSystem::remove`] because discarding a subtree is a
+    /// different decision from undoing one `mkdir`, and a single method would
+    /// make the dangerous one the default; see [R-FS-006]. Removing something
+    /// that is not there succeeds.
+    ///
+    /// # Errors
+    ///
+    /// [`FsError::Io`] when it is there and cannot be removed.
+    fn remove_dir_all(&self, path: &Path) -> FsResult<()>;
 
     /// Copies a file.
     ///
@@ -232,6 +246,9 @@ impl<T: FileSystem + ?Sized> FileSystem for std::sync::Arc<T> {
     }
     fn remove(&self, path: &Path) -> FsResult<()> {
         (**self).remove(path)
+    }
+    fn remove_dir_all(&self, path: &Path) -> FsResult<()> {
+        (**self).remove_dir_all(path)
     }
     fn copy(&self, from: &Path, to: &Path) -> FsResult<()> {
         (**self).copy(from, to)

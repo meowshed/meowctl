@@ -143,7 +143,22 @@ impl FileSystem for RealFs {
         match fs::symlink_metadata(path) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(FsError::io("inspecting", path, e)),
+            // A directory needs `remove_dir`, and it refuses a directory with
+            // anything in it, which is the behaviour [R-FS-006] wants.
+            // `Op::RemoveDir` walks a chain of directories it created and
+            // stops at the first one that is not empty, so this is the call it
+            // has been making all along.
+            Ok(meta) if meta.is_dir() => {
+                fs::remove_dir(path).map_err(|e| FsError::io("removing", path, e))
+            }
             Ok(_) => fs::remove_file(path).map_err(|e| FsError::io("removing", path, e)),
+        }
+    }
+
+    fn remove_dir_all(&self, path: &Path) -> FsResult<()> {
+        match fs::remove_dir_all(path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            other => other.map_err(|e| FsError::io("removing", path, e)),
         }
     }
 

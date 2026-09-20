@@ -375,15 +375,10 @@ fn the_executable_bit_is_set_and_reported() {
 #[test]
 fn making_a_missing_file_executable_fails() {
     for_each(|s| {
-        let err = s
-            .fs
-            .set_executable(&s.path("absent"), true)
-            .expect_err(s.name);
-        assert!(
-            matches!(err, FsError::NotFound { .. }),
-            "{}: {err}",
-            s.name
-        );
+        let err =
+            s.fs.set_executable(&s.path("absent"), true)
+                .expect_err(s.name);
+        assert!(matches!(err, FsError::NotFound { .. }), "{}: {err}", s.name);
     });
 }
 
@@ -418,6 +413,114 @@ fn a_copy_drops_the_executable_bit_and_a_rename_keeps_it() {
                 executable: cfg!(unix)
             }),
             "{}: a rename moves the file",
+            s.name
+        );
+    });
+}
+
+/// [R-FS-006] `Op::RemoveDir` walks the chain of directories a `mkdir -p`
+/// created and stops at the first one that is not empty, which only works if
+/// `remove` refuses a directory with something in it and removes an empty one.
+#[test]
+fn removing_a_directory_takes_an_empty_one_and_refuses_the_rest() {
+    for_each(|s| {
+        let dir = s.path("a/b");
+        s.fs.create_dir_all(&dir).expect(s.name);
+        s.fs.write(&dir.join("file"), b"x").expect(s.name);
+
+        let err = s.fs.remove(&dir).expect_err(s.name);
+        assert!(matches!(err, FsError::Io { .. }), "{}: {err}", s.name);
+
+        s.fs.remove(&dir.join("file")).expect(s.name);
+        s.fs.remove(&dir).expect(s.name);
+        assert_eq!(s.fs.entry(&dir).expect(s.name), None, "{}", s.name);
+    });
+}
+
+/// [R-FS-006] the module cache replaces a module's directory when what is in
+/// it no longer matches what was recorded, and nothing there is worth keeping.
+#[test]
+fn removing_a_directory_recursively_takes_the_whole_subtree() {
+    for_each(|s| {
+        let root = s.path("cache");
+        s.fs.create_dir_all(&root.join("mod/components"))
+            .expect(s.name);
+        s.fs.write(&root.join("mod/MODULE.meow"), b"x")
+            .expect(s.name);
+        s.fs.write(&root.join("mod/components/a.star"), b"y")
+            .expect(s.name);
+
+        s.fs.remove_dir_all(&root.join("mod")).expect(s.name);
+
+        assert_eq!(
+            s.fs.entry(&root.join("mod")).expect(s.name),
+            None,
+            "{}",
+            s.name
+        );
+        assert_eq!(
+            s.fs.entry(&root.join("mod/MODULE.meow")).expect(s.name),
+            None,
+            "{}",
+            s.name
+        );
+        assert_eq!(
+            s.fs.entry(&root.join("mod/components/a.star"))
+                .expect(s.name),
+            None,
+            "{}",
+            s.name
+        );
+        assert!(
+            s.fs.exists(&root).expect(s.name),
+            "{}: the root stays",
+            s.name
+        );
+    });
+}
+
+/// Removing what is not there is what the caller wanted, so it succeeds.
+#[test]
+fn removing_a_missing_directory_recursively_succeeds() {
+    for_each(|s| {
+        s.fs.remove_dir_all(&s.path("never-existed")).expect(s.name);
+    });
+}
+
+/// Renaming a directory takes everything under it. The module cache stages an
+/// extraction beside its destination and renames it into place, so a rename
+/// that moved only the directory itself would leave an empty module; see
+/// [R-MODULE-063].
+#[test]
+fn renaming_a_directory_moves_everything_under_it() {
+    for_each(|s| {
+        let staging = s.path("staging");
+        s.fs.create_dir_all(&staging.join("components"))
+            .expect(s.name);
+        s.fs.write(&staging.join("MODULE.meow"), b"m")
+            .expect(s.name);
+        s.fs.write(&staging.join("components/a.star"), b"a")
+            .expect(s.name);
+
+        let landed = s.path("landed");
+        s.fs.rename(&staging, &landed).expect(s.name);
+
+        assert_eq!(
+            s.fs.read(&landed.join("components/a.star")).expect(s.name),
+            b"a",
+            "{}",
+            s.name
+        );
+        assert_eq!(
+            s.fs.read(&landed.join("MODULE.meow")).expect(s.name),
+            b"m",
+            "{}",
+            s.name
+        );
+        assert_eq!(s.fs.entry(&staging).expect(s.name), None, "{}", s.name);
+        assert!(
+            s.fs.read(&staging.join("MODULE.meow")).is_err(),
+            "{}: nothing is left on the old side",
             s.name
         );
     });

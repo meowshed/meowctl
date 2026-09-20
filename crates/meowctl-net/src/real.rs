@@ -90,7 +90,10 @@ fn translate(url: &str, error: ureq::Error) -> NetError {
         ureq::Error::StatusCode(code) => NetError::Status { url, code },
         // A URL that will not parse, and a scheme `https_only` rejected, are
         // both refusals: nothing was sent, and the fix is the URL.
-        ureq::Error::BadUri(detail) => NetError::Refused { url, reason: detail },
+        ureq::Error::BadUri(detail) => NetError::Refused {
+            url,
+            reason: detail,
+        },
         // A URL the `http` crate will not accept never becomes a request
         // either, and saying "could not reach" about it sends the reader
         // looking at their network.
@@ -98,7 +101,10 @@ fn translate(url: &str, error: ureq::Error) -> NetError {
             url,
             reason: detail.to_string(),
         },
-        ureq::Error::RequireHttpsOnly(detail) => NetError::Refused { url, reason: detail },
+        ureq::Error::RequireHttpsOnly(detail) => NetError::Refused {
+            url,
+            reason: detail,
+        },
         ureq::Error::HostNotFound => NetError::Unreachable {
             url,
             detail: "the host could not be resolved".to_owned(),
@@ -122,7 +128,9 @@ mod tests {
     /// be checked without a server.
     #[test]
     fn a_plaintext_url_is_refused_rather_than_fetched() {
-        let err = RealHttp::new().get("http://example.invalid/index.toml").unwrap_err();
+        let err = RealHttp::new()
+            .get("http://example.invalid/index.toml")
+            .unwrap_err();
         assert!(matches!(err, NetError::Refused { .. }), "{err}");
         assert_eq!(err.url(), "http://example.invalid/index.toml");
     }

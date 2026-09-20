@@ -123,6 +123,13 @@ impl MemFs {
     }
 }
 
+/// Whether anything is stored under `path`.
+fn has_children(nodes: &BTreeMap<PathBuf, Node>, path: &Path) -> bool {
+    nodes
+        .keys()
+        .any(|held| held != path && held.starts_with(path))
+}
+
 impl FileSystem for MemFs {
     fn read(&self, path: &Path) -> FsResult<Vec<u8>> {
         match self.lock().get(path) {
@@ -175,7 +182,24 @@ impl FileSystem for MemFs {
     }
 
     fn remove(&self, path: &Path) -> FsResult<()> {
-        self.lock().remove(path);
+        let mut nodes = self.lock();
+        if matches!(nodes.get(path), Some(Node::Directory)) && has_children(&nodes, path) {
+            return Err(FsError::io(
+                "removing",
+                path,
+                std::io::Error::new(
+                    std::io::ErrorKind::DirectoryNotEmpty,
+                    "the directory is not empty",
+                ),
+            ));
+        }
+        nodes.remove(path);
+        Ok(())
+    }
+
+    fn remove_dir_all(&self, path: &Path) -> FsResult<()> {
+        let mut nodes = self.lock();
+        nodes.retain(|held, _| held != path && !held.starts_with(path));
         Ok(())
     }
 
@@ -288,13 +312,29 @@ impl FileSystem for MemFs {
             });
         };
         Self::require_parent(&nodes, to)?;
+        // A directory takes everything under it, which is what `fs::rename`
+        // does and what the module cache depends on when it moves a staged
+        // extraction into place; see [R-MODULE-063].
+        let moved: Vec<PathBuf> = nodes
+            .keys()
+            .filter(|held| held.starts_with(from))
+            .cloned()
+            .collect();
+        for held in moved {
+            let rest = held.strip_prefix(from).unwrap_or(&held).to_path_buf();
+            if let Some(child) = nodes.remove(&held) {
+                nodes.insert(to.join(rest), child);
+            }
+        }
         nodes.insert(to.to_path_buf(), node);
         Ok(())
     }
 
     fn set_executable(&self, path: &Path, executable: bool) -> FsResult<()> {
         match self.lock().get_mut(path) {
-            Some(Node::File { executable: bit, .. }) => {
+            Some(Node::File {
+                executable: bit, ..
+            }) => {
                 *bit = executable;
                 Ok(())
             }

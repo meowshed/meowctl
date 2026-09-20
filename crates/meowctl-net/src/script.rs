@@ -24,41 +24,32 @@ impl ScriptedHttp {
     }
 
     /// Answers `url` with `body`.
-    ///
-    /// # Panics
-    ///
-    /// If another thread panicked while holding the table.
     #[must_use]
     pub fn with(self, url: impl Into<String>, body: impl Into<Vec<u8>>) -> Self {
         self.responses
             .lock()
-            .expect("the response table is poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(url.into(), Ok(body.into()));
         self
     }
 
     /// Fails `url` with `error`.
-    ///
-    /// # Panics
-    ///
-    /// If another thread panicked while holding the table.
     #[must_use]
     pub fn failing(self, url: impl Into<String>, error: NetError) -> Self {
         self.responses
             .lock()
-            .expect("the response table is poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(url.into(), Err(error));
         self
     }
 
     /// Every URL asked for, in order, including the ones that failed.
-    ///
-    /// # Panics
-    ///
-    /// If another thread panicked while holding the log.
     #[must_use]
     pub fn asked(&self) -> Vec<String> {
-        self.asked.lock().expect("the request log is poisoned").clone()
+        self.asked
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 }
 
@@ -66,11 +57,11 @@ impl Http for ScriptedHttp {
     fn get(&self, url: &str) -> NetResult<Vec<u8>> {
         self.asked
             .lock()
-            .expect("the request log is poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(url.to_owned());
         self.responses
             .lock()
-            .expect("the response table is poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(url)
             .cloned()
             .unwrap_or_else(|| {
@@ -99,7 +90,10 @@ mod tests {
     fn an_unscripted_url_fails_rather_than_returning_nothing() {
         let http = ScriptedHttp::new();
         let err = http.get("https://h/missing").unwrap_err();
-        assert!(err.to_string().contains("no response was scripted"), "{err}");
+        assert!(
+            err.to_string().contains("no response was scripted"),
+            "{err}"
+        );
         assert_eq!(http.asked(), vec!["https://h/missing"]);
     }
 

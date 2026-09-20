@@ -8,6 +8,8 @@ publish.workspace = true
 description = "Shared domain types, error taxonomy, and event vocabulary for meowctl"
 
 [dependencies]
+base64 = { workspace = true }
+sha2 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 

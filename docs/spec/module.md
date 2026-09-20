@@ -96,6 +96,20 @@ executes a file it shipped.
 **[R-MODULE-033]** Extraction MUST reject an entry whose path escapes the
 module root. A tarball is remote input.
 
+**[R-MODULE-034]** Extraction MUST drop a single top-level directory when
+every entry in the archive is inside one, and MUST drop nothing otherwise.
+
+This is what makes a GitHub module work at all. A release tarball, which is
+what every entry in the published registry points at, holds `MODULE.meow` at
+its root. A GitHub archive holds `repo-<commit>/MODULE.meow`, because that is
+what `github.com/<owner>/<repo>/archive/<ref>.tar.gz` serves. `v0.1.0`
+extracts both as they come and then looks for `<cache>/MODULE.meow`, so for a
+`github:` dependency it finds nothing, reads no transitive dependencies, and
+serves every file from a path one directory above where the files are. The
+condition is exact rather than a count of components, so a module that
+genuinely ships one top-level directory and nothing beside it is the case this
+changes, and there is none in the registry.
+
 ## The cache
 
 **[R-MODULE-040]** A module MUST be cached under the cache directory keyed by
@@ -113,6 +127,12 @@ extracted by something that did not write one, and what it holds is unknown.
 **[R-MODULE-043]** Resolution MUST work offline when every module in the lock
 is cached and verified. A shell hook that triggers a resolution on a machine
 with no network is otherwise a hang.
+
+**[R-MODULE-045]** The cache MUST be populated during a dry run. A dry run has
+to evaluate a configuration's modules to produce a plan at all, and a machine
+with a cold cache could otherwise produce none. The cache is meowctl's own
+storage rather than the user's configuration, so filling it is not a change
+`--dry-run` promises not to make; see [R-CLI-011].
 
 **[R-MODULE-044]** The record MUST be written inside the cache directory under
 a name that cannot be loaded as a module file, and MUST cover the tarball's
@@ -162,7 +182,7 @@ the executable-bit handling, and the local-overlay precedence all come from
 `internal/mvs/mvs.go` and `internal/starlark/loader/`. The lock this component
 produces must be byte-identical to `v0.1.0`'s; see [R-CONFIG-023].
 
-Three things are new, and the first is the largest.
+Four things are new, and the first is the largest.
 
 `v0.1.0` does not verify a registry module's files at all. It checks the
 tarball against the index hash when it downloads one, writes the `.sri`
@@ -182,7 +202,10 @@ network whenever a module is absent from the lock and never says that a fully
 locked, fully cached configuration must not, which matters for
 `meowctl hook shell`, on every shell spawn.
 
-[R-MODULE-063] is the third. `v0.1.0` extracts straight into the cache
+[R-MODULE-034] is the third, and it is a repair rather than an addition: see
+the requirement, which says what a `github:` module does today.
+
+[R-MODULE-063] is the fourth. `v0.1.0` extracts straight into the cache
 directory, so an interrupted extraction leaves a directory that `os.Stat`
 finds and every later run treats as a complete module. Extracting beside it and
 renaming makes the directory's existence mean what the code already assumes it

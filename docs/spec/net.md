@@ -55,9 +55,10 @@ orders of magnitude above the largest module published.
 **[R-NET-010]** The error MUST distinguish four cases that a request can reach:
 the URL was refused before any request, the host could not be reached, the
 server answered with a status, and the body could not be read. A fifth, the
-refusal [R-NET-014] produces, is not one of them because no request happened. [R-MODULE-060] requires a module
-resolution to say which of these happened, and it can only say it if this trait
-reports it.
+refusal [R-NET-014] produces, is not one of them because no request happened.
+
+[R-MODULE-060] requires a module resolution to say which of these happened, and
+it can only say it if this trait reports it.
 
 **[R-NET-011]** An error MUST carry the URL it is about. A resolution fetches an
 index, a tarball, and a commit; an error that says only "connection refused"
