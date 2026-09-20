@@ -8,7 +8,6 @@ publish.workspace = true
 description = "Module resolution: version selection, fetching, integrity, and the cache"
 
 [dependencies]
-meowctl-common = { path = "../meowctl-common" }
 semver = { workspace = true }
 thiserror = { workspace = true }
 
