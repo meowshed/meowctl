@@ -1,9 +1,0 @@
-# meowctl shell integration for fish
-# Add this to your ~/.config/fish/config.fish:
-#   meowctl shell fish | source
-
-set -gx MEOWCTL_SHELL fish
-if not set -q _MEOWCTL_SHELL_DONE
-    set -gx _MEOWCTL_SHELL_DONE 1
-    meowctl hook shell | source
-end

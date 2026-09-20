@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rewritten in Rust. `v0.2.0` is a ground-up rewrite, not a port: the Starlark
+  evaluator is `starlark-rust`, effects sit behind `FileSystem` and `Executor`
+  traits constructed once at the binary, every reversible effect is an `Op`
+  with an inverse, and the engine emits an event stream that three sinks
+  render. `docs/design/0.2.0-rust-rewrite.md` says why each of those is a
+  rewrite rather than a refactor.
+- Terminal output redesigned. A live region renders what is running, the
+  finished work is committed above it, and `--format json` emits the same
+  event stream on every command rather than only on `doctor`.
+- `--dry-run` no longer claims work the runner skips. A dry run is a
+  `FileSystem` and an `Executor` that cannot write, so it predicts exactly
+  what a real run would do.
+
+The Starlark API, the command surface, and every config and lock format are
+unchanged. A configuration that `v0.1.0` applied applies here.
+
+### Removed
+
+- The Go implementation, and the compatibility corpus that compared the two
+  binaries. The corpus existed to prove the rewrite does what `v0.1.0` did,
+  and that proof had an end date.
+- `self-update`. The command reports that it is not implemented rather than
+  pretending to work.
+
 ## [0.1.0] - 2026-09-19
 
 First tagged release. The Go implementation is feature-complete for the

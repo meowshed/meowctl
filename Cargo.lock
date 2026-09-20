@@ -1142,14 +1142,14 @@ dependencies = [
 
 [[package]]
 name = "meowctl"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "meowctl-cli",
 ]
 
 [[package]]
 name = "meowctl-cli"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "clap_complete",
@@ -1170,7 +1170,7 @@ dependencies = [
 
 [[package]]
 name = "meowctl-common"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -1181,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "meowctl-config"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "meowctl-common",
  "meowctl-fs",
@@ -1195,7 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "meowctl-ctx"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "allocative",
  "anyhow",
@@ -1213,7 +1213,7 @@ dependencies = [
 
 [[package]]
 name = "meowctl-engine"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "meowctl-common",
  "meowctl-config",
@@ -1233,7 +1233,7 @@ dependencies = [
 
 [[package]]
 name = "meowctl-exec"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "meowctl-common",
  "thiserror",
@@ -1241,7 +1241,7 @@ dependencies = [
 
 [[package]]
 name = "meowctl-fs"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "meowctl-common",
  "tempfile",
@@ -1250,7 +1250,7 @@ dependencies = [
 
 [[package]]
 name = "meowctl-module"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "flate2",
  "meowctl-common",
@@ -1268,7 +1268,7 @@ dependencies = [
 
 [[package]]
 name = "meowctl-net"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "thiserror",
  "ureq",
@@ -1276,7 +1276,7 @@ dependencies = [
 
 [[package]]
 name = "meowctl-ops"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "meowctl-common",
  "meowctl-exec",
@@ -1290,7 +1290,7 @@ dependencies = [
 
 [[package]]
 name = "meowctl-pm"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "meowctl-starlark",
  "thiserror",
@@ -1298,7 +1298,7 @@ dependencies = [
 
 [[package]]
 name = "meowctl-starlark"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "allocative",
  "anyhow",
@@ -1311,22 +1311,13 @@ dependencies = [
 
 [[package]]
 name = "meowctl-tui"
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 dependencies = [
  "insta",
  "meowctl-common",
  "serde_json",
  "terminal_size",
  "thiserror",
-]
-
-[[package]]
-name = "meowctl-xtask"
-version = "0.2.0-alpha.0"
-dependencies = [
- "anyhow",
- "sha2",
- "walkdir",
 ]
 
 [[package]]

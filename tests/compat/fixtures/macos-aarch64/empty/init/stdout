@@ -1,2 +1,0 @@
-  ✓ dotfiles initialized  <CONFIG>
-Edit init.star to declare components, then run 'meowctl apply'.
