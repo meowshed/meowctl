@@ -5,13 +5,10 @@
   ],
   "schedule": ["before 6am on Monday"],
   "prConcurrentLimit": 5,
-  "golang": {
-    "enabled": true
-  },
   "packageRules": [
     {
-      "matchManagers": ["gomod"],
-      "groupName": "Go dependencies",
+      "matchManagers": ["cargo"],
+      "groupName": "Rust dependencies",
       "automerge": false
     },
     {
