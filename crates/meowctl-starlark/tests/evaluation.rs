@@ -417,3 +417,93 @@ fn decoding_malformed_json_says_so() {
     let err = evaluate("component(json.decode('not json'))\n").expect_err("should fail");
     assert!(err.to_string().contains("json.decode"), "{err}");
 }
+
+/// A registry that answers one manager, for the `query_pm` tests.
+#[derive(Debug)]
+struct OneManager {
+    manager: &'static str,
+    installed: Vec<String>,
+}
+
+impl meowctl_starlark::PackageManagers for OneManager {
+    fn interrogate(&self, manager: &str) -> StarlarkResult<Vec<String>> {
+        if manager == self.manager {
+            return Ok(self.installed.clone());
+        }
+        Err(StarlarkError::Evaluation {
+            message: format!("no component handles the package manager {manager}"),
+            span: None,
+            load_chain: Vec::new(),
+        })
+    }
+}
+
+/// [R-STAR-005] the one builtin that runs another component's code during
+/// evaluation. A configuration that asks what is installed and declares
+/// components accordingly is why it exists.
+#[test]
+fn query_pm_returns_what_the_manager_reports() {
+    let loader = NoLoader;
+    let managers = std::sync::Arc::new(OneManager {
+        manager: "brew",
+        installed: vec!["git".to_owned(), "jq".to_owned()],
+    });
+    let result = Evaluator::new(macos(), &loader)
+        .with_package_managers(managers)
+        .evaluate(
+            "init.star",
+            "for name in query_pm(\"brew\"):\n    component(name)\n",
+        )
+        .expect("evaluate");
+
+    let names: Vec<&str> = result
+        .declarations
+        .components
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert_eq!(names, ["git", "jq"]);
+}
+
+/// [R-PM-030] a typo in a manager name is the common cause, and the failure
+/// has to reach the configuration that made it.
+#[test]
+fn query_pm_fails_when_nothing_handles_the_manager() {
+    let loader = NoLoader;
+    let managers = std::sync::Arc::new(OneManager {
+        manager: "brew",
+        installed: Vec::new(),
+    });
+    let err = Evaluator::new(macos(), &loader)
+        .with_package_managers(managers)
+        .evaluate("init.star", "query_pm(\"bwer\")\n")
+        .expect_err("should fail");
+    assert!(err.to_string().contains("bwer"), "{err}");
+}
+
+/// [R-STAR-005] an evaluation with no registry refuses rather than answering
+/// with an empty list, which would silently drop every component the
+/// configuration meant to declare.
+#[test]
+fn query_pm_without_a_registry_refuses() {
+    let err = evaluate("query_pm(\"brew\")\n").expect_err("should fail");
+    assert!(err.to_string().contains("query_pm"), "{err}");
+}
+
+/// [R-STAR-033] `pm_name` is what decides whether a component handles a
+/// package manager, and it is read from the evaluation rather than by
+/// re-parsing the file.
+#[test]
+fn the_value_of_every_top_level_string_is_reported() {
+    let result = evaluate("pm_name = \"brew\"\nother = 3\ntext = \"hi\"\n").expect("evaluate");
+    assert_eq!(
+        result.strings.get("pm_name").map(String::as_str),
+        Some("brew")
+    );
+    assert_eq!(result.strings.get("text").map(String::as_str), Some("hi"));
+    assert!(
+        !result.strings.contains_key("other"),
+        "{:?}",
+        result.strings
+    );
+}

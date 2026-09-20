@@ -30,5 +30,8 @@ pub use accumulator::{
     PackageDecl, ReplaceDecl, RepoDecl,
 };
 pub use error::{StarlarkError, StarlarkResult};
-pub use evaluator::{Evaluated, Evaluator, HookArgument, LoadedFile, Loader, NoLoader};
+pub use evaluator::{
+    Evaluated, Evaluator, HookArgument, LoadedFile, Loader, NoLoader, NoPackageManagers,
+    PackageManagers,
+};
 pub use platform::Platform;
