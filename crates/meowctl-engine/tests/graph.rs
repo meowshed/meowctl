@@ -8,6 +8,7 @@ mod support;
 
 use std::collections::BTreeMap;
 
+use meowctl_common::ComponentId;
 use meowctl_engine::{Declaration, EngineError, discover};
 use support::{Config, NoLoads, graph_of, linux, macos, plain};
 
@@ -407,4 +408,72 @@ fn a_qualified_dependency_is_left_alone_inside_a_module() {
 
     let graph = graph_of(&config, &macos()).expect("the graph builds");
     assert_eq!(graph.names(), ["tmux", "@dotmeow"]);
+}
+
+/// [R-ENGINE-018] a name already carrying `@` is left alone, and so is one
+/// carrying `//`. Only a bare name is read against its declarer's module.
+///
+/// The two are separate cases: `@dotmeow` has the sigil and no path, and
+/// `github.com/o/r//x` has the path and no sigil. Requiring both would
+/// prefix the first into `@dotmeow//components/@dotmeow`.
+#[test]
+fn a_name_that_is_already_qualified_is_left_as_written() {
+    let declarer: ComponentId = "@dotmeow//components/fish".parse().expect("an id");
+
+    for already in [
+        "@dotmeow",
+        "@stdlib//components/git",
+        "github.com/o/r//components/x",
+    ] {
+        assert_eq!(
+            meowctl_engine::resolve_bare(&declarer, already),
+            already,
+            "{already} was rewritten"
+        );
+    }
+
+    // And a bare name is the one that moves.
+    assert_eq!(
+        meowctl_engine::resolve_bare(&declarer, "fish-config"),
+        "@dotmeow//components/fish-config"
+    );
+}
+
+/// [R-ENGINE-018] a component that belongs to no module leaves a bare name
+/// alone, because there is no module for it to mean.
+#[test]
+fn a_bare_name_declared_outside_a_module_stays_bare() {
+    let local: ComponentId = "zsh".parse().expect("an id");
+    assert_eq!(
+        meowctl_engine::resolve_bare(&local, "fish-config"),
+        "fish-config"
+    );
+}
+
+/// [R-ENGINE-013] an edge is followed once every component it waits on is
+/// done, and not before. A component waiting on two is not freed by one.
+#[test]
+fn a_component_waiting_on_two_is_not_freed_by_one() {
+    let config = Config::new()
+        .declaring(Declaration::new("first"), "component(\"first\")\n")
+        .declaring(Declaration::new("second"), "component(\"second\")\n")
+        .declaring(
+            Declaration::new("last").after(&["first", "second"]),
+            "component(\"last\")\n",
+        );
+
+    let graph = graph_of(&config, &macos()).expect("the graph builds");
+    let order: Vec<&str> = graph.names();
+    let last = order.iter().position(|n| *n == "last").expect("last is in");
+    let first = order
+        .iter()
+        .position(|n| *n == "first")
+        .expect("first is in");
+    let second = order
+        .iter()
+        .position(|n| *n == "second")
+        .expect("second is in");
+
+    assert!(last > first, "{order:?}");
+    assert!(last > second, "{order:?}");
 }

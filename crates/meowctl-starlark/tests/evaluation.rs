@@ -668,3 +668,79 @@ fn an_error_inside_a_loaded_module_names_the_chain() {
         "the module is not named: {said}"
     );
 }
+
+/// [R-STAR-007] components write `platform().os`, so every field the struct
+/// carries is reachable by name and `dir()` lists them.
+#[test]
+fn every_field_of_the_platform_struct_is_reachable() {
+    let loader = NoLoader;
+    let platform = Platform {
+        os: "linux".to_owned(),
+        distro: "fedora".to_owned(),
+        distro_like: "rhel".to_owned(),
+        version_id: "41".to_owned(),
+        wsl: false,
+    };
+
+    Evaluator::new(platform, &loader)
+        .evaluate(
+            "init.star",
+            concat!(
+                "p = platform()\n",
+                "for want in [\"os\", \"distro\", \"distro_like\", \"version_id\"]:\n",
+                "    if want not in dir(p):\n",
+                "        fail(want + \" is not in dir(platform()): \" + str(dir(p)))\n",
+                "if p.os != \"linux\": fail(\"os is \" + p.os)\n",
+                "if p.distro != \"fedora\": fail(\"distro is \" + p.distro)\n",
+                "if p.distro_like != \"rhel\": fail(\"distro_like is \" + p.distro_like)\n",
+                "if p.version_id != \"41\": fail(\"version_id is \" + p.version_id)\n",
+                "if hasattr(p, \"nonesuch\"): fail(\"platform claims nonesuch\")\n",
+            ),
+        )
+        .expect("every field is reachable");
+}
+
+/// [R-STAR-008] `select()` takes the branch this machine names, and a machine
+/// that matches nothing takes the default.
+#[test]
+fn select_takes_the_branch_this_machine_names() {
+    let loader = NoLoader;
+    let fedora = Platform {
+        os: "linux".to_owned(),
+        distro: "fedora".to_owned(),
+        ..Platform::default()
+    };
+
+    let chosen = Evaluator::new(fedora, &loader)
+        .evaluate(
+            "init.star",
+            concat!(
+                "component(select({\n",
+                "    \"//platform:macos\": \"the-mac-one\",\n",
+                "    \"//platform:linux-fedora\": \"the-fedora-one\",\n",
+                "    \"//conditions:default\": \"the-default-one\",\n",
+                "}))\n",
+            ),
+        )
+        .expect("evaluate");
+    assert_eq!(chosen.declarations.components[0].name, "the-fedora-one");
+
+    let elsewhere = Platform {
+        os: "linux".to_owned(),
+        distro: "gentoo".to_owned(),
+        ..Platform::default()
+    };
+    let chosen = Evaluator::new(elsewhere, &loader)
+        .evaluate(
+            "init.star",
+            concat!(
+                "component(select({\n",
+                "    \"//platform:macos\": \"the-mac-one\",\n",
+                "    \"//platform:linux-fedora\": \"the-fedora-one\",\n",
+                "    \"//conditions:default\": \"the-default-one\",\n",
+                "}))\n",
+            ),
+        )
+        .expect("evaluate");
+    assert_eq!(chosen.declarations.components[0].name, "the-default-one");
+}

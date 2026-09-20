@@ -681,3 +681,28 @@ fn a_sync_carries_the_other_tables_through() {
     assert_eq!(synced.lock.packages, previous.packages);
     assert_eq!(synced.lock.github, previous.github);
 }
+
+/// [R-MODULE-050] Minimal Version Selection takes the maximum any path
+/// requires, and equal requirements do not move it.
+///
+/// Mutation testing asked for the second half: `other > self` could become
+/// `>=` and every test still passed, which is harmless here and would not be
+/// if `Version` ever carried something the comparison does not order.
+#[test]
+fn the_selected_version_is_the_maximum_any_path_requires() {
+    use meowctl_module::Version;
+
+    let lower = Version::parse("0.1.0").expect("a version");
+    let higher = Version::parse("0.2.0").expect("a version");
+
+    assert_eq!(lower.clone().max(higher.clone()), higher);
+    assert_eq!(higher.clone().max(lower.clone()), higher);
+    assert_eq!(higher.clone().max(higher.clone()), higher);
+
+    // And the absence of a requirement loses to any requirement.
+    let none = Version::None;
+    assert!(none.is_none());
+    assert!(!lower.is_none());
+    assert_eq!(none.clone().max(lower.clone()), lower);
+    assert_eq!(lower.clone().max(none), lower);
+}

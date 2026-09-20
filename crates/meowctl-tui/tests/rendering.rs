@@ -596,3 +596,66 @@ fn this_crate_has_no_way_to_read_a_file() {
         );
     }
 }
+
+/// [R-TUI-042] a 24-bit colour is downsampled to the nearest of the 256
+/// levels, and the boundary between two levels goes to the nearer one.
+///
+/// `95` and `135` are adjacent levels; `115` is exactly between them, and the
+/// comparison decides which way it falls. Getting it wrong shifts every
+/// colour on a 256-colour terminal by one step.
+#[test]
+fn a_colour_is_downsampled_to_the_nearest_level() {
+    let terminal = caps(ColourDepth::Ansi256, true);
+
+    // Two colours a single level apart must not render identically, which is
+    // what a boundary that rounds both the same way would produce.
+    let lower = Theme::with_palette(
+        terminal,
+        meowctl_tui::Palette {
+            info: meowctl_tui::theme::Colour {
+                r: 100,
+                g: 0,
+                b: 0,
+                ansi16: 31,
+            },
+            ..meowctl_tui::theme::CATPPUCCIN
+        },
+    );
+    let upper = Theme::with_palette(
+        terminal,
+        meowctl_tui::Palette {
+            info: meowctl_tui::theme::Colour {
+                r: 130,
+                g: 0,
+                b: 0,
+                ansi16: 31,
+            },
+            ..meowctl_tui::theme::CATPPUCCIN
+        },
+    );
+
+    assert_ne!(
+        lower.paint(meowctl_tui::Role::Info, "x"),
+        upper.paint(meowctl_tui::Role::Info, "x"),
+        "two levels apart rendered the same"
+    );
+
+    // And two colours inside one level render identically, so the
+    // downsampling is doing something rather than passing the value through.
+    let same = Theme::with_palette(
+        terminal,
+        meowctl_tui::Palette {
+            info: meowctl_tui::theme::Colour {
+                r: 133,
+                g: 0,
+                b: 0,
+                ansi16: 31,
+            },
+            ..meowctl_tui::theme::CATPPUCCIN
+        },
+    );
+    assert_eq!(
+        upper.paint(meowctl_tui::Role::Info, "x"),
+        same.paint(meowctl_tui::Role::Info, "x")
+    );
+}

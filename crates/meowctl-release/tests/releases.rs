@@ -166,3 +166,24 @@ fn the_checksum_file_is_found_among_the_assets() {
 
     assert_eq!(release.checksums().expect("it is there").name, CHECKSUMS);
 }
+
+/// [R-CLI-071] a broken line is numbered by its line, because a checksum file
+/// is read by a human when it goes wrong and "somewhere in this file" is not
+/// an answer.
+#[test]
+fn a_broken_line_is_numbered_by_where_it_is() {
+    let hash = Integrity::compute(b"x");
+
+    // The broken line moves down the file; the number has to follow it.
+    for (blanks, expected) in [(0usize, 1usize), (1, 2), (4, 5)] {
+        let file = format!(
+            "{}not-a-hash  meowctl-x\n{hash}  meowctl-y\n",
+            "\n".repeat(blanks)
+        );
+        let err = verify(&file, "meowctl-x", b"x").expect_err("a broken line");
+        assert!(
+            matches!(err, ReleaseError::Unparsable { line, .. } if line == expected),
+            "{blanks} blank lines: {err}"
+        );
+    }
+}

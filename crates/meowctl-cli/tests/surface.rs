@@ -133,6 +133,20 @@ fn dry_run_is_visible_on_every_command_that_takes_it() {
         let parsed = parse(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
         assert!(parsed.command.dry_run(), "{args:?}");
     }
+
+    // And false without it, or the flag would be doing nothing and a
+    // predicate that always said yes would pass the half above.
+    for args in [
+        vec!["apply"],
+        vec!["verify"],
+        vec!["status"],
+        vec!["dep", "list"],
+        vec!["dep", "sync"],
+        vec!["shell", "fish"],
+    ] {
+        let parsed = parse(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+        assert!(!parsed.command.dry_run(), "{args:?} is not a dry run");
+    }
 }
 
 /// [R-CLI-005] and the three that `apply` carries land in the parsed command,
@@ -200,6 +214,30 @@ fn ignore_lock_is_accepted_and_does_nothing() {
         vec!["upgrade", "--ignore-lock"],
     ] {
         parse(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+    }
+}
+
+/// [R-CLI-006] `--json` is the older spelling, and only two commands had it.
+/// A predicate that always said yes would make `--format json` the default
+/// for every command.
+#[test]
+fn the_older_json_flag_belongs_to_the_two_commands_that_had_it() {
+    for args in [vec!["doctor", "--json"], vec!["status", "--json"]] {
+        let parsed = parse(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+        assert!(parsed.command.wants_json(), "{args:?}");
+    }
+
+    for args in [
+        vec!["doctor"],
+        vec!["status"],
+        vec!["apply"],
+        vec!["dep", "list"],
+    ] {
+        let parsed = parse(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+        assert!(
+            !parsed.command.wants_json(),
+            "{args:?} did not ask for JSON"
+        );
     }
 }
 

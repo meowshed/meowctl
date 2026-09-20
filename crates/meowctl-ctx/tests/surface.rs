@@ -867,3 +867,214 @@ fn a_prompt_goes_through_the_interaction_trait() {
     // without a terminal. Reading stdin directly would hang here instead.
     call(&ctx, Surface::Full, "    ctx.prompt(\"go ahead?\")").expect("the prompt is answered");
 }
+
+/// [R-CTX-044] `remove_symlink` removes a symlink and refuses a file.
+///
+/// The guard is what stops a mistyped path from deleting something real: the
+/// method's name says what it is for, and a component that reached a regular
+/// file with it has made a mistake worth hearing about.
+#[test]
+fn remove_symlink_refuses_something_that_is_not_one() {
+    let (ctx, world) = plain();
+    let file = format!("{HOME}/an-ordinary-file");
+    world
+        .fs
+        .write(Path::new(&file), b"not a link")
+        .expect("the file");
+
+    let err = call(
+        &ctx,
+        Surface::Full,
+        &format!("    ctx.remove_symlink({})", quoted(&file)),
+    )
+    .expect_err("a file is not a symlink");
+    assert!(err.to_string().contains("not a symlink"), "{err}");
+
+    assert!(
+        world.fs.entry(Path::new(&file)).expect("ask").is_some(),
+        "the file was removed anyway"
+    );
+}
+
+/// [R-CTX-020] `list_dir` answers with what is in the directory, sorted, and
+/// with names rather than paths.
+#[test]
+fn list_dir_answers_with_the_names_in_the_directory() {
+    let (ctx, world) = plain();
+    let dir = format!("{HOME}/a-directory");
+    world
+        .fs
+        .create_dir_all(Path::new(&dir))
+        .expect("the directory");
+    for name in ["b.star", "a.star"] {
+        world
+            .fs
+            .write(Path::new(&format!("{dir}/{name}")), b"x")
+            .expect("a file");
+    }
+
+    call(
+        &ctx,
+        Surface::Full,
+        &format!(
+            "    found = ctx.list_dir({})\n    if found != [\"a.star\", \"b.star\"]:\n        fail(\"listed \" + str(found))",
+            quoted(&dir)
+        ),
+    )
+    .expect("the listing is what is there");
+}
+
+/// An interaction that answers with what it was told to, so a test can tell
+/// the answer from a placeholder.
+struct Says(&'static str);
+
+impl meowctl_tui::Interaction for Says {
+    fn ask(&mut self, _question: &str) -> Result<String, meowctl_tui::InteractionError> {
+        Ok(self.0.to_owned())
+    }
+
+    fn confirm(&mut self, _question: &str) -> Result<bool, meowctl_tui::InteractionError> {
+        Ok(true)
+    }
+}
+
+/// [R-CTX-026] `prompt` answers with what the `Interaction` gave it, so a
+/// component that asks a question gets the answer rather than a placeholder.
+///
+/// `Always` answers with an empty string, which is also what a `prompt` that
+/// forgot to ask would return -- so the double has to say something.
+#[test]
+fn prompt_answers_with_what_the_interaction_said() {
+    let fs = Arc::new(MemFs::new());
+    fs.create_dir_all(Path::new(HOME)).expect("home");
+    let ctx = Ctx::new(
+        Capabilities {
+            home: PathBuf::from(HOME),
+            dry_run: false,
+            component_dir: PathBuf::from(COMPONENT_DIR),
+            state_dir: PathBuf::from(STATE_DIR),
+            shell: None,
+            platform: Platform::default(),
+            environment: BTreeMap::new(),
+            phase: Phase::Install,
+            component: "neovim".to_owned(),
+        },
+        Effects {
+            fs: Arc::clone(&fs) as Arc<dyn FileSystem + Send + Sync>,
+            exec: Arc::new(ScriptedExecutor::new(Vec::new())),
+            http: Arc::new(ScriptedHttp::new()),
+            interaction: Arc::new(Mutex::new(Says("the answer"))),
+            journal: None,
+            events: Arc::new(Mutex::new(|_| {})),
+        },
+    );
+
+    call(
+        &ctx,
+        Surface::Full,
+        "    said = ctx.prompt(\"go ahead?\")\n    if said != \"the answer\":\n        fail(\"the prompt said \" + str(said))",
+    )
+    .expect("the answer arrives");
+}
+
+/// [R-CTX-016] a value reaches a command as the shell spells it: `defaults
+/// write` and `PlistBuddy` both reject Starlark's `True`.
+#[test]
+fn a_boolean_reaches_a_command_as_the_shell_spells_it() {
+    let (ctx, world) = build(
+        vec![ScriptedRun::ok(
+            "defaults write com.apple.dock autohide -bool true",
+            "",
+        )],
+        ScriptedHttp::new(),
+        Phase::Install,
+    );
+
+    call(
+        &ctx,
+        Surface::Full,
+        "    ctx.defaults_write(\"com.apple.dock\", \"autohide\", \"-bool\", True)",
+    )
+    .expect("True became true");
+
+    assert_eq!(
+        world.exec.ran(),
+        ["defaults write com.apple.dock autohide -bool true"]
+    );
+}
+
+/// [R-CTX-030] and [R-CTX-031]: the restricted surfaces answer `hasattr`
+/// honestly, because a component that checks before calling would otherwise
+/// be told a method is there and then refused.
+#[test]
+fn the_restricted_surfaces_do_not_claim_what_they_refuse() {
+    let (read_only, _) = build(Vec::new(), ScriptedHttp::new(), Phase::Verify);
+    call(
+        &read_only,
+        Surface::ReadOnly,
+        "    if hasattr(ctx, \"write_file\"):\n        fail(\"a read-only ctx claims write_file\")\n    if not hasattr(ctx, \"read_file\"):\n        fail(\"a read-only ctx denies read_file\")",
+    )
+    .expect("the read-only surface is honest");
+
+    let (shell, _) = build(Vec::new(), ScriptedHttp::new(), Phase::Shell);
+    call(
+        &shell,
+        Surface::Shell,
+        "    if hasattr(ctx, \"write_file\"):\n        fail(\"a shell ctx claims write_file\")\n    if not hasattr(ctx, \"emit\"):\n        fail(\"a shell ctx denies emit\")",
+    )
+    .expect("the shell surface is honest");
+}
+
+/// [R-CTX-001] and [R-CTX-031]: `dir(ctx)` lists what is there, which is how
+/// a component author finds out what they have without reading the source of
+/// a binary they do not have.
+#[test]
+fn dir_lists_the_surface_the_phase_gets() {
+    let (full, _) = plain();
+    call(
+        &full,
+        Surface::Full,
+        "    names = dir(ctx)\n    for wanted in [\"home\", \"write_file\", \"run\", \"platform\"]:\n        if wanted not in names:\n            fail(wanted + \" is not in dir(ctx): \" + str(names))",
+    )
+    .expect("the full surface lists itself");
+
+    let (shell, _) = build(Vec::new(), ScriptedHttp::new(), Phase::Shell);
+    call(
+        &shell,
+        Surface::Shell,
+        "    names = dir(ctx)\n    if \"write_file\" in names:\n        fail(\"a shell ctx lists write_file\")\n    for wanted in [\"emit\", \"shell\", \"state_dir\"]:\n        if wanted not in names:\n            fail(wanted + \" is not in dir(ctx): \" + str(names))",
+    )
+    .expect("the shell surface lists itself");
+}
+
+/// [R-CTX-015] `link_file` with no backup given puts the user's file at
+/// `<name>.meowctl-backup` beside it, which is where `v0.1.0` puts it and
+/// therefore where a user who has been through this before will look.
+#[test]
+fn a_displaced_file_goes_beside_itself_with_a_known_name() {
+    let (ctx, world) = plain();
+    let link = format!("{HOME}/.zshrc");
+    let target = format!("{COMPONENT_DIR}/zshrc");
+    world
+        .fs
+        .write(Path::new(&link), b"the user's own")
+        .expect("their file");
+    world
+        .fs
+        .write(Path::new(&target), b"ours")
+        .expect("the component's file");
+
+    call(
+        &ctx,
+        Surface::Full,
+        &format!("    ctx.link_file({}, {})", quoted(&target), quoted(&link)),
+    )
+    .expect("the link");
+
+    let backup = format!("{link}.meowctl-backup");
+    assert_eq!(
+        world.fs.read(Path::new(&backup)).expect("the backup"),
+        b"the user's own",
+        "the displaced file is not at {backup}"
+    );
+}

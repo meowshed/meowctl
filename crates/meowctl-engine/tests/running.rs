@@ -717,3 +717,137 @@ fn a_run_nobody_stopped_finishes() {
     assert!(!report.interrupted, "{report:?}");
     assert!(report.succeeded(), "{report:?}");
 }
+
+/// [R-ENGINE-041] a component that failed is not recorded as done.
+///
+/// Recording it would make the next run skip the thing that broke, which is
+/// the one component it must not skip.
+#[test]
+fn a_failed_component_is_not_recorded_as_completed() {
+    let dir = tempfile::tempdir().expect("a temporary directory");
+    let state = dir.path().join("state.toml");
+
+    let config = Config::new()
+        .declaring(Declaration::new("good"), &writes("good", "~/a"))
+        .declaring(Declaration::new("bad").after(&["good"]), &fails("bad"));
+
+    let loader = NoLoads;
+    let platform = macos();
+    let discovered = discover(&config, &loader, &platform).expect("discovery");
+    let graph = Graph::build(&discovered).expect("the graph builds");
+    let plan = Plan::compute(&graph, PhaseSet::Install, &Inputs::default());
+
+    let (effects, _world) = world(Vec::new(), None);
+    let fs = std::sync::Arc::clone(&effects.fs);
+    let evaluator = Evaluator::new(platform.clone(), &loader);
+    let mut runner = Runner::new(
+        &graph,
+        &discovered.registry,
+        evaluator,
+        effects,
+        settings(&platform, false),
+    )
+    .recording(meowctl_engine::Progress::new(
+        meowctl_config::Sentinel::default(),
+        state.clone(),
+    ));
+
+    let report = runner.run(&plan);
+    assert!(report.failure.is_some(), "{report:?}");
+
+    let progress = runner.progress().expect("it was recording");
+    assert!(
+        progress.sentinel().is_completed("install", "good"),
+        "the component that worked was not recorded"
+    );
+    assert!(
+        !progress.sentinel().is_completed("install", "bad"),
+        "the component that failed was recorded as done"
+    );
+    let _ = fs;
+}
+
+/// [R-ENGINE-003] a plan with nothing running says so, and one with something
+/// running does not. It is what lets a command say "nothing to do" instead of
+/// drawing an empty phase.
+#[test]
+fn a_plan_knows_whether_it_has_anything_to_do() {
+    let config = Config::new().declaring(Declaration::new("zsh"), &writes("zsh", "~/.zshrc"));
+    let graph = support::graph_of(&config, &macos()).expect("the graph builds");
+
+    let doing = Plan::compute(&graph, PhaseSet::Install, &Inputs::default());
+    assert!(!doing.is_empty(), "a plan with a component is not empty");
+
+    let mut sentinel = meowctl_config::Sentinel::default();
+    for phase in PhaseSet::Install.phases() {
+        sentinel.record(phase.as_str(), "zsh", None);
+    }
+    let done = Plan::compute(
+        &graph,
+        PhaseSet::Install,
+        &Inputs {
+            sentinel: Some(&sentinel),
+            ..Inputs::default()
+        },
+    );
+    assert!(done.is_empty(), "everything recorded is nothing to do");
+}
+
+/// [R-ENGINE-030] a report says whether the run succeeded, which is what the
+/// exit code is built from.
+#[test]
+fn a_report_says_whether_the_run_succeeded() {
+    let working = Config::new().declaring(Declaration::new("zsh"), &writes("zsh", "~/.zshrc"));
+    let (report, _) = run(&working, Vec::new(), false, None);
+    assert!(report.succeeded(), "{report:?}");
+
+    let broken = Config::new().declaring(Declaration::new("zsh"), &fails("zsh"));
+    let (report, _) = run(&broken, Vec::new(), false, None);
+    assert!(!report.succeeded(), "{report:?}");
+}
+
+/// [R-PM-010] a package's version reaches the handler, because
+/// `install_pkg(ctx, name, version)` is what a handler is written against and
+/// a package installed without its constraint is the wrong package.
+#[test]
+fn a_packages_version_reaches_its_handler() {
+    let config = Config::new()
+        .declaring(
+            Declaration::new("fakepm"),
+            concat!(
+                "component(\"fakepm\")\n",
+                "pm_name = \"fake\"\n",
+                "def install_pkg(ctx, name, version):\n",
+                "    if version != \"14.1.0\":\n",
+                "        fail(\"the version arrived as \" + str(version))\n",
+                "    ctx.write_file(ctx.home + \"/installed-\" + name, version)\n",
+                "def uninstall_pkg(ctx, name):\n",
+                "    pass\n",
+                "def interrogate(ctx):\n",
+                "    return {}\n",
+            ),
+        )
+        .declaring(
+            Declaration::new("tool").after(&["fakepm"]),
+            concat!(
+                "component(\"tool\")\n",
+                "pkg(\"fake\", \"ripgrep\", \"14.1.0\")\n",
+                "def install(ctx):\n",
+                "    pass\n",
+            ),
+        );
+
+    let (report, world) = run(&config, Vec::new(), false, None);
+    assert!(report.succeeded(), "{report:?}");
+    use meowctl_fs::FileSystem as _;
+    assert_eq!(
+        world
+            .fs
+            .read(std::path::Path::new(&format!(
+                "{}/installed-ripgrep",
+                support::HOME
+            )))
+            .expect("the handler wrote it"),
+        b"14.1.0"
+    );
+}
