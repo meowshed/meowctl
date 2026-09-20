@@ -25,9 +25,20 @@ The `Op` enum, `apply`, `inverse`, the journal file format, and replay.
 
 ## Operations
 
-**[R-OPS-001]** `Op` MUST have exactly these nine variants: `WriteFile`,
-`AppendFile`, `CopyFile`, `Symlink`, `LinkFile`, `Mkdir`, `Download`,
-`DefaultsWrite`, and `PlistSet`.
+**[R-OPS-001]** `Op` MUST have exactly these nine journalled variants:
+`WriteFile`, `AppendFile`, `CopyFile`, `Symlink`, `LinkFile`, `Mkdir`,
+`Download`, `DefaultsWrite`, and `PlistSet`. It MAY carry further variants
+that express an inverse, and those MUST NOT be written to a journal.
+
+An earlier draft said "exactly these nine" and the implementation has
+thirteen. The other four -- `Remove`, `RemoveDir`, `RestoreBackup` and
+`Nothing` -- are what an inverse is: undoing a `Symlink` that created a link
+is removing it, and undoing a `Mkdir` of a directory that already existed is
+doing nothing. Without them `inverse()` could not return an `Op`, and the
+whole point of operations being data is that it can. `is_journaled` is the
+line between the two groups, and [R-OPS-020] is what makes it matter: a
+journal written by one binary has to replay under the other, and `v0.1.0`
+knows only the nine.
 
 `v0.1.0` journals the first seven. It declares `defaults_write` and `plist_set`
 as `Kind*` constants, and `applyInverse` returns "inverse not implemented" for

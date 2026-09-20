@@ -438,3 +438,40 @@ fn the_json_sink_still_carries_a_shell_line() {
     assert!(text.contains("shell_line"), "{text}");
     assert!(text.contains("export EDITOR=nvim"), "{text}");
 }
+
+/// [R-TUI-071] every sink that renders a run handles every variant, which the
+/// compiler already guarantees: `Event` is not `#[non_exhaustive]` and the
+/// matches are exhaustive, so a new variant is an error in each one.
+///
+/// What is left to check is that the guarantee is real rather than assumed --
+/// that no sink reached for a catch-all and made a future variant silent.
+#[test]
+fn no_sink_that_renders_a_run_has_a_catch_all() {
+    let sources = [
+        include_str!("../src/sink.rs"),
+        include_str!("../src/live.rs"),
+    ];
+    for source in sources {
+        for (number, line) in source.lines().enumerate() {
+            let code = line.split("//").next().unwrap_or(line);
+            assert!(
+                !code.trim_start().starts_with("_ =>"),
+                "line {} reaches for a catch-all over Event: {line}",
+                number + 1
+            );
+        }
+    }
+}
+
+/// [R-TUI-050] the palette is one table, so pointing at a user file later is
+/// a reader rather than a restructuring.
+#[test]
+fn the_palette_is_data() {
+    let theme = Theme::new(caps(ColourDepth::TrueColour, true));
+    assert_eq!(theme.palette, meowctl_tui::theme::CATPPUCCIN);
+
+    // Every role resolves through the table rather than through a literal at
+    // the call site; see [R-TUI-051].
+    let painted = theme.paint(meowctl_tui::Role::Muted, "x");
+    assert!(painted.contains('x'), "{painted}");
+}

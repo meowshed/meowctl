@@ -169,9 +169,23 @@ its position and MUST NOT partially apply what came before it.
 **[R-STAR-051]** A builtin called with wrong or missing arguments MUST name the
 builtin, the argument, and what was expected.
 
-**[R-STAR-052]** An evaluation MUST be bounded: a configuration that loops
-forever MUST be interruptible. `v0.1.0` inherits `go.starlark.net`'s step
-limit; the equivalent here is whatever M0 finds.
+**[R-STAR-052]** A configuration that loops forever MUST be stoppable from
+outside the evaluation. Nothing MUST claim to bound it from inside.
+
+This replaces a requirement that was wrong twice. It said `v0.1.0` inherits
+`go.starlark.net`'s step limit: that limit exists, and is off unless
+`SetMaxExecutionSteps` is called, which `v0.1.0` never calls. And it deferred
+the answer to M0, which landed without one. `starlark-rust` 0.14 has no step
+limit, and its only statement hook is `before_stmt`, which is `pub(crate)`
+with a `#[doc(hidden)]` DAP alias that the crate documents as not public API
+and whose callback cannot fail an evaluation in any case.
+
+So neither binary bounds one, and what stops a runaway configuration is the
+process: the second interrupt kills it, which is what [R-CLI-053] is for. The
+first sets a flag the engine reads between components, and an evaluation that
+never returns never reaches one -- so a user has to ask twice. Saying this is
+the point of the requirement; a spec that promised a bound would be promising
+something no reader could rely on.
 
 **[R-STAR-053]** A `load()` of a module that cannot be fetched MUST exit with
 the module code, not the configuration code; see [R-COMMON-030].
