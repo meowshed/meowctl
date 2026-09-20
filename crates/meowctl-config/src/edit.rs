@@ -13,7 +13,7 @@
 //!
 //! Parsing is not evaluating. This module reads the syntax to find a
 //! statement; what a declaration *means* is [`meowctl_starlark`]'s, and the
-//! dialect is shared with it — see [`DIALECT`].
+//! dialect is shared with it — see [`dialect`].
 //!
 //! [`meowctl_starlark`]: https://docs.rs/meowctl-starlark
 

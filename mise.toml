@@ -67,8 +67,12 @@ description = "Format all Rust code"
 run = "cargo fmt --all -- --check"
 description = "Check formatting without changing files"
 
+# RUSTDOCFLAGS matches the CI job. Without it a broken intra-doc link is a
+# warning locally and an error there, which is the shape of gap that teaches
+# you to distrust the local gate.
 [tasks.doc]
 run = "cargo doc --workspace --no-deps"
+env = { RUSTDOCFLAGS = "-D warnings" }
 description = "Build the API documentation"
 
 [tasks.deny]
