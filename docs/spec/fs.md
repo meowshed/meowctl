@@ -45,6 +45,24 @@ lock files depend on it.
 Configuration holds secrets often enough that the default has to be the narrow
 one.
 
+**[R-FS-006]** `remove` MUST remove a file, a symlink, or an empty directory,
+and MUST refuse a directory that is not empty. The trait MUST also expose
+removing a directory and everything in it, which is a separate method because
+the two are different decisions: one is an undo, the other discards a subtree.
+The recursive one exists for the module cache, which replaces a module's
+directory when it no longer matches what was recorded; see [R-MODULE-042].
+
+`v0.1.0` has no equivalent, because nothing there removes a cache entry: a
+module whose files changed under it is evaluated as it stands.
+
+**[R-FS-005]** The trait MUST expose setting a file's executable bit, and
+reporting it, and MUST make both a no-op on a platform without mode bits. This
+is the one exception [R-FS-004] allows, and it exists because a module tarball
+ships scripts meowctl later executes; see [R-MODULE-032]. It is the executable
+bit rather than a mode because that is the whole of what the caller decides:
+`v0.1.0` normalises every extracted file to `0o644` or `0o755` and nothing
+asks for a third value.
+
 ## Implementations
 
 **[R-FS-010]** `RealFs` MUST perform the effect against the real filesystem.

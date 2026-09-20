@@ -49,6 +49,13 @@ strange name.
 the form `sha384-<base64>`, and MUST reject a string that is not one. This is
 what `deps.lock` stores; see [R-CONFIG-020].
 
+**[R-COMMON-005]** Computing an `Integrity` from bytes MUST live with the type:
+SHA-384 in standard base64, which is what `computeSRI` in
+`internal/starlark/loader/github.go` produces and what every published
+`index.toml` carries. Two things hash bytes -- the module cache and
+`ctx.download` -- and an implementation each is how a tool ends up with two
+encodings of the same hash and no way to tell them apart.
+
 ## Phases
 
 **[R-COMMON-010]** `Phase` MUST have exactly the thirteen variants `v0.1.0`
