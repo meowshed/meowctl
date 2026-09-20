@@ -1,0 +1,17 @@
+[package]
+name = "meowctl-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Discovery, the component graph, the plan, and the runner"
+
+[dependencies]
+meowctl-common = { path = "../meowctl-common" }
+meowctl-pm = { path = "../meowctl-pm" }
+meowctl-starlark = { path = "../meowctl-starlark" }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

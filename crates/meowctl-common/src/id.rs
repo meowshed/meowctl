@@ -46,6 +46,28 @@ impl ComponentId {
         }
     }
 
+    /// The logical name of a component named by this text.
+    ///
+    /// The same rule as [`ComponentId::logical_name`], for a caller holding a
+    /// name it has not parsed yet: an `after` list is read before anything
+    /// decides whether every entry in it is a component.
+    #[must_use]
+    pub fn logical_of(name: &str) -> &str {
+        let trimmed = name.trim_end_matches('/');
+        trimmed.rsplit('/').next().unwrap_or(trimmed)
+    }
+
+    /// The last path segment, which is the name everything else keys on.
+    ///
+    /// `@stdlib//components/node` and `github://o/r//components/node` are
+    /// both `node`. An `after` list names components this way, and so do a
+    /// lock entry and a sentinel record; see [R-COMMON-006].
+    #[must_use]
+    pub fn logical_name(&self) -> &str {
+        let trimmed = self.0.trim_end_matches('/');
+        trimmed.rsplit('/').next().unwrap_or(trimmed)
+    }
+
     /// Whether this component came from a module rather than from the
     /// configuration directory.
     #[must_use]
@@ -353,6 +375,24 @@ mod tests {
             "github:o/r@v1".parse::<ModuleRef>().unwrap().lock_key(),
             "github.com/o/r"
         );
+    }
+
+    /// [R-COMMON-006] an `after` list names a component by its last segment,
+    /// and so do a lock entry and a sentinel record. The cases are the ones
+    /// `TestLogicalName` covers.
+    #[test]
+    fn a_component_reports_its_logical_name() {
+        for (written, logical) in [
+            ("@stdlib//components/node", "node"),
+            ("github.com/owner/repo//components/neovim", "neovim"),
+            ("shell", "shell"),
+            ("my-tool", "my-tool"),
+            ("@stdlib//components/zsh/", "zsh"),
+            ("components/foo/bar", "bar"),
+        ] {
+            let id: ComponentId = written.parse().expect(written);
+            assert_eq!(id.logical_name(), logical, "{written}");
+        }
     }
 
     /// [R-COMMON-004] an unvalidated hash compares unequal forever and looks

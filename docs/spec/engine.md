@@ -43,23 +43,47 @@ then merging `local.star` when it exists, with a component declared in both
 counting once.
 
 **[R-ENGINE-011]** A component's dependencies MUST be expanded transitively, so
-declaring an aggregate brings in what it needs.
+declaring an aggregate brings in what it needs. A component reached this way
+and not declared by the configuration MUST be marked as such, because a
+`meowctl remove` of one tool must not run the uninstall hook of the package
+manager it was reached through; see [R-ENGINE-032].
 
 **[R-ENGINE-012]** A component whose platform or distribution guard does not
-match the current machine MUST be dropped from the graph, using the same
-matching as [R-STAR-008].
+match the current machine MUST be dropped from the graph.
+
+The guards are top-level globals in the component's own file, not arguments to
+`component()`: a `platforms` list of operating-system names, and a `distros`
+list matched against the machine's distribution or its `ID_LIKE` value. A
+component declaring neither runs everywhere, and a value that is not a list of
+strings is ignored rather than refused, which is what `platformMatches` and
+`distroMatches` do.
+
+This is not the matching [R-STAR-008] describes. `select()` takes
+`//platform:linux-debian` conditions and matches `ID_LIKE` by substring; a
+guard takes a bare `linux` and matches by equality. An earlier draft of this
+requirement said they were the same and they are not.
 
 **[R-ENGINE-013]** Execution order MUST be a topological sort of the dependency
 graph, with declaration order as the tie-break between components that have no
 dependency between them. `TopoSort` in `internal/lifecycle/toposort.go` takes
 the declaration-order map for exactly this.
 
-**[R-ENGINE-014]** `after` hints MUST constrain order without implying a
-dependency: a component listed in `after` that is not in the graph MUST NOT
-pull it in.
+**[R-ENGINE-014]** A component's `after` list MUST be read from both the
+`component()` declaration and the component file's own top-level `after`
+global, and a name in it that the configuration does not declare MUST be
+pulled into the graph.
+
+An earlier draft of this requirement said the opposite: that `after` orders
+without depending, and that an unknown name is ignored. Neither is what
+`expandWithFileDeps` does, and the comment above it says why — a component
+declaring `after = ["@stdlib//components/apt"]` is relying on apt being
+installed, and requiring it to be named twice would make every component file
+a change to `init.star` as well.
 
 **[R-ENGINE-015]** A cycle MUST be reported with the components on it, and MUST
-exit with the configuration code.
+exit with the configuration code. `TopoSort` reports only that there is one,
+which leaves a user with a hundred components and no way to find the two that
+point at each other.
 
 **[R-ENGINE-016]** A filter naming components MUST restrict the run to those
 components and their dependencies, and a name matching nothing MUST be an

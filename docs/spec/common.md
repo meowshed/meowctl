@@ -45,6 +45,13 @@ bare identifier, from a GitHub module, named `github:owner/repo@ref`. Parsing a
 string that is neither MUST fail rather than produce a registry module with a
 strange name.
 
+**[R-COMMON-006]** A `ComponentId` MUST expose its logical name: the last
+path segment of a qualified form, and the whole of a bare one. So
+`@stdlib//components/node` and `github://o/r//components/node` are both `node`.
+This is the name an `after` list refers to and the key a lock entry and a
+sentinel record use; `logicalName` in `internal/starlark/accumulator.go` is the
+behaviour.
+
 **[R-COMMON-004]** An `Integrity` MUST hold a W3C Subresource Integrity hash in
 the form `sha384-<base64>`, and MUST reject a string that is not one. This is
 what `deps.lock` stores; see [R-CONFIG-020].

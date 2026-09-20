@@ -507,3 +507,24 @@ fn the_value_of_every_top_level_string_is_reported() {
         result.strings
     );
 }
+
+/// [R-STAR-034] `platforms` and `distros` are top-level lists in a component's
+/// own file, and they decide whether it runs on this machine.
+#[test]
+fn the_value_of_every_top_level_string_list_is_reported() {
+    let result = evaluate(
+        "platforms = [\"macos\", \"linux\"]\nmixed = [1, \"a\"]\nempty = []\nnotalist = \"x\"\n",
+    )
+    .expect("evaluate");
+    assert_eq!(
+        result.lists.get("platforms").map(Vec::as_slice),
+        Some(["macos".to_owned(), "linux".to_owned()].as_slice())
+    );
+    assert_eq!(result.lists.get("empty").map(Vec::len), Some(0));
+    assert!(
+        !result.lists.contains_key("mixed"),
+        "half a guard is worse than none: {:?}",
+        result.lists
+    );
+    assert!(!result.lists.contains_key("notalist"));
+}
