@@ -25,6 +25,7 @@ except where the higher layer constrains the lower on purpose.
 
 | File | Crate | Covers |
 | --- | --- | --- |
+| [`spec/README.md`](spec/README.md) | — | The area prefixes, the requirement template, and how a withdrawn requirement is retired |
 | [`spec/common.md`](spec/common.md) | `meowctl-common` | Identifiers, phases, paths, the error and exit-code taxonomy, the `Event` vocabulary |
 | [`spec/config.md`](spec/config.md) | `meowctl-config` | Every on-disk format, its schema version, and the syntax-aware Starlark editor |
 | [`spec/fs.md`](spec/fs.md) | `meowctl-fs` | The `FileSystem` trait and its real, dry-run, and in-memory implementations |
@@ -35,8 +36,13 @@ except where the higher layer constrains the lower on purpose.
 | [`spec/pm.md`](spec/pm.md) | `meowctl-pm` | Package-manager handler registration and dispatch |
 | [`spec/ctx.md`](spec/ctx.md) | `meowctl-ctx` | The `ctx` object a hook receives, and its restricted forms |
 | [`spec/engine.md`](spec/engine.md) | `meowctl-engine` | The staged pipeline, the component graph, phases, staleness, and rollback |
-| [`spec/tui.md`](spec/tui.md) | `meowctl-tui` | The three event sinks, the theme, capability detection, and prompts |
-| [`spec/cli.md`](spec/cli.md) | `meowctl-cli` | The command surface and the exit-code mapping |
+| [`spec/net.md`](spec/net.md) | `meowctl-net` | The `Http` trait, its real, scripted and offline implementations, and what a failed request carries |
+| [`spec/tui.md`](spec/tui.md) | `meowctl-tui` | The four event sinks, the theme and the file a user can point at, capability detection, and prompts |
+| [`spec/cli.md`](spec/cli.md) | `meowctl-cli` | The command surface, the exit-code mapping, the runtime hooks, and updating the binary |
+
+`meowctl-release` has no file of its own. It exists to serve one command, and
+its obligations are that command's: [R-CLI-070] through [R-CLI-076] in
+[`spec/cli.md`](spec/cli.md).
 
 ## Elsewhere in the repository
 

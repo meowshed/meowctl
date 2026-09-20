@@ -196,6 +196,17 @@ mise run unused-deps    # cargo machete
 mise run snapshots      # cargo insta review
 ```
 
+CI runs the test matrix on Linux only. The tree still carries `cfg(unix)` and
+`cfg(windows)` code, so `mise run check-windows` is what is left before
+touching anything behind a `cfg` — the last two Windows failures were an
+unused import and a path literal that is absolute on one platform and not the
+other.
+
+A tag matching `v*` runs `.github/workflows/release.yml`, which builds four
+targets and publishes `checksums.sri`. A release without that file is one
+`self-update` refuses, so the workflow is not optional dressing; see
+[R-CLI-071].
+
 Workspace lints are in the root `Cargo.toml` and every crate inherits them
 with `lints.workspace = true`. Two of them encode principles from this file:
 `print_stdout` and `print_stderr` are denied outside `meowctl-tui`, and
