@@ -34,6 +34,10 @@ pub enum Entry {
     File {
         /// Length in bytes.
         len: u64,
+        /// Whether the file is executable.
+        ///
+        /// Always `false` on a platform with no mode bits; see [R-FS-005].
+        executable: bool,
     },
     /// A directory.
     Directory,
@@ -167,6 +171,17 @@ pub trait FileSystem: Debug {
     /// [`FsError::Io`] when the directory cannot be created.
     fn create_dir_all(&self, path: &Path) -> FsResult<bool>;
 
+    /// Marks a file executable, or stops it being one.
+    ///
+    /// The one exception to [R-FS-004]'s `0o600`, and it exists because a
+    /// module tarball ships scripts meowctl later runs; see [R-MODULE-032].
+    /// A no-op on a platform with no mode bits.
+    ///
+    /// # Errors
+    ///
+    /// [`FsError::NotFound`] when nothing is there, or [`FsError::Io`].
+    fn set_executable(&self, path: &Path, executable: bool) -> FsResult<()>;
+
     /// Lists a directory's entries, sorted by name.
     ///
     /// # Errors
@@ -232,6 +247,9 @@ impl<T: FileSystem + ?Sized> FileSystem for std::sync::Arc<T> {
     }
     fn create_dir_all(&self, path: &Path) -> FsResult<bool> {
         (**self).create_dir_all(path)
+    }
+    fn set_executable(&self, path: &Path, executable: bool) -> FsResult<()> {
+        (**self).set_executable(path, executable)
     }
     fn read_dir(&self, path: &Path) -> FsResult<Vec<PathBuf>> {
         (**self).read_dir(path)

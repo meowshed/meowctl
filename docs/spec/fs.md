@@ -45,6 +45,14 @@ lock files depend on it.
 Configuration holds secrets often enough that the default has to be the narrow
 one.
 
+**[R-FS-005]** The trait MUST expose setting a file's executable bit, and
+reporting it, and MUST make both a no-op on a platform without mode bits. This
+is the one exception [R-FS-004] allows, and it exists because a module tarball
+ships scripts meowctl later executes; see [R-MODULE-032]. It is the executable
+bit rather than a mode because that is the whole of what the caller decides:
+`v0.1.0` normalises every extracted file to `0o644` or `0o755` and nothing
+asks for a third value.
+
 ## Implementations
 
 **[R-FS-010]** `RealFs` MUST perform the effect against the real filesystem.

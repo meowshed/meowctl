@@ -19,6 +19,16 @@ const FILE_MODE: u32 = 0o600;
 /// Mode for a directory meowctl creates.
 const DIR_MODE: u32 = 0o700;
 
+/// Mode for a file a module tarball marked executable.
+///
+/// `v0.1.0` normalises every extracted entry to one of two modes rather than
+/// carrying the archive's exact bits, so a module cannot ship something
+/// group-writable; see [R-MODULE-032].
+const EXECUTABLE_MODE: u32 = 0o755;
+
+/// Mode for a file a module tarball did not mark executable.
+const READABLE_MODE: u32 = 0o644;
+
 /// Performs filesystem effects against the real filesystem.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RealFs;
@@ -52,6 +62,20 @@ fn set_mode(path: &Path, mode: u32) -> FsResult<()> {
     use std::os::unix::fs::PermissionsExt as _;
     fs::set_permissions(path, fs::Permissions::from_mode(mode))
         .map_err(|e| FsError::io("setting the mode of", path, e))
+}
+
+/// Whether a file's mode has any executable bit set.
+#[cfg(unix)]
+fn is_executable(meta: &fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt as _;
+    meta.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+fn is_executable(_meta: &fs::Metadata) -> bool {
+    // Nothing on Windows carries the bit, so nothing can report it; see
+    // [R-FS-005].
+    false
 }
 
 #[cfg(not(unix))]
@@ -186,6 +210,22 @@ impl FileSystem for RealFs {
         Ok(true)
     }
 
+    fn set_executable(&self, path: &Path, executable: bool) -> FsResult<()> {
+        if !path.is_file() {
+            return Err(FsError::NotFound {
+                path: path.to_path_buf(),
+            });
+        }
+        set_mode(
+            path,
+            if executable {
+                EXECUTABLE_MODE
+            } else {
+                READABLE_MODE
+            },
+        )
+    }
+
     fn read_dir(&self, path: &Path) -> FsResult<Vec<PathBuf>> {
         let mut out = Vec::new();
         for entry in fs::read_dir(path).map_err(|e| FsError::io("listing", path, e))? {
@@ -210,7 +250,10 @@ impl FileSystem for RealFs {
                     .map_err(|e| FsError::io("reading the link at", path, e))?,
             })),
             Ok(meta) if meta.is_dir() => Ok(Some(Entry::Directory)),
-            Ok(meta) => Ok(Some(Entry::File { len: meta.len() })),
+            Ok(meta) => Ok(Some(Entry::File {
+                len: meta.len(),
+                executable: is_executable(&meta),
+            })),
         }
     }
 }

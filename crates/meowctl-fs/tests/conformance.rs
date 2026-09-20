@@ -322,3 +322,103 @@ fn every_error_names_its_path() {
         assert!(err.to_string().contains("absent"), "{}: {err}", s.name);
     });
 }
+
+/// [R-FS-005] a module tarball ships scripts meowctl later runs, and the bit
+/// is what makes them runnable. Every implementation has to agree on it, or a
+/// dry run reports a plan the real run does not produce.
+///
+/// Windows has no bit, so what is checked there is that asking and setting are
+/// both answerable rather than a panic.
+#[test]
+fn the_executable_bit_is_set_and_reported() {
+    for_each(|s| {
+        let path = s.path("script.sh");
+        s.fs.write(&path, b"#!/bin/sh\n").expect(s.name);
+
+        assert_eq!(
+            s.fs.entry(&path).expect(s.name),
+            Some(Entry::File {
+                len: 10,
+                executable: false
+            }),
+            "{}: a written file starts unexecutable",
+            s.name
+        );
+
+        s.fs.set_executable(&path, true).expect(s.name);
+        let expected = cfg!(unix);
+        assert_eq!(
+            s.fs.entry(&path).expect(s.name),
+            Some(Entry::File {
+                len: 10,
+                executable: expected
+            }),
+            "{}: after setting the bit",
+            s.name
+        );
+
+        s.fs.set_executable(&path, false).expect(s.name);
+        assert_eq!(
+            s.fs.entry(&path).expect(s.name),
+            Some(Entry::File {
+                len: 10,
+                executable: false
+            }),
+            "{}: after clearing the bit",
+            s.name
+        );
+    });
+}
+
+/// Setting the bit on nothing is a mistake worth reporting: the caller thinks
+/// it extracted a file and did not.
+#[test]
+fn making_a_missing_file_executable_fails() {
+    for_each(|s| {
+        let err = s
+            .fs
+            .set_executable(&s.path("absent"), true)
+            .expect_err(s.name);
+        assert!(
+            matches!(err, FsError::NotFound { .. }),
+            "{}: {err}",
+            s.name
+        );
+    });
+}
+
+/// [R-FS-005] a copy creates a file and [R-FS-004] gives a created file
+/// `0o600`, so the bit does not travel. A rename moves the file, so it does.
+/// The two differ, and a caller that copies a script has to set it again.
+#[test]
+fn a_copy_drops_the_executable_bit_and_a_rename_keeps_it() {
+    for_each(|s| {
+        let from = s.path("from.sh");
+        s.fs.write(&from, b"x").expect(s.name);
+        s.fs.set_executable(&from, true).expect(s.name);
+
+        let copied = s.path("copied.sh");
+        s.fs.copy(&from, &copied).expect(s.name);
+        assert_eq!(
+            s.fs.entry(&copied).expect(s.name),
+            Some(Entry::File {
+                len: 1,
+                executable: false
+            }),
+            "{}: a copy creates a file",
+            s.name
+        );
+
+        let moved = s.path("moved.sh");
+        s.fs.rename(&from, &moved).expect(s.name);
+        assert_eq!(
+            s.fs.entry(&moved).expect(s.name),
+            Some(Entry::File {
+                len: 1,
+                executable: cfg!(unix)
+            }),
+            "{}: a rename moves the file",
+            s.name
+        );
+    });
+}

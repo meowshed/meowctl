@@ -25,6 +25,13 @@ pub enum Intent {
     Wrote {
         /// What would have been written.
         contents: Vec<u8>,
+        /// Whether the file would end up executable; see [R-FS-005].
+        executable: bool,
+    },
+    /// An existing file's executable bit would be changed, and nothing else.
+    MadeExecutable {
+        /// What it would become.
+        executable: bool,
     },
     /// The path would be removed.
     Removed,
@@ -74,6 +81,20 @@ impl DryRunFs {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    /// Whether a path would be executable once the recorded intents apply.
+    ///
+    /// A copy and a rename carry the bit, which is what `RealFs` does, so the
+    /// plan has to say the same.
+    fn would_be_executable(&self, path: &Path) -> bool {
+        matches!(
+            self.entry(path),
+            Ok(Some(Entry::File {
+                executable: true,
+                ..
+            }))
+        )
+    }
+
     fn record(&self, path: &Path, intent: Intent) {
         self.lock().insert(path.to_path_buf(), intent);
     }
@@ -106,7 +127,7 @@ impl DryRunFs {
 impl FileSystem for DryRunFs {
     fn read(&self, path: &Path) -> FsResult<Vec<u8>> {
         match self.lock().get(path) {
-            Some(Intent::Wrote { contents }) => Ok(contents.clone()),
+            Some(Intent::Wrote { contents, .. }) => Ok(contents.clone()),
             Some(Intent::Removed) => Err(FsError::NotFound {
                 path: path.to_path_buf(),
             }),
@@ -120,6 +141,7 @@ impl FileSystem for DryRunFs {
             path,
             Intent::Wrote {
                 contents: contents.to_vec(),
+                executable: self.would_be_executable(path),
             },
         );
         Ok(())
@@ -133,7 +155,14 @@ impl FileSystem for DryRunFs {
             Err(e) => return Err(e),
         };
         existing.extend_from_slice(contents);
-        self.record(path, Intent::Wrote { contents: existing });
+        let executable = self.would_be_executable(path);
+        self.record(
+            path,
+            Intent::Wrote {
+                contents: existing,
+                executable,
+            },
+        );
         Ok(())
     }
 
@@ -145,7 +174,15 @@ impl FileSystem for DryRunFs {
     fn copy(&self, from: &Path, to: &Path) -> FsResult<()> {
         let contents = self.read(from)?;
         self.require_parent(to)?;
-        self.record(to, Intent::Wrote { contents });
+        // Not the source's bit: a copy creates a file, and `RealFs` sets the
+        // mode of what it created; see [R-FS-004].
+        self.record(
+            to,
+            Intent::Wrote {
+                contents,
+                executable: false,
+            },
+        );
         Ok(())
     }
 
@@ -217,6 +254,27 @@ impl FileSystem for DryRunFs {
         Ok(true)
     }
 
+    fn set_executable(&self, path: &Path, executable: bool) -> FsResult<()> {
+        // [R-FS-033]: `RealFs` fails on a path that is not a file, so the
+        // prediction has to fail there too.
+        if !matches!(self.entry(path)?, Some(Entry::File { .. })) {
+            return Err(FsError::NotFound {
+                path: path.to_path_buf(),
+            });
+        }
+        // A file this run would write keeps one intent, with the bit folded
+        // in: two intents for one path would need an order, and the map has
+        // none. A file that is only being chmod'ed gets its own.
+        let mut intents = self.lock();
+        match intents.get_mut(path) {
+            Some(Intent::Wrote { executable: bit, .. }) => *bit = executable,
+            _ => {
+                intents.insert(path.to_path_buf(), Intent::MadeExecutable { executable });
+            }
+        }
+        Ok(())
+    }
+
     fn read_dir(&self, path: &Path) -> FsResult<Vec<PathBuf>> {
         self.underlying.read_dir(path)
     }
@@ -224,16 +282,34 @@ impl FileSystem for DryRunFs {
     fn rename(&self, from: &Path, to: &Path) -> FsResult<()> {
         let contents = self.read(from)?;
         self.require_parent(to)?;
+        let executable = self.would_be_executable(from);
         self.record(from, Intent::Removed);
-        self.record(to, Intent::Wrote { contents });
+        self.record(
+            to,
+            Intent::Wrote {
+                contents,
+                executable,
+            },
+        );
         Ok(())
     }
 
     fn entry(&self, path: &Path) -> FsResult<Option<Entry>> {
         match self.lock().get(path) {
-            Some(Intent::Wrote { contents }) => Ok(Some(Entry::File {
+            Some(Intent::Wrote {
+                contents,
+                executable,
+            }) => Ok(Some(Entry::File {
                 len: contents.len() as u64,
+                executable: *executable,
             })),
+            Some(Intent::MadeExecutable { executable }) => match self.underlying.entry(path)? {
+                Some(Entry::File { len, .. }) => Ok(Some(Entry::File {
+                    len,
+                    executable: *executable,
+                })),
+                other => Ok(other),
+            },
             Some(Intent::Removed) => Ok(None),
             Some(Intent::Linked { target }) => Ok(Some(Entry::Symlink {
                 target: target.clone(),
