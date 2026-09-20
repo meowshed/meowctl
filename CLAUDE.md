@@ -155,7 +155,7 @@ The Starlark API is frozen at what `v0.1.0` accepts. The predeclared set is
 `component`, `pkg`, `unpkg`, `uppkg`, `repo`, `query_pm`, `dep`, `module`,
 `replace`, `select`, and `platform`; the `ctx` object passed to hooks carries
 the file, process, network, macOS, templating, and shell-integration methods
-listed in `internal/ctx/ctx.go`. A component is a `.star` file; a package
+`docs/spec/ctx.md` lists. A component is a `.star` file; a package
 manager is a component exporting `pm_name`, `install_pkg`, `uninstall_pkg`, and
 `interrogate`.
 

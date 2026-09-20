@@ -96,6 +96,72 @@ buries it.
 
 **[R-CLI-033]** An error MUST go to stderr and MUST NOT corrupt a piped stdout.
 
+## Updating the binary
+
+**[R-CLI-070]** `self-update` MUST NOT install a binary it has not verified.
+It MUST check the integrity of what it downloaded against a checksum the
+release publishes, and MUST refuse rather than replace the running binary when
+the two disagree; see [R-COMMON-005] and [R-MODULE-030], which is the rule
+everything else meowctl downloads already follows.
+
+`v0.1.0` does not. `runSelfUpdate` fetches a release asset over HTTPS and
+renames it over `os.Executable()` with no check of any kind, and the source
+says so: `SRI verification deferred (TODO below)`. Anything that can answer
+for the download URL replaces the user's `meowctl`. This is the one place the
+parity constraint does not reach, because reproducing it would mean shipping
+the weakness deliberately, in the one crate that already knows how to verify a
+download.
+
+**[R-CLI-071]** Until a release publishes a checksum, `self-update` MUST say
+that it cannot update this build and how to update it by hand, and MUST exit
+with the general code.
+
+Saying so is not the same as the command being absent: [R-CLI-001] keeps it on
+the surface, and a script that calls it gets an error it can read rather than
+"unknown command". The repository publishes no release assets yet, so there is
+nothing to verify against and nothing to download.
+
+## Runtime hooks
+
+`hook <phase>` is what a shell runs on every spawn. `meowctl shell <shell>`
+emits a snippet that calls it, so the requirements here are about a command
+nobody types and everybody runs.
+
+**[R-CLI-060]** `hook` MUST accept `shell` and `login` and no other phase. An
+unsupported phase MUST exit 2 with the usage error, naming the two that work;
+see [R-COMMON-013].
+
+**[R-CLI-061]** `hook` MUST run the named phase for every discovered
+component, in graph order, and MUST write what `ctx.emit` contributed to
+stdout and nothing else. A decorated line would be evaluated by the shell.
+
+**[R-CLI-062]** A failure to evaluate a component or to run a hook MUST be
+recorded in `.hook-error` and MUST NOT change the exit code, which stays 0.
+
+A shell that cannot start is worse than a shell that starts without its
+integration. `v0.1.0` chose this and it is right: the failure is a
+configuration error the user fixes at their leisure, and the alternative is a
+terminal that reports an error on every prompt and a login that fails. The
+flag file is how the failure stays visible without being fatal.
+
+**[R-CLI-063]** A run in which nothing failed MUST remove `.hook-error`.
+
+**[R-CLI-064]** `status` and `doctor` MUST report the flag when it is present.
+`status` MUST say that it failed and where to look; `doctor` MUST render the
+recorded text. Both MUST use the warning level, which is what a reader scans
+for.
+
+`v0.1.0` writes the `status` line to stderr so that `meowctl status | ...`
+stays clean. That does not carry over: a sink owns its destination and writes
+one stream, and splitting one command across two would mean the live region
+and the JSON stream disagreeing about what the command said. The line is a
+warning in the stream instead, which is visible rather than hidden. This is
+inside the terminal output carve-out; see [R-TUI-032].
+
+**[R-CLI-065]** `hook` MUST NOT journal what a hook does and MUST NOT roll
+back. A `shell` hook that writes is misusing the phase, and a rollback on a
+shell spawn would undo the previous one.
+
 ## Failure paths
 
 **[R-CLI-050]** A command that needs a configuration and is run outside one

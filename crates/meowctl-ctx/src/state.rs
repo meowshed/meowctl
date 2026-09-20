@@ -30,8 +30,8 @@ pub enum Surface {
     /// Everything that does not mutate, for a read-only phase; see
     /// [R-CTX-030].
     ReadOnly,
-    /// The eight attributes `ShellCtxAllowList` names, for `shell.star`; see
-    /// [R-CTX-031].
+    /// The eight attributes `ShellCtxAllowList` names, for a runtime hook
+    /// phase; see [R-CTX-031].
     Shell,
 }
 
@@ -39,7 +39,9 @@ impl Surface {
     /// The surface a phase gets.
     #[must_use]
     pub const fn for_phase(phase: Phase) -> Surface {
-        if phase.is_read_only() {
+        if phase.is_runtime_hook() {
+            Surface::Shell
+        } else if phase.is_read_only() {
             Surface::ReadOnly
         } else {
             Surface::Full

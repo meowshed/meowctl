@@ -30,8 +30,19 @@ available in which phase.
 `internal/ctx/ctx.go` registers: `home`, `dry_run`, `component_dir`,
 `state_dir`, `shell`, and `platform`.
 
-**[R-CTX-002]** `shell` MUST be `None` outside `shell.star` evaluation, and
-`platform` MUST be the same struct `platform()` returns; see [R-STAR-007].
+**[R-CTX-002]** `shell` MUST name the shell in a runtime hook phase and MUST
+be `None` in every other phase, and `platform` MUST be the same struct
+`platform()` returns; see [R-STAR-007] and [R-COMMON-013].
+
+The name is the base name of `$SHELL`, which is the login shell rather than
+whatever spawned the process. A component reads it to choose between
+`set -gx` and `export`, so it has to be the shell that will evaluate the line.
+
+An earlier draft said "outside `shell.star` evaluation". There is no file by
+that name: the phases are `shell` and `login`, and what runs is the
+component's hook of that name. The wording sent the first implementation to
+`None` everywhere, which made every component that branches on `ctx.shell`
+emit nothing.
 
 **[R-CTX-003]** `component_dir` MUST be the component's own source directory
 and `state_dir` its persistent per-component directory. A component writes
@@ -121,10 +132,13 @@ a second copy, which is why the argument exists; see [R-OPS-011].
 read-only phases are in [R-COMMON-012], and a hook that tries to write in one
 MUST get attribute-not-found rather than a silent no-op.
 
-**[R-CTX-031]** During `shell.star` evaluation, `ctx` MUST expose exactly the
-eight attributes `ShellCtxAllowList` names: `emit`, `file_exists`, `list_dir`,
+**[R-CTX-031]** In a runtime hook phase, `ctx` MUST expose exactly the eight
+attributes `ShellCtxAllowList` names: `emit`, `file_exists`, `list_dir`,
 `platform`, `read_file`, `run`, `shell`, and `state_dir`. A shell hook runs on
 every shell spawn and must have no persistent effect beyond what it emits.
+
+Every `shell` and `login` hook in `meowctl-stdlib` and in `dotmeow` stays
+inside those eight, which was checked rather than assumed.
 
 **[R-CTX-032]** The restriction MUST be enforced by the value the hook receives,
 not by a check inside each method.

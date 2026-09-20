@@ -10,7 +10,7 @@
 
 mod support;
 
-use meowctl_common::{Event, Outcome, PhaseSet};
+use meowctl_common::{Event, Outcome, Phase, PhaseSet};
 use meowctl_engine::{Declaration, Graph, Inputs, Plan, Runner, discover};
 use meowctl_exec::ScriptedRun;
 use meowctl_starlark::Evaluator;
@@ -531,4 +531,98 @@ def interrogate(ctx):
             world.seen()
         );
     }
+}
+
+/// A component whose shell hook emits a line.
+fn emits(name: &str, line: &str) -> String {
+    format!("component({name:?})\ndef shell(ctx):\n    ctx.emit({line:?})\n")
+}
+
+/// Runs one runtime hook phase and returns the report and the world.
+fn run_hook(config: &Config, phase: Phase) -> (meowctl_engine::Report, support::World) {
+    let loader = NoLoads;
+    let platform = macos();
+    let discovered = discover(config, &loader, &platform).expect("discovery");
+    let graph = Graph::build(&discovered).expect("the graph builds");
+
+    let (effects, world) = world(Vec::new(), None);
+    let evaluator = Evaluator::new(platform.clone(), &loader);
+    let mut runner = Runner::new(
+        &graph,
+        &discovered.registry,
+        evaluator,
+        effects,
+        settings(&platform, false),
+    );
+    (runner.run_hook(phase), world)
+}
+
+/// [R-ENGINE-035] every component runs, every time. `shell` runs on every
+/// shell spawn, so skipping one because it ran last time would mean a shell
+/// without its integration.
+#[test]
+fn a_runtime_hook_runs_every_component() {
+    let config = Config::new()
+        .declaring(Declaration::new("zsh"), &emits("zsh", "export A=1"))
+        .declaring(Declaration::new("fish"), &emits("fish", "set -gx B 2"));
+
+    let (report, world) = run_hook(&config, Phase::Shell);
+    assert!(report.succeeded(), "{report:?}");
+
+    let lines: Vec<String> = world
+        .seen()
+        .iter()
+        .filter_map(|event| match event {
+            Event::ShellLine { line } => Some(line.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(lines, ["export A=1", "set -gx B 2"]);
+}
+
+/// [R-ENGINE-035] no plan is announced and no phase is framed, so a sink
+/// writing shell code sees shell code and nothing else; see [R-CLI-061].
+#[test]
+fn a_runtime_hook_emits_only_what_a_hook_produced() {
+    let config = Config::new().declaring(Declaration::new("zsh"), &emits("zsh", "export A=1"));
+    let (_, world) = run_hook(&config, Phase::Shell);
+
+    for event in world.seen() {
+        assert!(
+            !matches!(
+                event,
+                Event::PlanComputed { .. }
+                    | Event::PhaseStarted { .. }
+                    | Event::PhaseFinished { .. }
+                    | Event::ComponentStarted { .. }
+                    | Event::ComponentFinished { .. }
+            ),
+            "a runtime hook framed its run: {event:?}"
+        );
+    }
+}
+
+/// [R-ENGINE-035] a component that fails stops the run and is reported, so
+/// the caller can record why the shell has no integration.
+#[test]
+fn a_failing_runtime_hook_stops_and_says_which_component() {
+    let config = Config::new()
+        .declaring(
+            Declaration::new("zsh"),
+            "component(\"zsh\")\ndef shell(ctx):\n    fail(\"no\")\n",
+        )
+        .declaring(Declaration::new("fish"), &emits("fish", "set -gx B 2"));
+
+    let (report, world) = run_hook(&config, Phase::Shell);
+    let failure = report.failure.expect("the run failed");
+    assert_eq!(failure.component.as_str(), "zsh");
+    assert_eq!(failure.phase, Phase::Shell);
+
+    assert!(
+        !world
+            .seen()
+            .iter()
+            .any(|e| matches!(e, Event::ShellLine { .. })),
+        "the run stopped at the first failure"
+    );
 }

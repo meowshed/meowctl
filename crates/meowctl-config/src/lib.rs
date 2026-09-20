@@ -12,6 +12,7 @@
 pub mod edit;
 pub mod emit;
 mod error;
+mod hookerr;
 mod installed;
 mod layout;
 mod lock;
@@ -19,6 +20,7 @@ mod modfile;
 mod state;
 
 pub use error::{ConfigError, ConfigResult};
+pub use hookerr::HookError;
 pub use installed::{InstalledComponent, InstalledLock};
 pub use layout::{LEGACY_ENTRY, Layout};
 pub use lock::{GitHubEntry, LockFile, LockMeta, ModuleEntry, PackageEntry};

@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use meowctl_common::{
     ComponentId, Event, Level, Outcome, Phase, PhaseSet, PlannedStep, SkipReason, Span, Stream,
 };
-use meowctl_tui::{Caps, ColourDepth, JsonSink, PlainSink, Sink, Theme};
+use meowctl_tui::{Caps, ColourDepth, JsonSink, PlainSink, ShellSink, Sink, Theme};
 
 /// A writer a test can read back.
 #[derive(Clone, Default)]
@@ -369,4 +369,72 @@ fn the_plain_sink_ignores_the_terminal_hand_off() {
         true,
     );
     assert_eq!(rendered, "");
+}
+
+/// [R-TUI-012] a shell evaluates whatever the sink writes, so it writes the
+/// line and not a rendering of it.
+#[test]
+fn the_shell_sink_writes_the_line_and_nothing_around_it() {
+    let out = Captured::default();
+    let mut sink = ShellSink::new(Box::new(out.clone()));
+
+    sink.handle(&Event::ShellLine {
+        line: "export EDITOR=nvim".to_owned(),
+    });
+    sink.finish();
+
+    assert_eq!(out.text(), "export EDITOR=nvim\n");
+}
+
+/// [R-TUI-012] every other event is dropped, because a shell would evaluate
+/// a heading as a command.
+#[test]
+fn the_shell_sink_writes_nothing_for_any_other_event() {
+    let out = Captured::default();
+    let mut sink = ShellSink::new(Box::new(out.clone()));
+
+    for event in [
+        Event::Message {
+            level: Level::Info,
+            text: "installing".to_owned(),
+        },
+        Event::Message {
+            level: Level::Warn,
+            text: "a warning".to_owned(),
+        },
+        Event::PhaseStarted {
+            phase: Phase::Shell,
+            total: 3,
+        },
+        Event::ComponentStarted {
+            component: component("git"),
+            phase: Phase::Shell,
+        },
+        Event::PathPrepended {
+            directory: "/opt/homebrew/bin".to_owned(),
+        },
+    ] {
+        sink.handle(&event);
+    }
+    sink.finish();
+
+    assert_eq!(out.text(), "");
+}
+
+/// [R-TUI-013] `--format json` on `hook` is the event stream, not shell code:
+/// a program reading events is not a shell evaluating them, so the two sinks
+/// render the same event differently and both are right.
+#[test]
+fn the_json_sink_still_carries_a_shell_line() {
+    let out = Captured::default();
+    let mut sink = JsonSink::new(Box::new(out.clone()));
+
+    sink.handle(&Event::ShellLine {
+        line: "export EDITOR=nvim".to_owned(),
+    });
+    sink.finish();
+
+    let text = out.text();
+    assert!(text.contains("shell_line"), "{text}");
+    assert!(text.contains("export EDITOR=nvim"), "{text}");
 }
