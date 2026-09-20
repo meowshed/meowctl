@@ -1,0 +1,16 @@
+[package]
+name = "meowctl-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Rendering the event stream: live, plain, and JSON sinks"
+
+[dependencies]
+meowctl-common = { path = "../meowctl-common" }
+serde_json = { workspace = true }
+terminal_size = { workspace = true }
+
+[lints]
+workspace = true
