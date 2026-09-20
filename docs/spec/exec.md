@@ -20,6 +20,15 @@ emitted around a process.
 **[R-EXEC-001]** `Executor` MUST cover running a command to completion and
 resolving a command name on `PATH`. Nothing else spawns a process.
 
+**[R-EXEC-006]** Resolving a name on Windows MUST also try the extensions
+`PATHEXT` names, in the order it names them, falling back to
+`.COM;.EXE;.BAT;.CMD` when it is unset.
+
+A component asks for `git`, and on Windows the file is `git.exe`. Every shell
+there resolves this way and a user who has put a `.ps1` on `PATHEXT` expects
+it to count. On every other platform the name is the file, and nothing is
+appended.
+
 **[R-EXEC-002]** A command MUST be built from a program name and an argument
 list, never from a shell string. `v0.1.0` does the same, and it is what keeps a
 component's arguments from being reinterpreted by a shell that the component

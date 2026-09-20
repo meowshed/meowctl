@@ -267,13 +267,22 @@ mod tests {
         );
     }
 
-    /// [R-TUI-042] and the depth is what the terminal reports rather than
-    /// what we hope, because truecolor on a 16-colour terminal is garbage.
+    /// [R-TUI-042] and [R-TUI-045]: the depth is what the terminal reports
+    /// rather than what we hope, because truecolor on a 16-colour terminal is
+    /// garbage.
     #[test]
     fn the_colour_depth_is_what_the_terminal_says() {
         let truecolor = FakeEnv::new(&[("TERM", "xterm-256color"), ("COLORTERM", "truecolor")]);
         assert_eq!(
             Caps::resolve(Mode::Auto, &truecolor, true, Some(80)).colour,
+            ColourDepth::TrueColour
+        );
+
+        // The other spelling terminals use, and the reason the check is a
+        // substring rather than an equality; see [R-TUI-045].
+        let bits = FakeEnv::new(&[("TERM", "xterm-256color"), ("COLORTERM", "24bit")]);
+        assert_eq!(
+            Caps::resolve(Mode::Auto, &bits, true, Some(80)).colour,
             ColourDepth::TrueColour
         );
 
@@ -290,8 +299,8 @@ mod tests {
         );
     }
 
-    /// A pipe takes no colour, unless the caller says it is rendering the
-    /// output itself.
+    /// [R-TUI-046] a pipe takes no colour, unless the caller says it is
+    /// rendering the output itself.
     #[test]
     fn a_pipe_takes_no_colour_unless_it_is_forced() {
         let env = FakeEnv::new(&[("TERM", "xterm-256color")]);
@@ -304,6 +313,32 @@ mod tests {
         assert_eq!(
             Caps::resolve(Mode::Auto, &forced, false, None).colour,
             ColourDepth::Ansi256
+        );
+    }
+
+    /// [R-TUI-046] `0` is the one value that means no, which is the
+    /// convention: everything else, including the empty string, forces.
+    #[test]
+    fn clicolor_force_of_zero_forces_nothing() {
+        let env = FakeEnv::new(&[("TERM", "xterm-256color"), ("CLICOLOR_FORCE", "0")]);
+        assert_eq!(
+            Caps::resolve(Mode::Auto, &env, false, None).colour,
+            ColourDepth::None
+        );
+    }
+
+    /// [R-TUI-046] and a user who turned colour off outranks a caller that
+    /// says this pipe can take it.
+    #[test]
+    fn no_color_outranks_clicolor_force() {
+        let env = FakeEnv::new(&[
+            ("TERM", "xterm-256color"),
+            ("CLICOLOR_FORCE", "1"),
+            ("NO_COLOR", "1"),
+        ]);
+        assert_eq!(
+            Caps::resolve(Mode::Auto, &env, false, None).colour,
+            ColourDepth::None
         );
     }
 

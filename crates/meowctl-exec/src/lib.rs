@@ -204,17 +204,80 @@ fn executable_in(dir: &Path, program: &str) -> Option<PathBuf> {
 
 #[cfg(windows)]
 fn executable_in(dir: &Path, program: &str) -> Option<PathBuf> {
-    let bare = dir.join(program);
-    if bare.is_file() {
-        return Some(bare);
+    let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| DEFAULT_PATHEXT.to_owned());
+    candidates(program, &pathext)
+        .into_iter()
+        .map(|name| dir.join(name))
+        .find(|candidate| candidate.is_file())
+}
+
+/// What Windows uses when `PATHEXT` is unset; see [R-EXEC-006].
+#[cfg_attr(
+    not(windows),
+    allow(dead_code, reason = "the rule is Windows's; the test for it is not")
+)]
+pub(crate) const DEFAULT_PATHEXT: &str = ".COM;.EXE;.BAT;.CMD";
+
+/// The file names a program could have, in the order to try them.
+///
+/// The bare name first, because a file with no extension is still a file, and
+/// then each extension `PATHEXT` names in its own order: a user who put
+/// `.PS1` ahead of `.EXE` meant it. Pure, so the order is testable without a
+/// Windows machine or a mutated environment; see [R-EXEC-006].
+#[cfg_attr(
+    not(windows),
+    allow(dead_code, reason = "the rule is Windows's; the test for it is not")
+)]
+pub(crate) fn candidates(program: &str, pathext: &str) -> Vec<String> {
+    let mut names = vec![program.to_owned()];
+    names.extend(
+        pathext
+            .split(';')
+            .map(str::trim)
+            .filter(|ext| !ext.is_empty())
+            .map(|ext| format!("{program}{ext}")),
+    );
+    names
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// [R-EXEC-006] the bare name first, then each extension in the order
+    /// `PATHEXT` names it. A user who put `.PS1` ahead of `.EXE` meant it.
+    #[test]
+    fn the_extensions_are_tried_in_the_order_pathext_gives() {
+        assert_eq!(
+            candidates("git", ".PS1;.EXE;.BAT"),
+            ["git", "git.PS1", "git.EXE", "git.BAT"]
+        );
     }
-    let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_owned());
-    pathext.split(';').find_map(|ext| {
-        let ext = ext.trim();
-        if ext.is_empty() {
-            return None;
+
+    /// [R-EXEC-006] an empty entry is skipped rather than producing the bare
+    /// name twice. `PATHEXT` with a trailing `;` is ordinary.
+    #[test]
+    fn an_empty_entry_is_skipped() {
+        assert_eq!(candidates("git", ".EXE;;"), ["git", "git.EXE"]);
+        assert_eq!(candidates("git", ""), ["git"]);
+    }
+
+    /// [R-EXEC-006] and space around an entry is not part of the extension.
+    #[test]
+    fn an_entry_is_trimmed() {
+        assert_eq!(
+            candidates("git", " .EXE ; .BAT "),
+            ["git", "git.EXE", "git.BAT"]
+        );
+    }
+
+    /// [R-EXEC-006] the fallback is what Windows itself uses, so a machine
+    /// with no `PATHEXT` still finds `git.exe`.
+    #[test]
+    fn the_default_covers_what_windows_ships() {
+        let names = candidates("git", DEFAULT_PATHEXT);
+        for expected in ["git.COM", "git.EXE", "git.BAT", "git.CMD"] {
+            assert!(names.iter().any(|n| n == expected), "{names:?}");
         }
-        let candidate = dir.join(format!("{program}{ext}"));
-        candidate.is_file().then_some(candidate)
-    })
+    }
 }
