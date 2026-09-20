@@ -34,4 +34,4 @@ pub use evaluator::{
     Evaluated, Evaluator, HookArgument, LoadedFile, Loader, NoLoader, NoPackageManagers,
     PackageManagers,
 };
-pub use platform::Platform;
+pub use platform::{Platform, PlatformValue};

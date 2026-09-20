@@ -1,0 +1,27 @@
+[package]
+name = "meowctl-ctx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "The ctx value a lifecycle hook is called with"
+
+[dependencies]
+allocative = { workspace = true }
+anyhow = { workspace = true }
+meowctl-common = { path = "../meowctl-common" }
+meowctl-exec = { path = "../meowctl-exec" }
+meowctl-fs = { path = "../meowctl-fs" }
+meowctl-net = { path = "../meowctl-net" }
+meowctl-ops = { path = "../meowctl-ops" }
+meowctl-starlark = { path = "../meowctl-starlark" }
+meowctl-tui = { path = "../meowctl-tui" }
+starlark = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
