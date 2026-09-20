@@ -8,7 +8,6 @@
 
 use std::cmp::Ordering;
 use std::fmt;
-use std::hash::Hash as _;
 
 /// A module version, or the absence of a requirement.
 ///
@@ -87,11 +86,13 @@ impl Eq for Version {}
 
 impl std::hash::Hash for Version {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // Only what the version denotes, so two spellings of one version hash
+        // alike and a set does not hold both.
         match self {
-            Version::None => 0u8.hash(state),
+            Version::None => state.write_u8(0),
             Version::Semver { parsed, .. } => {
-                1u8.hash(state);
-                parsed.hash(state);
+                state.write_u8(1);
+                std::hash::Hash::hash(parsed, state);
             }
         }
     }
