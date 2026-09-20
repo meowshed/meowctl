@@ -35,11 +35,18 @@ removed.
 
 **[R-STAR-002]** `component(name, after = [], **kwargs)` MUST record a
 declaration carrying the name, the ordering hints, and any extra keyword
-arguments, in declaration order.
+arguments, in declaration order. `name` may be positional or named and is
+required; `after` is named only and must be a list of strings.
 
-**[R-STAR-003]** `pkg(name, version = "", manager = "", **kwargs)` MUST record
-a package declaration. `unpkg` and `uppkg` MUST record the same shape for
-removal and update.
+**[R-STAR-003]** `pkg(manager, name, version = "", **kwargs)` MUST record a
+package declaration, and `unpkg` and `uppkg` MUST take the same shape for
+removal and update. Both `manager` and `name` are required, and either may be
+given positionally or by keyword; supplying one both ways MUST be an error.
+
+The positional order is `manager` before `name`, so `pkg("brew", "git")`
+installs git with Homebrew. It reads backwards, and it is what `parsePkgArgs`
+in `internal/starlark/builtins.go` accepts. Most components write both by
+keyword, which is why the order rarely shows.
 
 **[R-STAR-004]** `repo(...)` MUST record a repository declaration targeting a
 named manager.
