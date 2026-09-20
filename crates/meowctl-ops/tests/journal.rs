@@ -166,7 +166,10 @@ fn a_corrupt_line_is_reported_and_the_rest_still_replay() {
     );
 }
 
-/// [R-OPS-024] `partial` is the outcome a user most needs to see.
+/// [R-OPS-024] `partial` is the outcome a user most needs to see, and
+/// [R-OPS-023]: the inverse that failed did not strand the one after it. The
+/// failing record is the later one, and replay runs backwards, so the run
+/// reached the good one only by continuing past the bad.
 #[test]
 fn a_replay_that_half_works_reports_partial() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -240,7 +243,8 @@ fn an_inverse_only_operation_is_not_journaled() {
     assert!(journal.is_empty());
 }
 
-/// [R-OPS-021] a crash between the record and the effect must leave a journal
+/// [R-OPS-021] and [R-OPS-003]: a crash between the record and the effect
+/// must leave a journal
 /// that replays a no-op, so the record is on disk before the effect runs.
 #[test]
 fn a_record_is_on_disk_before_its_operation_runs() {

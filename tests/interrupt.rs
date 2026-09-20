@@ -39,9 +39,14 @@ fn sandbox() -> PathBuf {
     root
 }
 
-/// [R-CLI-051] and [R-ENGINE-062]: the run stops rather than the process
-/// dying where it stood, and the component that had not started does not
-/// start.
+/// [R-CLI-051], [R-CLI-053], [R-CLI-054] and [R-ENGINE-062]: the run stops
+/// rather than the process dying where it stood, the component that had not
+/// started does not start, and the exit code says the command did not do what
+/// was asked.
+///
+/// [R-CLI-014] is here too: the handler is installed by the binary, and a
+/// machine where it could not be would kill the process on the first signal
+/// instead of reaching any of this.
 #[test]
 fn an_interrupt_stops_the_run_between_components() {
     let root = sandbox();

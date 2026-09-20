@@ -84,7 +84,21 @@ A module's own `MODULE.meow` uses the same statements plus `compat` on
 `MODULE.meow`, so this component's writer emits no `compat`.
 
 **[R-CONFIG-012]** A `dep()` MUST carry a version or a source, never both and
-never neither.
+never neither, and a `replace()` a path or a source on the same terms. Reading
+a `deps.mod` that breaks either MUST fail, naming the entry.
+
+`internal/modfile/modfile.go` refuses both at parse time -- "version and
+source are mutually exclusive", "exactly one of version or source is
+required", and the same pair for `replace`. An earlier draft of this named
+only `dep` and said nothing about where the rule is enforced, and the
+implementation enforced it only in `meowctl dep add`: a hand-written
+`deps.mod` carrying both parsed, and the module then resolved from whichever
+field the resolver reached for first.
+
+This is the cost of the three grammars becoming one. `v0.1.0` has a separate
+`dep()` for `deps.mod` that validates and another for `init.star` that takes
+no `source` at all; [R-CONFIG-010] merged them, and the validation had to move
+with the merge rather than be dropped in it.
 
 **[R-CONFIG-013]** Writing `deps.mod` MUST emit keyword arguments in the order
 `name`, then `version` or `source`. `v0.1.0` requires this order for its

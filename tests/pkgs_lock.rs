@@ -85,9 +85,11 @@ fn the_declaring_file_decides_which_lock_records_the_package() {
     );
 }
 
-/// [R-CONFIG-025] the constraint is recorded as both the requested and the
-/// installed version, which is what `appendPkgsLock` writes: nothing
-/// interrogates the manager for what it actually put down.
+/// [R-CONFIG-025] and [R-CONFIG-027]: the constraint is recorded as both the
+/// requested and the installed version, which is what `appendPkgsLock`
+/// writes -- nothing interrogates the manager for what it actually put down.
+/// Asserted on the content rather than on the bytes, because these two are
+/// written by a different encoder than `deps.lock` and are not byte-compared.
 #[test]
 fn the_constraint_is_recorded_as_both_versions() {
     let root = sandbox("versions");
@@ -109,8 +111,9 @@ fn a_package_with_no_constraint_still_gets_an_entry() {
     assert!(local.contains("[packages.fake.bat]"), "{local}");
 }
 
-/// [R-CONFIG-025] merged into what is there, not replacing it. A second
-/// component's packages must not remove the first's.
+/// [R-CONFIG-025] and [R-CONFIG-026]: merged into what is there, not
+/// replacing it. A second component's packages must not remove the first's,
+/// and an entry for a package nothing declares any more survives.
 #[test]
 fn a_second_run_keeps_what_the_first_recorded() {
     let root = sandbox("merge");
@@ -137,7 +140,7 @@ fn a_second_run_keeps_what_the_first_recorded() {
     assert!(after.contains("ripgrep"), "{after}");
 }
 
-/// [R-CONFIG-025] a run that installs nothing writes no file. `v0.1.0` skips
+/// [R-CONFIG-026] a run that installs nothing writes no file. `v0.1.0` skips
 /// the write when nothing was pinned, and a configuration with no packages
 /// should not grow an empty lock.
 #[test]

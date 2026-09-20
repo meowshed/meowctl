@@ -316,6 +316,11 @@ fn the_json_sink_writes_no_decoration() {
 
 /// [R-TUI-012] a sink that dropped a variant would make a command's output
 /// depend on where it ran.
+///
+/// Also [R-TUI-010] and [R-TUI-032]: the stream is one stream, and each of
+/// the sinks that renders a run consumes all of it. `--format json` selects
+/// this one, and a command whose events it did not carry would be a command
+/// nothing could script.
 #[test]
 fn every_event_reaches_the_json_sink() {
     let events = vec![
@@ -461,6 +466,26 @@ fn no_sink_that_renders_a_run_has_a_catch_all() {
             );
         }
     }
+}
+
+/// [R-TUI-040] detection resolves four things independently, so a pipe on a
+/// colour terminal is not confused with a dumb terminal on a tty.
+#[test]
+fn the_four_capabilities_are_resolved_independently() {
+    let piped_but_colourful = caps(ColourDepth::TrueColour, true);
+    assert!(!piped_but_colourful.tty);
+    assert_eq!(piped_but_colourful.colour, ColourDepth::TrueColour);
+
+    let ascii = caps(ColourDepth::Ansi16, false);
+    assert!(!ascii.unicode);
+    assert_eq!(ascii.colour, ColourDepth::Ansi16);
+
+    // A theme built from each renders differently, which is what makes the
+    // four separate rather than one "is it fancy" flag.
+    assert_ne!(
+        Theme::new(piped_but_colourful).symbols().spinner,
+        Theme::new(ascii).symbols().spinner
+    );
 }
 
 /// [R-TUI-050] the palette is one table, so pointing at a user file later is

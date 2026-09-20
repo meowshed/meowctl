@@ -362,3 +362,35 @@ fn the_capability_matrix_renders() {
     }
     insta::assert_snapshot!(out);
 }
+
+/// [R-TUI-026] the spinner advances on events rather than on a timer.
+///
+/// `v0.1.0` animates from a goroutine, which draws while nothing is
+/// happening and stops drawing while something is. A frame tied to the stream
+/// moves exactly when there is news, and a test can therefore see it move
+/// without waiting.
+#[test]
+fn the_spinner_advances_on_events_and_not_on_time() {
+    let started = vec![
+        Event::ComponentStarted {
+            component: component("zsh"),
+            phase: Phase::Install,
+        },
+        Event::ProcessOutput {
+            stream: Stream::Stdout,
+            line: "one".to_owned(),
+        },
+    ];
+    let terminal = caps(ColourDepth::Ansi256, true, 80, 24);
+    let first = render(&started[..1], terminal);
+    let second = render(&started, terminal);
+
+    assert_ne!(
+        first, second,
+        "the spinner did not move when an event arrived"
+    );
+
+    // And it does not move on its own: rendering the same stream twice gives
+    // the same frame, whatever the clock has done in between.
+    assert_eq!(render(&started, terminal), second);
+}

@@ -77,6 +77,8 @@ impl Http for ScriptedHttp {
 mod tests {
     use super::*;
 
+    /// [R-NET-001] one method, answering with bytes: a caller that wanted a
+    /// document decodes them itself.
     #[test]
     fn a_scripted_url_answers_and_is_recorded() {
         let http = ScriptedHttp::new().with("https://h/a", b"one".to_vec());
@@ -97,6 +99,10 @@ mod tests {
         assert_eq!(http.asked(), vec!["https://h/missing"]);
     }
 
+    /// [R-NET-010] and [R-NET-011]: the four cases a request can reach are
+    /// distinguishable, and each carries the URL it is about. A resolution
+    /// fetches an index, a tarball and a commit, and "404" with no URL says
+    /// which of the three only by accident.
     #[test]
     fn a_scripted_failure_is_returned() {
         let http = ScriptedHttp::new().failing(

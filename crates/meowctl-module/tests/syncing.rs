@@ -574,8 +574,10 @@ fn each_manifest_produces_its_own_lock() {
     assert_eq!(local.lock.modules.keys().collect::<Vec<_>>(), ["helper"]);
 }
 
-/// A sync whose every dependency is local or on GitHub must not fetch the
-/// index, because a machine with no network still has to be able to run it.
+/// [R-MODULE-010] a registry module resolves through the index, and nothing
+/// else does: a sync whose every dependency is local or on GitHub must not
+/// fetch it, because a machine with no network still has to be able to run
+/// one. `OfflineHttp` is what proves there was no request.
 #[test]
 fn the_index_is_fetched_only_when_a_registry_module_needs_it() {
     let fs = tree();
@@ -595,8 +597,10 @@ fn the_index_is_fetched_only_when_a_registry_module_needs_it() {
         .expect("nothing needed the index");
 }
 
-/// [R-MODULE-061] a version the index does not publish is a different mistake
-/// from a module it does not publish, and both are the user's to fix.
+/// [R-MODULE-061] and [R-MODULE-062]: a version the index does not publish is
+/// a different mistake from a module it does not publish, and both are the
+/// user's to fix. The error names the module and what was asked for, because
+/// "no matching version" across a graph of twenty is not an answer.
 #[test]
 fn a_version_the_index_does_not_publish_is_named() {
     let fs = tree();
@@ -611,6 +615,9 @@ fn a_version_the_index_does_not_publish_is_named() {
         )
         .expect_err("9.9.9 was never published");
     assert!(matches!(err, ModuleError::NoSuchVersion { .. }), "{err}");
+    let said = err.to_string();
+    assert!(said.contains("stdlib"), "{said}");
+    assert!(said.contains("9.9.9"), "{said}");
 }
 
 /// A `dep()` with no version takes what the index published most recently,

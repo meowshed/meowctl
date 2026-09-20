@@ -167,9 +167,12 @@ mod tests {
         (answer, String::from_utf8_lossy(&output).into_owned())
     }
 
-    /// [R-TUI-061] the advertised default is no, and pressing Enter has to
-    /// mean it. `fmt.Scanln` returned "unexpected newline" for a bare Enter,
-    /// so the command failed instead of cancelling.
+    /// [R-TUI-060] and [R-TUI-061]: prompting goes through the trait rather
+    /// than reading stdin, which is what lets this be tested from a string at
+    /// all -- `Printer.Confirm` could not be. The advertised default is no,
+    /// and pressing Enter has to mean it: `fmt.Scanln` returned "unexpected
+    /// newline" for a bare Enter, so the command failed instead of
+    /// cancelling.
     #[test]
     fn a_bare_enter_means_no() {
         let (answer, _) = ask("\n");

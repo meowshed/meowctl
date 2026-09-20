@@ -8,6 +8,12 @@
 //!
 //! `RealFs` is exercised inside a temporary directory, so these are the tests
 //! that touch a disk. Everything else in the workspace uses `MemFs`.
+//!
+//! [R-FS-001] is held by the file rather than by one test: the operations the
+//! trait covers are the ones exercised below, and a method the workspace does
+//! not need would have nothing here. [R-FS-010] likewise -- every case runs
+//! against `RealFs` as well as the other two, which is what "performs the
+//! effect against the real filesystem" means.
 
 // `clippy.toml` exempts tests from `expect_used`, but the exemption only
 // recognises a function carrying `#[test]`. A helper in a test binary is test
@@ -313,6 +319,8 @@ fn a_copy_reproduces_the_contents() {
     });
 }
 
+/// [R-FS-030] the path and the operation are in the error, because
+/// "permission denied" with no file sends the user reading a hook's source.
 #[test]
 fn every_error_names_its_path() {
     for_each(|s| {
@@ -524,4 +532,72 @@ fn renaming_a_directory_moves_everything_under_it() {
             s.name
         );
     });
+}
+
+/// [R-FS-002] a relative path is refused rather than resolved against
+/// whatever the working directory happens to be.
+///
+/// The three implementations would resolve it differently -- `MemFs` has no
+/// working directory at all -- and then a dry run would plan against one
+/// tree and the run would touch another.
+#[test]
+fn a_relative_path_is_refused_by_every_implementation() {
+    for subject in subjects() {
+        let relative = Path::new("relative/path");
+        assert!(
+            subject.fs.read(relative).is_err(),
+            "{}: read took a relative path",
+            subject.name
+        );
+        assert!(
+            subject.fs.write(relative, b"x").is_err(),
+            "{}: write took a relative path",
+            subject.name
+        );
+    }
+}
+
+/// [R-FS-013] `MemFs` touches no disk, which is what lets the engine's tests
+/// run without a temporary directory.
+#[test]
+fn the_in_memory_filesystem_writes_nothing_to_disk() {
+    let fs = MemFs::new();
+    let path = Path::new("/somewhere/absolute/file");
+    fs.create_dir_all(Path::new("/somewhere/absolute"))
+        .expect("the directory");
+    fs.write(path, b"x").expect("the write");
+
+    assert_eq!(fs.read(path).expect("the read"), b"x");
+    assert!(
+        !std::path::Path::new("/somewhere/absolute/file").exists(),
+        "MemFs reached the disk"
+    );
+}
+
+/// [R-FS-031] a write that fails removes its temporary file, because
+/// `.meowctl-*.tmp` accumulating in a configuration directory is the litter
+/// this is here to avoid.
+///
+/// `RealFs` only: the temporary file is how the real atomic write is made,
+/// and the other two have nothing to leave behind.
+#[test]
+fn a_failed_write_leaves_no_temporary_file() {
+    let temp = tempfile::tempdir().expect("a temporary directory");
+    let fs = RealFs;
+    let root = temp.path();
+
+    // A directory where the file should be: the write reaches its rename and
+    // fails there, which is the branch that has something to clean up.
+    let path = root.join("target");
+    std::fs::create_dir(&path).expect("the obstruction");
+
+    let _ = fs.write(&path, b"x");
+
+    let leftovers: Vec<_> = std::fs::read_dir(root)
+        .expect("listing")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains(".tmp"))
+        .collect();
+    assert!(leftovers.is_empty(), "left behind: {leftovers:?}");
 }

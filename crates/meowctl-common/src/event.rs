@@ -233,8 +233,11 @@ mod tests {
         name.parse().unwrap()
     }
 
-    /// [R-COMMON-041] `JsonSink` emits one object per event, so every variant
-    /// has to survive a round trip through JSON.
+    /// [R-COMMON-040], [R-COMMON-041] and [R-COMMON-044]: every variant a
+    /// command produces survives a round trip through JSON, which is what
+    /// `JsonSink` needs and what makes the list here the whole vocabulary --
+    /// `ShellLine` and `PathPrepended` included, which are effects a hook
+    /// had rather than progress the engine made.
     #[test]
     fn every_event_round_trips_through_json() {
         let events = vec![

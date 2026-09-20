@@ -181,7 +181,10 @@ fn an_unknown_attribute_reports_attribute_not_found() {
     assert!(err.to_string().contains("nonesuch"), "{err}");
 }
 
-/// [R-CTX-001] and [R-CTX-002]: what each property carries.
+/// [R-CTX-001], [R-CTX-002] and [R-CTX-003]: what each property carries,
+/// including the two directories a component writes into -- its own source
+/// directory, which `render_file` reads against, and its persistent state
+/// directory, which survives the run.
 #[test]
 fn the_properties_carry_what_the_run_was_given() {
     let (ctx, _) = plain();
@@ -393,8 +396,14 @@ fn emit_speaks_only_in_a_runtime_hook_phase() {
     );
 }
 
-/// [R-CTX-030] a check that writes is a check with a side effect. `v0.1.0` has
-/// the machinery for this restriction and wires none of it up.
+/// [R-CTX-030] and [R-CTX-032]: a check that writes is a check with a side
+/// effect. `v0.1.0` has the machinery for this restriction and wires none of
+/// it up.
+///
+/// Enforced by the value rather than by a check inside each method, which is
+/// what the failure says: attribute-not-found, not "this phase may not
+/// write". A method that guarded itself would have to remember to, and a
+/// twenty-fifth method would forget.
 #[test]
 fn a_read_only_surface_has_no_mutating_method() {
     let (ctx, _) = build(Vec::new(), ScriptedHttp::new(), Phase::Verify);
@@ -813,4 +822,48 @@ fn a_runtime_hook_reaches_only_the_eight_attributes() {
             .expect_err("a shell hook must not reach a mutating method");
         assert!(err.to_string().contains("ctx"), "{refused}: {err}");
     }
+}
+
+/// [R-CTX-040] a method called with the wrong type names the method and the
+/// argument, because a component author reads this and has no source for the
+/// binary that produced it.
+#[test]
+fn a_wrong_argument_type_names_the_method_and_the_argument() {
+    let (ctx, _) = plain();
+    let err = call(&ctx, Surface::Full, "    ctx.write_file(42, \"x\")")
+        .expect_err("a number is not a path");
+
+    let said = err.to_string();
+    assert!(said.contains("write_file"), "{said}");
+}
+
+/// [R-CTX-041] an effect that fails fails the hook, which fails the component
+/// and lets the run roll back. Swallowing it would leave a component
+/// reporting success over a file that was never written.
+#[test]
+fn a_failed_effect_fails_the_hook() {
+    let (ctx, _) = plain();
+    // A directory that does not exist, which [R-FS-033] makes a failure on
+    // every implementation.
+    let err = call(
+        &ctx,
+        Surface::Full,
+        &format!(
+            "    ctx.write_file({}, \"x\")",
+            quoted(&format!("{HOME}/missing/deeper/file"))
+        ),
+    )
+    .expect_err("a write into nothing should fail");
+
+    assert!(err.to_string().contains("missing"), "{err}");
+}
+
+/// [R-CTX-026] a prompt goes through the `Interaction` trait, so a run with
+/// no terminal answers rather than blocking on a stdin nobody is typing at.
+#[test]
+fn a_prompt_goes_through_the_interaction_trait() {
+    let (ctx, _) = plain();
+    // `Always(true)` is what the world is built with, so a prompt answers
+    // without a terminal. Reading stdin directly would hang here instead.
+    call(&ctx, Surface::Full, "    ctx.prompt(\"go ahead?\")").expect("the prompt is answered");
 }

@@ -135,8 +135,14 @@ fn the_executable_bit_survives_extraction() {
     );
 }
 
-/// [R-MODULE-041] and [R-MODULE-043]: a verified cache answers without a
-/// request, and `OfflineHttp` is what proves there was none.
+/// [R-MODULE-040], [R-MODULE-041] and [R-MODULE-043]: a verified cache
+/// answers without a request, and `OfflineHttp` is what proves there was
+/// none.
+///
+/// The second loader is a fresh one over the same cache directory, so the
+/// answer can only have come from a key both agree on -- the module's name
+/// and its resolved version, which is what [R-MODULE-040] fixes. A key that
+/// included anything per-run would miss here and fetch.
 #[test]
 fn a_verified_cache_needs_no_network_at_all() {
     let fs = tree();
@@ -232,6 +238,11 @@ fn the_v0_1_0_sidecar_is_written_where_v0_1_0_looks_for_it() {
     );
 }
 
+/// [R-MODULE-013] is held by the crate rather than by a case: nothing here
+/// spawns a process, because `meowctl-module` has no `Executor` to spawn one
+/// with -- a machine being bootstrapped may not have `git` yet. What it has
+/// is an `Http`, and [R-NET-003] is where the scheme is enforced.
+///
 /// [R-MODULE-030] and [R-MODULE-031]: the hash is checked before anything is
 /// extracted, and the message carries both hashes so a reader can tell which
 /// is which.
@@ -604,4 +615,30 @@ fn the_loader_refuses_a_url_it_cannot_parse() {
         .expect_err("the malformed URL is refused");
     assert!(matches!(err, ModuleError::UnusableUrl { .. }), "{err}");
     assert!(ModuleUrl::parse("github://nope").is_err());
+}
+
+/// [R-MODULE-045] the cache is populated during a dry run.
+///
+/// A dry run has to evaluate a configuration's modules to produce a plan, and
+/// evaluating them means fetching them. The fetch is a read as far as the
+/// user's tree is concerned -- nothing in the configuration directory moves --
+/// so it is not a mutation a dry run has to withhold. A dry run that refused
+/// to fill the cache would report a plan it could not compute.
+#[test]
+fn a_fetch_fills_the_cache_whether_or_not_anything_will_be_applied() {
+    let fs = tree();
+    let http = registry_http(stdlib_tarball());
+
+    ModuleLoader::new(&fs, &http, cache(), roots())
+        .with_index_url(INDEX_URL)
+        .resolved("stdlib", "0.2.17")
+        .fetch("@stdlib//components/apt")
+        .expect("the fetch");
+
+    // The cache is a real directory in the filesystem the loader was given,
+    // not something held for the duration of one loader.
+    let entries = fs
+        .read_dir(std::path::Path::new("/cache"))
+        .expect("the cache directory exists");
+    assert!(!entries.is_empty(), "nothing was cached");
 }
