@@ -5,4 +5,6 @@
 # compared byte for byte, so a checkout that rewrote their line endings would
 # fail the parity test on Windows and nowhere else.
 tests/fixtures/** -text
+tests/compat/fixtures/** -text
 crates/*/tests/fixtures/** -text
+tests/compat/fixtures/** -text
