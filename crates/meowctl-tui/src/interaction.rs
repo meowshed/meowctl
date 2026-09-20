@@ -138,7 +138,10 @@ mod tests {
     fn end_of_input_means_no() {
         let (answer, output) = ask("");
         assert!(!answer.expect("an answer"));
-        assert!(output.ends_with('\n'), "the question was left open: {output:?}");
+        assert!(
+            output.ends_with('\n'),
+            "the question was left open: {output:?}"
+        );
     }
 
     /// Only an explicit yes means yes: anything else is a typo, and a typo
@@ -170,7 +173,10 @@ mod tests {
         let mut prompt = Prompt::new("y\n".as_bytes(), &mut output, false);
 
         let err = prompt.confirm("Apply changes?").expect_err("should refuse");
-        assert!(matches!(err, InteractionError::NotInteractive { .. }), "{err:?}");
+        assert!(
+            matches!(err, InteractionError::NotInteractive { .. }),
+            "{err:?}"
+        );
         assert!(err.to_string().contains("Apply changes?"), "{err}");
 
         // Nothing was read: the pipe's contents are not an answer.
