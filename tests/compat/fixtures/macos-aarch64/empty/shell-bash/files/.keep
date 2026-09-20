@@ -1,0 +1,5 @@
+This directory is deliberately empty.
+
+`meowctl init` refuses to scaffold over an existing `init.star`, so the corpus
+case that checks what it writes needs a configuration directory with nothing in
+it. Git does not track an empty directory, which is why this file is here.

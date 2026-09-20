@@ -12,7 +12,7 @@ use meowctl_engine::{
     ComponentSource, Declaration, Graph, Inputs, Plan, Progress, Runner, Settings, Sources,
     discover, fingerprints, interrupted_run, stale_components,
 };
-use meowctl_module::{Cache, ModuleLoader, Roots};
+use meowctl_module::{Cache, ModuleLoader, Roots, Upgrade};
 use meowctl_starlark::{Evaluator, Loader, NoLoader};
 
 use super::Session;
@@ -42,7 +42,7 @@ pub(super) fn run(cli: &Cli, session: &mut Session<'_>) -> CliResult<()> {
         } => dep_list(session),
         Command::Dep {
             command: DepCommand::Sync { .. },
-        } => dep_sync(session),
+        } => dep_sync(session, &Upgrade::Nothing),
         Command::Apply {
             components,
             force,
@@ -61,14 +61,49 @@ pub(super) fn run(cli: &Cli, session: &mut Session<'_>) -> CliResult<()> {
         Command::Verify { components } => apply(session, PhaseSet::Verify, components, true, false),
         Command::Hook { phase } => hook(session, phase),
 
-        // The commands that write a configuration are issue 35.
-        Command::Init { .. }
-        | Command::Add { .. }
-        | Command::Remove { .. }
-        | Command::Update { .. }
-        | Command::SelfUpdate
-        | Command::Dep { .. } => Err(CliError::General(
-            "this command is not implemented in this build yet".to_owned(),
+        Command::Init { repo_url, force } => match repo_url {
+            Some(url) => super::writing::bootstrap(session, url, *force),
+            None => super::writing::init(session, *force),
+        },
+        Command::Add { components, .. } => super::writing::add(session, components),
+        Command::Remove { components, .. } => super::writing::remove(session, components),
+        Command::Dep {
+            command: DepCommand::Add {
+                name,
+                version,
+                source,
+                local,
+            },
+        } => super::writing::dep_add(
+            session,
+            name,
+            version.as_deref(),
+            source.as_deref(),
+            *local,
+        ),
+        Command::Dep {
+            command: DepCommand::Remove { name, local },
+        } => super::writing::dep_remove(session, name, *local),
+        Command::Dep {
+            command: DepCommand::Upgrade { modules, .. },
+        } => {
+            let upgrade = if modules.is_empty() {
+                Upgrade::Everything
+            } else {
+                Upgrade::Named(modules.iter().cloned().collect())
+            };
+            dep_sync(session, &upgrade)
+        }
+        Command::Dep {
+            command: DepCommand::Tidy { .. },
+        } => super::writing::dep_tidy(session),
+        Command::Update { yes, .. } => super::writing::update(session, *yes),
+
+        // Replacing the running binary is a different kind of work from
+        // everything else here, and nothing in the cutover needs it.
+        Command::SelfUpdate => Err(CliError::General(
+            "self-update is not implemented in this build; install the new release the way you installed this one"
+                .to_owned(),
         )),
     }
 }
@@ -77,7 +112,7 @@ impl Session<'_> {
     /// Says something through the sink.
     ///
     /// The only route to standard output there is; see [R-CLI-020].
-    fn say(&mut self, text: &str) {
+    pub(super) fn say(&mut self, text: &str) {
         self.sink.handle(&Event::Message {
             level: Level::Info,
             text: text.to_owned(),
@@ -85,7 +120,7 @@ impl Session<'_> {
     }
 
     /// Whether there is a configuration here at all.
-    fn require_configured(&self) -> CliResult<()> {
+    pub(super) fn require_configured(&self) -> CliResult<()> {
         self.layout
             .check(self.fs.as_ref())
             .map_err(|_| CliError::NotConfigured {
@@ -164,32 +199,31 @@ impl Sources for ConfigSources<'_> {
         // A bare name is a file in the configuration's own tree, in either of
         // the two layouts in use; see [R-ENGINE-017].
         let name = id.logical_name();
-        let mut last = String::new();
-        for candidate in [
+        let candidates = [
             format!("components/{name}.star"),
             format!("components/{name}/init.star"),
-        ] {
-            match self.loader.load(&candidate) {
-                Ok(file) => {
-                    let beside = self.components.join(name);
-                    return Ok(ComponentSource {
-                        text: file.source,
-                        // The directory beside the file when there is one, so
-                        // `render_file` finds the data files; otherwise the
-                        // components directory itself.
-                        directory: if self.directories.contains(&beside) {
-                            beside
-                        } else {
-                            self.components.clone()
-                        },
-                    });
-                }
-                Err(e) => last = e.to_string(),
+        ];
+        for candidate in &candidates {
+            if let Ok(file) = self.loader.load(candidate) {
+                let beside = self.components.join(name);
+                return Ok(ComponentSource {
+                    text: file.source,
+                    // The directory beside the file when there is one, so
+                    // `render_file` finds the data files; otherwise the
+                    // components directory itself.
+                    directory: if self.directories.contains(&beside) {
+                        beside
+                    } else {
+                        self.components.clone()
+                    },
+                });
             }
         }
+        // Both are named, because a reader who wrote one of them needs to
+        // know which spelling was looked for.
         Err(meowctl_engine::EngineError::Configuration {
-            path: format!("components/{name}"),
-            reason: last,
+            path: name.to_owned(),
+            reason: format!("no {} and no {}", candidates[0], candidates[1]),
         })
     }
 }
@@ -229,7 +263,7 @@ fn declarations(session: &Session<'_>, loader: &dyn Loader) -> CliResult<Vec<Dec
 }
 
 /// Runs a phase set.
-fn apply(
+pub(super) fn apply(
     session: &mut Session<'_>,
     phase_set: PhaseSet,
     filter: &[String],
@@ -350,8 +384,11 @@ fn hook(session: &mut Session<'_>, phase: &str) -> CliResult<()> {
 }
 
 /// Lists what the manifests declare.
+///
+/// A directory with no configuration gets an empty list rather than a
+/// refusal: "nothing is declared" is an answer to the question; see
+/// [R-CLI-050].
 fn dep_list(session: &mut Session<'_>) -> CliResult<()> {
-    session.require_configured()?;
     let lock = session.lock()?;
     for (name, entry) in &lock.modules {
         let what = if entry.replaced {
@@ -366,18 +403,198 @@ fn dep_list(session: &mut Session<'_>) -> CliResult<()> {
     Ok(())
 }
 
+/// The components a file declares, by name.
+pub(super) fn parse_components(
+    session: &Session<'_>,
+    name: &str,
+    source: &str,
+) -> CliResult<Vec<String>> {
+    let loader = NoLoader;
+    let evaluated = Evaluator::new(session.platform.clone(), &loader)
+        .evaluate(name, source)
+        .map_err(|e| CliError::Configuration {
+            message: format!("{name}: {e}"),
+            span: e.span().cloned(),
+        })?;
+    Ok(evaluated
+        .declarations
+        .components
+        .iter()
+        .map(|decl| decl.name.clone())
+        .collect())
+}
+
+/// Reads a manifest by evaluating it.
+///
+/// One evaluator reads every manifest meowctl encounters, so `deps.mod` and a
+/// module's `MODULE.meow` cannot drift apart; see [R-STAR-006].
+pub(super) fn parse_modfile(
+    session: &Session<'_>,
+    name: &str,
+    source: &str,
+) -> CliResult<meowctl_config::Modfile> {
+    let loader = NoLoader;
+    let evaluated = Evaluator::new(session.platform.clone(), &loader)
+        .evaluate(name, source)
+        .map_err(|e| CliError::Configuration {
+            message: format!("{name}: {e}"),
+            span: e.span().cloned(),
+        })?;
+
+    Ok(meowctl_config::Modfile {
+        module: evaluated
+            .declarations
+            .module
+            .as_ref()
+            .map(|decl| meowctl_config::Module {
+                name: decl.name.clone(),
+                version: decl.version.clone(),
+            }),
+        deps: evaluated
+            .declarations
+            .deps
+            .iter()
+            .map(|dep| meowctl_config::Dep {
+                name: dep.name.clone(),
+                version: dep.version.clone(),
+                source: dep.source.clone(),
+            })
+            .collect(),
+        replaces: evaluated
+            .declarations
+            .replaces
+            .iter()
+            .map(|replace| meowctl_config::Replace {
+                name: replace.name.clone(),
+                path: replace.path.clone(),
+                source: replace.source.clone(),
+            })
+            .collect(),
+    })
+}
+
 /// Resolves the manifests into their locks.
-fn dep_sync(session: &mut Session<'_>) -> CliResult<()> {
-    let _ = session;
-    Err(CliError::General(
-        "this command is not implemented in this build yet".to_owned(),
-    ))
+///
+/// Each manifest gets its own lock, and a module in both resolves in each:
+/// a machine-local override must not land in the committed lock; see
+/// [R-MODULE-052].
+pub(super) fn dep_sync(session: &mut Session<'_>, upgrade: &Upgrade) -> CliResult<()> {
+    session.require_configured()?;
+
+    let shared_replaces = manifest_of(session, &session.layout.modfile())?.replaces;
+    let local_replaces = manifest_of(session, &session.layout.local_modfile())?.replaces;
+    // A machine-local override wins wherever both name a module, which is
+    // what the local file is for; see [R-MODULE-022].
+    let replaces = meowctl_module::overlay_replaces(&shared_replaces, &local_replaces);
+
+    let syncer = meowctl_module::Syncer::new(
+        session.fs.as_ref(),
+        session.http.as_ref(),
+        Cache::new(session.cache.clone()),
+        crate::version::STRING,
+        now(),
+    );
+
+    let mut resolved: Vec<(std::path::PathBuf, meowctl_module::Synced)> = Vec::new();
+    for (manifest, lock) in [
+        (session.layout.modfile(), session.layout.lock()),
+        (session.layout.local_modfile(), session.layout.local_lock()),
+    ] {
+        if !session.fs.exists(&manifest).unwrap_or(false) {
+            continue;
+        }
+        let declared = manifest_of(session, &manifest)?;
+        if declared.deps.is_empty() {
+            continue;
+        }
+        let previous = LockFile::read(session.fs.as_ref(), &lock)?;
+        let synced = syncer.sync(&declared.deps, &replaces, &previous, upgrade)?;
+        resolved.push((lock, synced));
+    }
+
+    for (lock, synced) in resolved {
+        for (name, version) in &synced.resolved {
+            session.say(&format!("{name} {version}"));
+        }
+        if session.dry_run {
+            continue;
+        }
+        synced.lock.write(session.fs.as_ref(), &lock)?;
+    }
+    Ok(())
+}
+
+/// Reads a manifest, treating an absent one as empty.
+fn manifest_of(
+    session: &Session<'_>,
+    path: &std::path::Path,
+) -> CliResult<meowctl_config::Modfile> {
+    let Ok(bytes) = session.fs.read(path) else {
+        return Ok(meowctl_config::Modfile::default());
+    };
+    let text = String::from_utf8(bytes).map_err(|_| CliError::Configuration {
+        message: format!("{} is not UTF-8", path.display()),
+        span: None,
+    })?;
+    parse_modfile(session, &path.display().to_string(), &text)
+}
+
+/// The time a lock records as its own.
+///
+/// Read once here rather than inside the resolver, because a component that
+/// asks the clock cannot be tested; see [R-CONFIG-022].
+fn now() -> String {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or_else(|_| "unknown".to_owned(), |d| rfc3339(d.as_secs()))
+}
+
+/// Seconds since the epoch, as an RFC 3339 timestamp in UTC.
+///
+/// Written out rather than pulled in: one format, one call site, and a date
+/// library would be a dependency for twenty lines of arithmetic.
+fn rfc3339(seconds: u64) -> String {
+    const DAYS_IN_MONTH: [u64; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let (mut days, rest) = (seconds / 86_400, seconds % 86_400);
+    let (hour, minute, second) = (rest / 3600, (rest % 3600) / 60, rest % 60);
+
+    let mut year = 1970;
+    loop {
+        let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+        let length = if leap { 366 } else { 365 };
+        if days < length {
+            break;
+        }
+        days -= length;
+        year += 1;
+    }
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let mut month = 1;
+    for (index, length) in DAYS_IN_MONTH.iter().enumerate() {
+        let length = if index == 1 && leap { 29 } else { *length };
+        if days < length {
+            break;
+        }
+        days -= length;
+        month += 1;
+    }
+    format!(
+        "{year:04}-{month:02}-{:02}T{hour:02}:{minute:02}:{second:02}Z",
+        days + 1
+    )
 }
 
 /// Reports what the last run did.
+///
+/// A directory with no configuration gets "no runs recorded" rather than a
+/// refusal, for the reason [R-CLI-050] gives.
 fn status(session: &mut Session<'_>, all: bool) -> CliResult<()> {
-    session.require_configured()?;
     let sentinel = Sentinel::read(session.fs.as_ref(), &session.layout.state())?;
+
+    if sentinel.last_run.phase_set.is_empty() && sentinel.completed_components.is_empty() {
+        session.say("no runs recorded");
+        return Ok(());
+    }
 
     let started = sentinel
         .last_run

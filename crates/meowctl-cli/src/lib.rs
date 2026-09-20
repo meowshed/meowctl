@@ -14,6 +14,7 @@ mod error;
 mod run;
 mod shell;
 mod signals;
+pub mod templates;
 mod version;
 
 pub use cli::{Cli, Command, DepCommand, Format, Global, Shell};
