@@ -127,6 +127,26 @@ unreadable.
 **[R-TUI-042]** `NO_COLOR` MUST disable colour, and colour MUST be downsampled
 to the depth the terminal reports rather than assumed.
 
+**[R-TUI-045]** `COLORTERM` naming `truecolor` or `24bit` MUST select the
+24-bit depth, and a `TERM` containing `256` the 256-colour one. Anything else
+MUST be the 16-colour depth.
+
+These two variables are how a terminal reports what it takes, which is the
+"reports" in [R-TUI-042]. Naming them here rather than leaving the rule
+abstract: a reader whose theme looks wrong needs to know which variable to
+check, and a `COLORTERM` this misreads is indistinguishable from a palette
+that is simply ugly.
+
+**[R-TUI-046]** `CLICOLOR_FORCE`, set to anything but `0`, MUST turn colour
+back on for a destination that is not a terminal. `NO_COLOR` MUST still win
+over it.
+
+A caller that renders meowctl's output itself -- a CI log viewer, a pager
+invoked deliberately -- has no way to say so otherwise, because from here it
+looks exactly like a pipe to a file. The precedence is the convention's:
+`NO_COLOR` is a user saying they do not want colour anywhere, and that
+outranks a caller saying this particular pipe can take it.
+
 **[R-TUI-043]** A non-UTF-8 locale MUST select the ASCII glyph set, and the
 ASCII set MUST carry the same distinctions as the Unicode one.
 
