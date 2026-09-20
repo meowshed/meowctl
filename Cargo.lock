@@ -1315,9 +1315,11 @@ version = "0.2.0"
 dependencies = [
  "insta",
  "meowctl-common",
+ "serde",
  "serde_json",
  "terminal_size",
  "thiserror",
+ "toml",
 ]
 
 [[package]]

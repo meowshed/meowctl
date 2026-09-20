@@ -9,7 +9,9 @@ description = "Rendering the event stream: live, plain, and JSON sinks"
 
 [dependencies]
 meowctl-common = { path = "../meowctl-common" }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+toml = { workspace = true }
 terminal_size = { workspace = true }
 thiserror = { workspace = true }
 

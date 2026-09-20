@@ -158,24 +158,41 @@ environment variable is the behaviour to avoid.
 ## The theme
 
 **[R-TUI-050]** The palette MUST be data rather than colours at call sites,
-with the Catppuccin values as the built-in default.
-
-An earlier draft added "a user MUST be able to point at their own". No
-loader was built, so [R-TUI-052] -- the malformed file falls back -- had
-nothing to fall back from, and both were requirements with no test because
-there was nothing to test. The half that shipped is the half that mattered
-for the rewrite: the palette is one table and [R-TUI-051] keeps call sites
-naming roles, so pointing at a user file later is a reader, not a
-restructuring.
+with the Catppuccin values as the built-in default, and a user MUST be able to
+point at their own.
 
 **[R-TUI-051]** Call sites MUST name a role, never a colour, so the palette
 changes in one place.
 
-**[R-TUI-052]** *Deferred to 0.3.0 with the user theme file it describes. A
-malformed file MUST warn and fall back to the default rather than failing the
-command, because nobody's apply should stop because their colours are wrong.
-Kept rather than withdrawn: the obligation is right and there is nothing yet
-for it to constrain.*
+**[R-TUI-052]** A theme file that is malformed MUST warn and fall back to the
+default, not fail the command. Nobody's apply should stop because their
+colours are wrong.
+
+**[R-TUI-053]** The theme file MUST be `theme.toml` in the configuration
+directory, and MUST be a table per role naming `r`, `g`, `b` and `ansi16`.
+
+```toml
+[accent]
+r = 203
+g = 166
+b = 247
+ansi16 = 35
+```
+
+**[R-TUI-054]** A role the file does not name MUST keep its default, so a user
+who wants one colour changed writes one table. A role it names MUST be
+replaced whole: a partial colour is four numbers with one missing, and
+guessing which default to mix in produces a colour nobody chose.
+
+**[R-TUI-055]** Parsing MUST NOT read a file. `meowctl-tui` depends on
+`meowctl-common` and on nothing else in the workspace, so it takes the text
+and the caller brings it; see [R-CLI-010].
+
+**[R-TUI-056]** The theme MUST be read once, before the sink is built, and a
+read that fails for any reason -- absent, unreadable, malformed -- MUST leave
+the default in place. Absence MUST be silent and the other two MUST warn:
+almost nobody has this file, and a warning on every command for a file the
+user never wrote is noise.
 
 ## Interaction
 

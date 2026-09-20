@@ -101,6 +101,16 @@ impl Layout {
         self.root.join("rollback.jsonl")
     }
 
+    /// `theme.toml`, the palette a user can point us at.
+    ///
+    /// In the configuration directory rather than somewhere of its own,
+    /// because a user who moves their configuration between machines expects
+    /// their colours to come with it; see [R-TUI-053].
+    #[must_use]
+    pub fn theme(&self) -> PathBuf {
+        self.root.join("theme.toml")
+    }
+
     /// `.hook-error`, the flag a failed runtime hook leaves.
     #[must_use]
     pub fn hook_error(&self) -> PathBuf {
