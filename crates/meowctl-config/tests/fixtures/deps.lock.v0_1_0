@@ -1,0 +1,38 @@
+[meta]
+  generated-by = "v0.1.0"
+  updated-at = "2026-09-19T12:00:00Z"
+
+[modules]
+  [modules.forked]
+    version = ""
+    source = ""
+    integrity = ""
+    replaced = true
+    path = "/local/checkout"
+  [modules.gh]
+    version = "1.0.0"
+    source = "github:o/r@v1"
+    integrity = "sha384-DDD"
+    commit-sha = "abc123"
+  [modules.stdlib]
+    version = "0.2.17"
+    source = "https://example.invalid/stdlib.tar.gz"
+    integrity = "sha384-AAA"
+    [modules.stdlib.files]
+      "MODULE.meow" = "sha384-CCC"
+      "components/zsh/init.star" = "sha384-BBB"
+
+[github-modules]
+  [github-modules."github.com/o/r"]
+    commit = "abc123"
+    integrity = "sha384-EEE"
+
+[packages]
+  [packages.brew]
+    [packages.brew.git]
+      requested = "latest"
+      installed = "2.43.0"
+    [packages.brew.jq]
+      requested = "1.7"
+      installed = "1.7"
+      note = "pinned"
