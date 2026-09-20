@@ -20,6 +20,36 @@ use meowctl_net::ScriptedHttp;
 use meowctl_starlark::{Evaluator, NoLoader, Platform, StarlarkError};
 use meowctl_tui::Always;
 
+/// An absolute home directory for the platform the test runs on.
+///
+/// `/home/u` is not absolute on Windows, and [R-CTX-012] refuses a path that
+/// is not absolute after `~` expands, so a test that hard-coded a Unix path
+/// would fail there for the wrong reason.
+#[cfg(unix)]
+const HOME: &str = "/home/u";
+#[cfg(not(unix))]
+const HOME: &str = r"C:\Users\u";
+
+#[cfg(unix)]
+const COMPONENT_DIR: &str = "/component";
+#[cfg(not(unix))]
+const COMPONENT_DIR: &str = r"C:\component";
+
+#[cfg(unix)]
+const STATE_DIR: &str = "/state";
+#[cfg(not(unix))]
+const STATE_DIR: &str = r"C:\state";
+
+/// A path under the home directory, built the way the code under test builds
+/// it so the two agree on the separator.
+fn under_home(rest: &str) -> PathBuf {
+    let mut path = PathBuf::from(HOME);
+    for part in rest.split('/') {
+        path.push(part);
+    }
+    path
+}
+
 /// A `ctx` over an in-memory world, and the pieces a test asserts on.
 struct World {
     fs: Arc<MemFs>,
@@ -39,10 +69,10 @@ fn build(runs: Vec<ScriptedRun>, responses: ScriptedHttp, phase: Phase) -> (Ctx,
     let recorder = Arc::clone(&events);
 
     let capabilities = Capabilities {
-        home: PathBuf::from("/home/u"),
+        home: PathBuf::from(HOME),
         dry_run: false,
-        component_dir: PathBuf::from("/component"),
-        state_dir: PathBuf::from("/state"),
+        component_dir: PathBuf::from(COMPONENT_DIR),
+        state_dir: PathBuf::from(STATE_DIR),
         shell: None,
         platform: Platform {
             os: "macos".to_owned(),
@@ -80,6 +110,11 @@ fn call(ctx: &Ctx, surface: Surface, body: &str) -> Result<(), StarlarkError> {
     Evaluator::new(Platform::default(), &loader)
         .call_hook("component.star", &source, "install", &argument)
         .map(|_| ())
+}
+
+/// A Starlark string literal for a path, with backslashes escaped.
+fn quoted(path: &str) -> String {
+    format!("\"{}\"", path.replace('\\', "\\\\"))
 }
 
 fn indent(lines: &str) -> String {
@@ -148,22 +183,20 @@ fn an_unknown_attribute_reports_attribute_not_found() {
 #[test]
 fn the_properties_carry_what_the_run_was_given() {
     let (ctx, _) = plain();
-    call(
-        &ctx,
-        Surface::Full,
-        &indent(
-            r#"
-if ctx.home != "/home/u": fail("home is " + ctx.home)
+    let source = format!(
+        r#"
+if ctx.home != {home}: fail("home is " + ctx.home)
 if ctx.dry_run: fail("dry_run")
-if ctx.component_dir != "/component": fail("component_dir")
-if ctx.state_dir != "/state": fail("state_dir")
+if ctx.component_dir != {component}: fail("component_dir")
+if ctx.state_dir != {state}: fail("state_dir")
 if ctx.shell != None: fail("shell should be None outside shell.star")
 if ctx.platform.os != "macos": fail("platform")
-"#
-            .trim(),
-        ),
-    )
-    .expect("the properties read");
+"#,
+        home = quoted(HOME),
+        component = quoted(COMPONENT_DIR),
+        state = quoted(STATE_DIR),
+    );
+    call(&ctx, Surface::Full, &indent(source.trim())).expect("the properties read");
 }
 
 /// [R-CTX-020] and [R-CTX-043]: the three fields, and a non-zero exit being a
@@ -197,7 +230,7 @@ if result["stdout"] != "": fail("stdout")
 #[test]
 fn file_exists_answers_where_read_file_fails() {
     let (ctx, world) = plain();
-    world.fs.seed("/home/u/.config/there", "content");
+    world.fs.seed(under_home(".config/there"), "content");
     call(
         &ctx,
         Surface::Full,
@@ -233,7 +266,7 @@ fn a_relative_path_is_refused_and_a_tilde_is_expanded() {
     )
     .expect("the tilde expands");
     assert_eq!(
-        world.fs.read(Path::new("/home/u/.zshrc")).expect("written"),
+        world.fs.read(&under_home(".zshrc")).expect("written"),
         b"export A=1\n"
     );
 
@@ -287,8 +320,8 @@ fn appending_twice_with_one_marker_leaves_one_block() {
     call(&ctx, Surface::Full, body).expect("the first append");
     call(&ctx, Surface::Full, body).expect("the second append");
 
-    let text = String::from_utf8(world.fs.read(Path::new("/home/u/.zshrc")).expect("written"))
-        .expect("utf-8");
+    let text =
+        String::from_utf8(world.fs.read(&under_home(".zshrc")).expect("written")).expect("utf-8");
     assert_eq!(text.matches("export A=1").count(), 1, "{text}");
     assert_eq!(
         text.matches("mine").count(),
@@ -301,9 +334,10 @@ fn appending_twice_with_one_marker_leaves_one_block() {
 #[test]
 fn render_substitutes_and_render_file_reads_the_components_own_directory() {
     let (ctx, world) = plain();
-    world
-        .fs
-        .seed("/component/config.tmpl", "editor = {{editor}}\n");
+    world.fs.seed(
+        Path::new(COMPONENT_DIR).join("config.tmpl"),
+        "editor = {{editor}}\n",
+    );
     call(
         &ctx,
         Surface::Full,
@@ -426,7 +460,7 @@ fn the_shell_surface_is_the_eight_attributes_and_nothing_else() {
 #[test]
 fn remove_symlink_refuses_a_regular_file() {
     let (ctx, world) = plain();
-    world.fs.seed("/home/u/real", "not a link");
+    world.fs.seed(under_home("real"), "not a link");
     let err =
         call(&ctx, Surface::Full, "    ctx.remove_symlink(\"~/real\")").expect_err("should refuse");
     assert!(err.to_string().contains("not a symlink"), "{err}");
@@ -478,7 +512,7 @@ fn download_verifies_before_it_writes() {
     .expect_err("the checksum does not match");
     assert!(err.to_string().contains("expected"), "{err}");
     assert!(
-        world.fs.read(Path::new("/home/u/f")).is_err(),
+        world.fs.read(&under_home("f")).is_err(),
         "nothing was written"
     );
 
@@ -491,7 +525,7 @@ fn download_verifies_before_it_writes() {
     )
     .expect("the matching checksum");
     assert_eq!(
-        world.fs.read(Path::new("/home/u/f")).expect("written"),
+        world.fs.read(&under_home("f")).expect("written"),
         b"payload"
     );
 }
@@ -515,7 +549,10 @@ fn git_clone_runs_git() {
     .expect("the clone runs");
     assert_eq!(
         world.exec.ran(),
-        ["git clone --branch v1 https://h/r /home/u/r"]
+        [format!(
+            "git clone --branch v1 https://h/r {}",
+            under_home("r").display()
+        )]
     );
 }
 
@@ -556,7 +593,7 @@ ctx.write_file("~/written", "x")
         ),
     )
     .expect("the write happens");
-    assert!(world.fs.read(Path::new("/home/u/written")).is_ok());
+    assert!(world.fs.read(&under_home("written")).is_ok());
 }
 
 /// Nothing above needs this, and a component that loses `ctx.log` loses the
@@ -599,14 +636,14 @@ fn a_mutation_is_journaled_before_it_happens() {
     let journal_path = temp.path().join("journal.ndjson");
 
     let fs = Arc::new(MemFs::new());
-    fs.create_dir_all(Path::new("/home/u")).expect("home");
+    fs.create_dir_all(Path::new(HOME)).expect("home");
     let journal = meowctl_ops::Journal::open(&journal_path).expect("the journal opens");
 
     let capabilities = Capabilities {
-        home: PathBuf::from("/home/u"),
+        home: PathBuf::from(HOME),
         dry_run: false,
-        component_dir: PathBuf::from("/component"),
-        state_dir: PathBuf::from("/state"),
+        component_dir: PathBuf::from(COMPONENT_DIR),
+        state_dir: PathBuf::from(STATE_DIR),
         shell: None,
         platform: Platform::default(),
         environment: BTreeMap::new(),
