@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 462b0f0a438b60849358e217129bfd072f2f8f9456c07843991c93b76cdefd83 # shrinks to op = LinkFile { target: "/home/u/source", link: "/home/u/.zshrc", backup: "/home/u/.zshrc.backup" }
+cc 00245c9ae9d871fb9f35d0b74b76a07f3ba2cad93322a2d8439241d7ca00b36d # shrinks to op = AppendFile { path: "/home/u/fresh", contents: "added\n", marker: "test" }
+cc 587c6758e3efb8b314f3663999be2e48a263b3ec336247815a692dcdea8b0c56 # shrinks to op = Mkdir { path: "/home/u/.config/nvim" }

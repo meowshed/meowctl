@@ -49,6 +49,14 @@ existed.
 filesystem to the state it had before. This MUST hold for every variant, and a
 property test over `MemFs` MUST check it.
 
+`v0.1.0` fails this in three places, all found by writing that test. Undoing a
+`link_file` copies the backup back instead of moving it, leaving the backup
+behind. Undoing an `append_file` that created its file removes the block and
+leaves a zero-byte file where there was none. And undoing a `mkdir` removes one
+directory where `mkdir -p` created a chain, so `~/.config/nvim` undone leaves
+`~/.config`. Each is repaired here, and each needed a field in the journal
+payload that `v0.1.0` ignores.
+
 **[R-OPS-005]** An `Op` that finds the system already in its target state MUST
 still produce a correct inverse. Re-linking an already-correct symlink must not
 journal a removal that would delete the user's working configuration.
