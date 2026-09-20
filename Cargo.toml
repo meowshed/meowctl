@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/meowctl-common", "crates/meowctl-ctx", "crates/meowctl-config", "crates/meowctl-exec", "crates/meowctl-fs", "crates/meowctl-module", "crates/meowctl-net", "crates/meowctl-ops", "crates/meowctl-pm", "crates/meowctl-starlark", "crates/meowctl-tui", "crates/meowctl-xtask"]
+members = ["crates/meowctl-common", "crates/meowctl-ctx", "crates/meowctl-engine", "crates/meowctl-config", "crates/meowctl-exec", "crates/meowctl-fs", "crates/meowctl-module", "crates/meowctl-net", "crates/meowctl-ops", "crates/meowctl-pm", "crates/meowctl-starlark", "crates/meowctl-tui", "crates/meowctl-xtask"]
 resolver = "3"
 
 [workspace.package]

@@ -1067,6 +1067,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "meowctl-engine"
+version = "0.2.0-alpha.0"
+dependencies = [
+ "meowctl-common",
+ "meowctl-pm",
+ "meowctl-starlark",
+ "thiserror",
+]
+
+[[package]]
 name = "meowctl-exec"
 version = "0.2.0-alpha.0"
 dependencies = [
