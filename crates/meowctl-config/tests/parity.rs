@@ -107,6 +107,10 @@ fn populated() -> LockFile {
 
 /// [R-CONFIG-023] byte for byte, because a semantic comparison hides a key
 /// reorder and a reorder is what breaks reproducibility.
+///
+/// The fixture is also where [R-CONFIG-020] and [R-CONFIG-021] are held: the
+/// four tables and the per-file hash map are in it, so a table dropped or a
+/// key renamed fails here rather than on somebody's machine.
 #[test]
 fn a_lock_file_is_written_exactly_as_v0_1_0_writes_it() {
     let fs = memory();
@@ -196,7 +200,9 @@ fn the_version_1_installed_lock_still_parses() {
     assert_eq!(fingerprints["zsh"], "");
 }
 
-/// [R-CONFIG-032] sorted, so the file does not churn and show a diff on every
+/// [R-CONFIG-030] and [R-CONFIG-032]: each component with the fingerprint of
+/// the module it came from, sorted, so the file does not churn and shows a
+/// diff on every
 /// apply.
 #[test]
 fn an_installed_lock_is_written_sorted_and_in_the_current_shape() {
@@ -242,6 +248,11 @@ fn a_sentinel_from_a_newer_build_is_refused_rather_than_overwritten() {
 
 /// [R-CONFIG-040] the sentinel is read back as what was written, including the
 /// timestamps, which are TOML datetimes rather than strings.
+///
+/// The fixture carries what [R-CONFIG-042], [R-CONFIG-043] and
+/// [R-CONFIG-044] require: `last_run` with its four fields, a
+/// `completed_components` entry with its phase, component and timestamp, and
+/// `rolled_back` as one of the four strings.
 #[test]
 fn a_sentinel_round_trips() {
     let fs = memory();
@@ -375,8 +386,9 @@ fn a_configured_directory_passes() {
 /// The manifest `v0.1.0` wrote, checked into the tree.
 const V0_1_0_MODFILE: &str = include_str!("fixtures/deps.mod.v0_1_0");
 
-/// [R-CONFIG-014] byte for byte, from a fixture `modfile.Write` produced
-/// rather than from a reading of it.
+/// [R-CONFIG-011], [R-CONFIG-013] and [R-CONFIG-014]: byte for byte, from a
+/// fixture `modfile.Write` produced rather than from a reading of it. The
+/// four statements are all in it, and so is the keyword order.
 #[test]
 fn a_manifest_is_written_exactly_as_v0_1_0_writes_it() {
     use meowctl_config::{Dep, Modfile, Module, Replace};
@@ -511,4 +523,167 @@ fn a_replaced_module_with_no_hash_is_accepted() {
 
     let lock = LockFile::read(&fs, path).expect("a replaced module has no hash to check");
     assert!(lock.modules["stdlib"].replaced);
+}
+
+/// [R-CONFIG-012] a dependency naming both leaves the resolver choosing
+/// between two answers, so reading the manifest fails instead.
+#[test]
+fn a_dep_with_a_version_and_a_source_is_refused() {
+    use meowctl_config::{Dep, Modfile};
+
+    let modfile = Modfile {
+        deps: vec![Dep {
+            name: "stdlib".to_owned(),
+            version: "0.2.17".to_owned(),
+            source: "github:o/r@v1".to_owned(),
+        }],
+        ..Modfile::default()
+    };
+
+    let err = modfile
+        .check(Path::new("/cfg/deps.mod"))
+        .expect_err("both fields should be refused");
+    let said = err.to_string();
+    assert!(said.contains("stdlib"), "{said}");
+    assert!(said.contains("mutually exclusive"), "{said}");
+}
+
+/// [R-CONFIG-012] and one naming neither is equally unusable.
+#[test]
+fn a_dep_with_neither_is_refused() {
+    use meowctl_config::{Dep, Modfile};
+
+    let modfile = Modfile {
+        deps: vec![Dep {
+            name: "stdlib".to_owned(),
+            version: String::new(),
+            source: String::new(),
+        }],
+        ..Modfile::default()
+    };
+
+    let err = modfile
+        .check(Path::new("/cfg/deps.mod"))
+        .expect_err("neither field should be refused");
+    assert!(err.to_string().contains("exactly one"), "{err}");
+}
+
+/// [R-CONFIG-012] `replace()` carries the same rule, with its own two fields.
+#[test]
+fn a_replace_follows_the_same_rule() {
+    use meowctl_config::{Modfile, Replace};
+
+    let both = Modfile {
+        replaces: vec![Replace {
+            name: "stdlib".to_owned(),
+            path: "/local".to_owned(),
+            source: "github:fork/r@v2".to_owned(),
+        }],
+        ..Modfile::default()
+    };
+    assert!(both.check(Path::new("/cfg/deps.mod")).is_err());
+
+    let neither = Modfile {
+        replaces: vec![Replace {
+            name: "stdlib".to_owned(),
+            path: String::new(),
+            source: String::new(),
+        }],
+        ..Modfile::default()
+    };
+    let err = neither
+        .check(Path::new("/cfg/deps.mod"))
+        .expect_err("neither field should be refused");
+    assert!(err.to_string().contains("path"), "{err}");
+}
+
+/// [R-CONFIG-011] and [R-CONFIG-012]: the four statements a manifest may
+/// carry, each in a form the rule accepts.
+#[test]
+fn the_four_statements_a_manifest_carries_are_accepted() {
+    use meowctl_config::{Dep, Modfile, Module, Replace};
+
+    let modfile = Modfile {
+        module: Some(Module {
+            name: "my-dotfiles".to_owned(),
+            version: "0.1.0".to_owned(),
+        }),
+        deps: vec![
+            Dep {
+                name: "stdlib".to_owned(),
+                version: "0.2.17".to_owned(),
+                source: String::new(),
+            },
+            Dep {
+                name: "plug".to_owned(),
+                version: String::new(),
+                source: "github:o/r@v1".to_owned(),
+            },
+        ],
+        replaces: vec![
+            Replace {
+                name: "stdlib".to_owned(),
+                path: "/local/checkout".to_owned(),
+                source: String::new(),
+            },
+            Replace {
+                name: "plug".to_owned(),
+                path: String::new(),
+                source: "github:fork/r@v2".to_owned(),
+            },
+        ],
+    };
+
+    modfile
+        .check(Path::new("/cfg/deps.mod"))
+        .expect("the four statements are what a manifest is made of");
+}
+
+/// [R-CONFIG-060] the parser's position reaches the user, because "this file
+/// is malformed" for a 200-line lock sends them reading the whole thing.
+#[test]
+fn a_malformed_file_names_the_file_and_where_it_broke() {
+    let fs = memory();
+    let path = Path::new("/cfg/deps.lock");
+    fs.write(
+        path,
+        b"[modules]\n  [modules.stdlib]\n    version = \"unterminated\n",
+    )
+    .expect("seed");
+
+    let err = LockFile::read(&fs, path).expect_err("malformed TOML should be refused");
+    let said = err.to_string();
+    assert!(said.contains("deps.lock"), "the file is not named: {said}");
+    assert!(
+        said.contains("line 3") || said.contains("3:"),
+        "the position is not in the message: {said}"
+    );
+}
+
+/// [R-CONFIG-033] the fingerprint is a chain, not one field: a GitHub module
+/// re-synced to a new commit has to invalidate even though no version moved.
+#[test]
+fn a_fingerprint_falls_through_version_then_commit_then_hash() {
+    use meowctl_config::ModuleEntry;
+
+    let registry = ModuleEntry {
+        version: "0.2.17".to_owned(),
+        commit_sha: "abc".to_owned(),
+        integrity: "sha384-AAA".to_owned(),
+        ..ModuleEntry::default()
+    };
+    assert_eq!(registry.fingerprint(), "0.2.17");
+
+    let github = ModuleEntry {
+        commit_sha: "abc".to_owned(),
+        integrity: "sha384-AAA".to_owned(),
+        ..ModuleEntry::default()
+    };
+    assert_eq!(github.fingerprint(), "abc");
+
+    let hashed = ModuleEntry {
+        integrity: "sha384-AAA".to_owned(),
+        ..ModuleEntry::default()
+    };
+    assert_eq!(hashed.fingerprint(), "sha384-AAA");
 }

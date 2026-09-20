@@ -117,6 +117,16 @@ fn filesystem_ops() -> impl Strategy<Value = Op> {
 
 proptest! {
     /// [R-OPS-004] every filesystem variant, applied and undone.
+    ///
+    /// This is where most of the per-variant inverses are held, because the
+    /// obligation each one carries is the same obligation: the tree comes
+    /// back. [R-OPS-012]'s `CopyFile` destination is gone afterwards and
+    /// [R-OPS-016]'s `Download` is in the strategy in both its cases, the
+    /// file that existed and the one that did not.
+    ///
+    /// It also holds [R-OPS-002]: every variant reaches the tree through a
+    /// `MemFs`, which is only possible because `apply` goes through the
+    /// trait.
     #[test]
     fn apply_then_undo_restores_the_tree(op in filesystem_ops()) {
         if let Err(why) = round_trips(&op) {

@@ -140,6 +140,28 @@ mod tests {
         assert_eq!(err.url(), "http://example.invalid/index.toml");
     }
 
+    /// [R-NET-012] `RealHttp` is what performs a request, and these are the
+    /// parts of it that can be held without a server: the client's
+    /// configuration and the refusals that happen before anything is sent.
+    /// The request itself is exercised by `meowctl-module`'s live registry
+    /// test, which is skipped when the network is not there.
+    ///
+    /// [R-NET-002] every request carries a timeout, and the default is the
+    /// 30 seconds `v0.1.0` gives all of its clients. A resolution without one
+    /// is a hang with no output.
+    #[test]
+    fn the_default_timeout_is_thirty_seconds() {
+        assert_eq!(DEFAULT_TIMEOUT, Duration::from_secs(30));
+    }
+
+    /// [R-NET-006] a body is bounded, so a URL answering with an endless
+    /// stream fails rather than filling the disk. The bound is an order of
+    /// magnitude above the largest module published.
+    #[test]
+    fn a_body_is_bounded_well_above_a_real_module() {
+        assert_eq!(MAX_BODY_BYTES, 64 * 1024 * 1024);
+    }
+
     #[test]
     fn a_url_that_is_not_a_url_is_refused() {
         let err = RealHttp::new().get("not a url").unwrap_err();

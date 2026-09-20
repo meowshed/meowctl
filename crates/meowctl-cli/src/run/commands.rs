@@ -672,7 +672,7 @@ pub(super) fn parse_modfile(
             span: e.span().cloned(),
         })?;
 
-    Ok(meowctl_config::Modfile {
+    let modfile = meowctl_config::Modfile {
         module: evaluated
             .declarations
             .module
@@ -701,7 +701,11 @@ pub(super) fn parse_modfile(
                 source: replace.source.clone(),
             })
             .collect(),
-    })
+    };
+    // A manifest naming both of an entry's two fields leaves the resolver
+    // choosing between two answers; see [R-CONFIG-012].
+    modfile.check(std::path::Path::new(name))?;
+    Ok(modfile)
 }
 
 /// Resolves the manifests into their locks.

@@ -66,6 +66,47 @@ pub struct Modfile {
 }
 
 impl Modfile {
+    /// Refuses an entry carrying both of its two fields, or neither.
+    ///
+    /// `internal/modfile/modfile.go` refuses these while parsing, and this is
+    /// where that happens now: `v0.1.0` has one `dep()` for `deps.mod` that
+    /// validates and another for `init.star` that takes no `source`, and
+    /// [R-CONFIG-010] merged them into one builtin. A manifest that names
+    /// both leaves the resolver choosing between two answers; see
+    /// [R-CONFIG-012].
+    ///
+    /// # Errors
+    ///
+    /// [`crate::ConfigError::Malformed`] naming the entry that is wrong.
+    pub fn check(&self, path: &std::path::Path) -> crate::ConfigResult<()> {
+        let wrong = |what: &str, name: &str, one: &str, other: &str, both: bool| {
+            Err(crate::ConfigError::Malformed {
+                path: path.to_path_buf(),
+                reason: if both {
+                    format!("{what}(\"{name}\"): {one} and {other} are mutually exclusive")
+                } else {
+                    format!("{what}(\"{name}\"): exactly one of {one} or {other} is required")
+                },
+            })
+        };
+
+        for dep in &self.deps {
+            match (dep.version.is_empty(), dep.source.is_empty()) {
+                (false, false) => return wrong("dep", &dep.name, "version", "source", true),
+                (true, true) => return wrong("dep", &dep.name, "version", "source", false),
+                _ => {}
+            }
+        }
+        for replace in &self.replaces {
+            match (replace.path.is_empty(), replace.source.is_empty()) {
+                (false, false) => return wrong("replace", &replace.name, "path", "source", true),
+                (true, true) => return wrong("replace", &replace.name, "path", "source", false),
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
     /// Renders the file exactly as `modfile.Write` renders it.
     ///
     /// The layout is not ours: the header, `module()` across four lines with

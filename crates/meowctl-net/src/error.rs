@@ -88,3 +88,49 @@ impl NetError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// [R-NET-010] the four cases, kept apart because a resolution that
+    /// failed on the network is a retry and one that failed on a 404 is a
+    /// mistake in the manifest.
+    #[test]
+    fn the_four_cases_are_distinguishable() {
+        let refused = NetError::Refused {
+            url: "http://h/x".to_owned(),
+            reason: "not https".to_owned(),
+        };
+        let status = NetError::Status {
+            url: "https://h/x".to_owned(),
+            code: 404,
+        };
+
+        assert_eq!(refused.status(), None);
+        assert_eq!(status.status(), Some(404));
+        assert_ne!(
+            std::mem::discriminant(&refused),
+            std::mem::discriminant(&status)
+        );
+    }
+
+    /// [R-NET-011] every case carries its URL, whichever of the three a
+    /// resolution was fetching when it failed.
+    #[test]
+    fn every_case_carries_its_url() {
+        for error in [
+            NetError::Refused {
+                url: "https://h/a".to_owned(),
+                reason: "x".to_owned(),
+            },
+            NetError::Status {
+                url: "https://h/a".to_owned(),
+                code: 500,
+            },
+        ] {
+            assert_eq!(error.url(), "https://h/a");
+            assert!(error.to_string().contains("https://h/a"), "{error}");
+        }
+    }
+}

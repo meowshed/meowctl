@@ -1,4 +1,13 @@
 //! What running a command has to do, and what it must not know about.
+//!
+//! [R-EXEC-001] is held by the file rather than by one test: running to
+//! completion and resolving a name on `PATH` are the two things the trait
+//! covers, and both are exercised below against `RealExecutor` as well as the
+//! scripted one, which is [R-EXEC-010].
+//!
+//! [R-EXEC-022] is held by what is absent: nothing here constructs a
+//! renderer, because `meowctl-exec` cannot -- it depends on
+//! `meowctl-common` for the event vocabulary and on nothing that renders.
 
 // `clippy.toml` exempts tests from `expect_used`, but only a function carrying
 // `#[test]`. A helper in a test binary is test code by construction.
@@ -159,7 +168,9 @@ fn a_windows_program_resolves_without_its_extension() {
     );
 }
 
-/// [R-EXEC-032] asking whether a tool exists is a question, not an assertion.
+/// [R-EXEC-032] asking whether a tool exists is a question, not an assertion,
+/// and [R-EXEC-001] and [R-EXEC-010]: `RealExecutor` resolves a real name on a
+/// real `PATH`.
 #[test]
 fn which_answers_absent_rather_than_failing() {
     let exec = ScriptedExecutor::new([]).with_path(["git"]);
@@ -237,4 +248,46 @@ fn the_environment_is_merged_rather_than_replaced() {
         )
         .expect("run");
     assert_eq!(got.stdout, "value:set", "{got:?}");
+}
+
+/// [R-EXEC-002] a command is a program and an argument list, never a shell
+/// string, so an argument containing a space or a semicolon is an argument.
+///
+/// `v0.1.0` does the same, and it is what keeps a component from being a
+/// shell injection waiting for a filename.
+#[test]
+fn an_argument_with_a_space_stays_one_argument() {
+    let exec = ScriptedExecutor::new([ScriptedRun::ok("echo one two; rm -rf /", "")]);
+    let command = Command::new("echo").args(["one two; rm -rf /"]);
+
+    assert_eq!(command.program, "echo");
+    assert_eq!(command.args, ["one two; rm -rf /"]);
+
+    let mut events = |_| {};
+    exec.run(&command, &mut events).expect("the run");
+}
+
+/// [R-EXEC-031] the sink gets the terminal back even when the command never
+/// starts, because a renderer that never hears the second half never draws
+/// again and the user is left with a dead screen.
+///
+/// `RealExecutor` because the hand-off is its, and `false` because the
+/// failure has to happen after the sink has already stood down -- a program
+/// that is not on `PATH` is refused before the terminal is ever asked for,
+/// and there is nothing to give back.
+///
+/// Unix only: `false` is the portable program that does one thing and fails.
+#[cfg(unix)]
+#[test]
+fn the_terminal_comes_back_when_the_command_fails() {
+    let exec = RealExecutor::new();
+    let command = Command::new("false").interactive();
+    let events = record(|sink| {
+        let _ = exec.run(&command, sink);
+    });
+
+    assert!(
+        events.iter().any(|e| matches!(e, Event::TerminalReleased)),
+        "the terminal was not given back: {events:?}"
+    );
 }
