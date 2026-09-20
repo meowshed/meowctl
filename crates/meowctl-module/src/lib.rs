@@ -15,6 +15,7 @@ pub mod github;
 mod loader;
 mod mvs;
 pub mod registry;
+mod sync;
 mod url;
 mod version;
 
@@ -22,5 +23,6 @@ pub use cache::{Cache, CacheRecord, Source};
 pub use error::{ModuleError, ModuleResult};
 pub use loader::{ModuleLoader, Roots};
 pub use mvs::{MvsError, Requirement, Requirements, build_list};
+pub use sync::{Synced, Syncer, Upgrade, overlay_replaces};
 pub use url::{LocalRoot, ModuleUrl};
 pub use version::Version;

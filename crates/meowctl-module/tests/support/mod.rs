@@ -1,5 +1,9 @@
 //! Building the archives the fetching tests fetch.
-
+//!
+//! Shared by several test binaries, each of which needs some of it. Rust
+//! compiles the module separately into each one, so a helper another binary
+//! uses looks dead here.
+#![allow(dead_code)]
 // `clippy.toml` exempts a function carrying `#[test]`; a helper in a test
 // binary is test code by construction.
 #![allow(clippy::expect_used)]

@@ -1042,6 +1042,7 @@ version = "0.2.0-alpha.0"
 dependencies = [
  "flate2",
  "meowctl-common",
+ "meowctl-config",
  "meowctl-fs",
  "meowctl-net",
  "meowctl-starlark",
