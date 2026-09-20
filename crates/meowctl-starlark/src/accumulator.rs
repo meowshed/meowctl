@@ -17,7 +17,7 @@ use starlark::values::ProvidesStaticType;
 /// Starlark values cannot leave their evaluation, so a keyword argument is
 /// flattened here rather than kept. The four shapes are what a configuration
 /// actually passes.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Argument {
     /// A string.
     String(String),
@@ -41,7 +41,7 @@ pub struct ComponentDecl {
 }
 
 /// A `pkg()`, `unpkg()`, or `uppkg()` declaration.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageDecl {
     /// What to do with it.
     pub action: PackageAction,

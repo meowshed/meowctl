@@ -142,10 +142,30 @@ sources, hashes, commits, packages -- is inside the comparison.
 and MUST be read as an overlay: an entry present in both wins from the local
 file.
 
-**[R-CONFIG-025]** `pkgs.lock` and `pkgs.local.lock` MUST record resolved
-package installations per manager, and a component declared in `local.star`
-MUST have its packages recorded in the local file rather than the shared one.
-`appendPkgsLock` in `internal/cli/apply.go` is the split.
+**[R-CONFIG-025]** `pkgs.lock` and `pkgs.local.lock` MUST record the packages
+declared by every component whose `install` or `upgrade` ran, per manager, and
+a component declared in `local.star` MUST have its packages recorded in the
+local file rather than the shared one. `appendPkgsLock` in
+`internal/cli/apply.go` is the split.
+
+An earlier draft said "resolved package installations", which reads as though
+the file pins what a manager actually installed. It does not: `v0.1.0` writes
+the declared constraint as both `requested` and `installed`, because nothing
+interrogates the manager afterwards. The file is a record of what is managed,
+not of what was resolved, and stating otherwise invites somebody to trust it
+for reproducing an environment.
+
+**[R-CONFIG-026]** A run that declared no packages MUST leave both files
+alone, and a run that declared some MUST merge into what is there rather than
+replacing it. An entry for a package no component declares any more MUST
+survive.
+
+**[R-CONFIG-027]** These two files MUST NOT be byte-compared against
+`v0.1.0`. `internal/lock/write.go` writes `deps.lock` by hand, in the layout
+[R-CONFIG-023] freezes; `writePkgsLockFile` hands these to
+`toml.NewEncoder`. They are two different writers, and nothing reads either
+package lock back -- not `v0.1.0`, which writes them and never opens them
+again. What matters is that the structure round-trips.
 
 ## Installed components
 
