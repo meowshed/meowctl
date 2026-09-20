@@ -487,6 +487,7 @@ pub(super) fn apply(
             dry_run: false,
             rollback,
             shell: None,
+            interrupted: Arc::clone(&session.interrupted),
         },
     )
     .recording(progress);
@@ -498,10 +499,18 @@ pub(super) fn apply(
     let local = local_declarations(session, &loader)?;
     record_packages(session, &report.packages, &local)?;
 
-    match report.failure {
-        None => Ok(()),
-        Some(failure) => Err(CliError::General(failure.to_string())),
+    if let Some(failure) = report.failure {
+        return Err(CliError::General(failure.to_string()));
     }
+    // Not a success: the command did not do what was asked, and a script that
+    // read an interrupted apply as a finished one would go on to the next
+    // step; see [R-CLI-054].
+    if report.interrupted {
+        return Err(CliError::General(
+            "stopped: the run was interrupted, and what it had done is recorded".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 /// The shell `ctx.shell` reports, from `$SHELL`.
@@ -595,6 +604,7 @@ fn run_hook(session: &mut Session<'_>, phase: Phase) -> Result<(), String> {
             dry_run: false,
             rollback: false,
             shell: current_shell(&session.environment),
+            interrupted: Arc::clone(&session.interrupted),
         },
     );
 

@@ -208,6 +208,23 @@ configuration and refuse without one.
 [R-ENGINE-062]. The sink MUST restore the terminal on the way out; see
 [R-TUI-023].
 
+**[R-CLI-053]** A second interrupt MUST stop the process at once, with the
+default disposition.
+
+**[R-CLI-054]** A run that stopped because it was interrupted MUST say so and
+MUST exit with the general code.
+
+Not zero: the command did not do what was asked, and a script that treats an
+interrupted `apply` as a successful one goes on to the next step. Not a code
+of its own either -- [R-COMMON-030] fixes the four `v0.1.0` defines and says
+"and no others". The process still dies from the second interrupt, which is
+where the shell's 130 comes from, as it does under `v0.1.0`.
+
+A user who has asked twice is not asking for a tidier stop. The first
+interrupt asks the run to finish what it is doing and stop; if that is taking
+longer than they are willing to wait, the second has to work, and a process
+that swallows its own interrupt is one nobody can stop.
+
 **[R-CLI-052]** An unknown command or flag MUST exit 2 with the usage error,
 and MUST suggest the nearest command when one is close.
 
