@@ -993,3 +993,94 @@ fn print_to_stdout(text: &str) {
     let _ = out.write_all(text.as_bytes());
     let _ = out.flush();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// [R-CONFIG-022] the timestamp a lock and a sentinel record.
+    ///
+    /// Twenty lines of arithmetic written out rather than a date dependency,
+    /// which means the arithmetic is ours to hold. Every case is a known
+    /// second-since-the-epoch and the string `date -u -r <n>` prints for it.
+    #[test]
+    fn a_timestamp_is_the_date_that_second_falls_on() {
+        for (seconds, expected) in [
+            (0, "1970-01-01T00:00:00Z"),
+            (1, "1970-01-01T00:00:01Z"),
+            (59, "1970-01-01T00:00:59Z"),
+            (60, "1970-01-01T00:01:00Z"),
+            (3_599, "1970-01-01T00:59:59Z"),
+            (3_600, "1970-01-01T01:00:00Z"),
+            (86_399, "1970-01-01T23:59:59Z"),
+            (86_400, "1970-01-02T00:00:00Z"),
+            // The end of January, which is where a month length is wrong.
+            (2_678_399, "1970-01-31T23:59:59Z"),
+            (2_678_400, "1970-02-01T00:00:00Z"),
+            // 1970 is not a leap year: 28 February is followed by 1 March.
+            (5_011_200, "1970-02-28T00:00:00Z"),
+            (5_097_600, "1970-03-01T00:00:00Z"),
+            // 1972 is, so it has a 29 February between the two.
+            (68_083_200, "1972-02-28T00:00:00Z"),
+            (68_169_600, "1972-02-29T00:00:00Z"),
+            (68_256_000, "1972-03-01T00:00:00Z"),
+            // 2000 is a leap year despite being a century, which is the
+            // whole of the `% 400` rule.
+            (951_696_000, "2000-02-28T00:00:00Z"),
+            (951_782_400, "2000-02-29T00:00:00Z"),
+            (951_868_800, "2000-03-01T00:00:00Z"),
+            // 2100 is a century that is not, which is the `% 100` rule.
+            (4_107_456_000, "2100-02-28T00:00:00Z"),
+            (4_107_542_400, "2100-03-01T00:00:00Z"),
+            // The end of a year, and the start of the next.
+            (31_535_999, "1970-12-31T23:59:59Z"),
+            (31_536_000, "1971-01-01T00:00:00Z"),
+            // A date somebody might actually see in a lock file.
+            (1_790_000_000, "2026-09-21T14:13:20Z"),
+        ] {
+            assert_eq!(rfc3339(seconds), expected, "{seconds}");
+        }
+    }
+
+    /// [R-CONFIG-022] every month has the length it has, checked by walking a
+    /// whole non-leap year one day at a time.
+    ///
+    /// A single wrong length shifts every date after it, and a test naming
+    /// two dates would catch only the months between them.
+    #[test]
+    fn every_month_of_a_year_has_its_own_length() {
+        const LENGTHS: [u32; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        // 1971-01-01, a year that is not a leap year.
+        let mut seconds = 31_536_000u64;
+
+        for (index, length) in LENGTHS.iter().enumerate() {
+            let month = u32::try_from(index).expect("twelve fits") + 1;
+            for day in 1..=*length {
+                assert_eq!(
+                    rfc3339(seconds),
+                    format!("1971-{month:02}-{day:02}T00:00:00Z"),
+                    "{seconds}"
+                );
+                seconds += 86_400;
+            }
+        }
+        assert_eq!(rfc3339(seconds), "1972-01-01T00:00:00Z");
+    }
+
+    /// [R-CONFIG-022] and the clock that reads it produces one of those, so a
+    /// lock written now round-trips as a TOML datetime.
+    #[test]
+    fn the_clock_produces_a_timestamp_of_that_shape() {
+        let written = now();
+        assert_eq!(written.len(), 20, "{written}");
+        assert!(written.ends_with('Z'), "{written}");
+        // The shape a TOML datetime has, which is what the sentinel stores.
+        assert_eq!(&written[4..5], "-", "{written}");
+        assert_eq!(&written[10..11], "T", "{written}");
+        assert_eq!(&written[13..14], ":", "{written}");
+        assert!(
+            written[..4].chars().all(|c| c.is_ascii_digit()),
+            "{written}"
+        );
+    }
+}
