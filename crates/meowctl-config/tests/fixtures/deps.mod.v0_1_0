@@ -1,0 +1,12 @@
+# meowctl.mod — machine-managed module file. Do not edit by hand.
+
+module(
+    name = "my-dotfiles",
+    version = "0.1.0",
+)
+
+dep(name = "stdlib", version = "0.2.17")
+dep(name = "plug", source = "github:o/r@v1")
+
+replace(name = "stdlib", path = "/local/checkout")
+replace(name = "plug", source = "github:fork/r@v2")

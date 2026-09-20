@@ -371,3 +371,68 @@ fn a_configured_directory_passes() {
         .check(&fs)
         .expect("check");
 }
+
+/// The manifest `v0.1.0` wrote, checked into the tree.
+const V0_1_0_MODFILE: &str = include_str!("fixtures/deps.mod.v0_1_0");
+
+/// [R-CONFIG-014] byte for byte, from a fixture `modfile.Write` produced
+/// rather than from a reading of it.
+#[test]
+fn a_manifest_is_written_exactly_as_v0_1_0_writes_it() {
+    use meowctl_config::{Dep, Modfile, Module, Replace};
+
+    let modfile = Modfile {
+        module: Some(Module {
+            name: "my-dotfiles".to_owned(),
+            version: "0.1.0".to_owned(),
+        }),
+        deps: vec![
+            Dep {
+                name: "stdlib".to_owned(),
+                version: "0.2.17".to_owned(),
+                source: String::new(),
+            },
+            Dep {
+                name: "plug".to_owned(),
+                version: String::new(),
+                source: "github:o/r@v1".to_owned(),
+            },
+        ],
+        replaces: vec![
+            Replace {
+                name: "stdlib".to_owned(),
+                path: "/local/checkout".to_owned(),
+                source: String::new(),
+            },
+            Replace {
+                name: "plug".to_owned(),
+                path: String::new(),
+                source: "github:fork/r@v2".to_owned(),
+            },
+        ],
+    };
+
+    assert_eq!(
+        modfile.render(),
+        V0_1_0_MODFILE,
+        "the manifest layout drifted from what v0.1.0 emits"
+    );
+}
+
+/// [R-CONFIG-010] a manifest this writer produced has to evaluate, or
+/// `meowctl dep add` writes a file the next run cannot read.
+#[test]
+fn a_written_manifest_evaluates() {
+    use meowctl_starlark::{Evaluator, NoLoader, Platform};
+
+    let loader = NoLoader;
+    let evaluator = Evaluator::new(Platform::current(), &loader);
+    let result = evaluator
+        .evaluate("deps.mod", V0_1_0_MODFILE)
+        .expect("the manifest should evaluate");
+
+    let module = result.declarations.module.expect("a module declaration");
+    assert_eq!(module.name, "my-dotfiles");
+    assert_eq!(result.declarations.deps.len(), 2);
+    assert_eq!(result.declarations.replaces.len(), 2);
+}
