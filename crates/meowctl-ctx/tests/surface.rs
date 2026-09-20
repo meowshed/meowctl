@@ -264,7 +264,12 @@ fn a_relative_path_is_refused_and_a_tilde_is_expanded() {
         Surface::Full,
         "    ctx.write_file(\"~/.zshrc\", \"export A=1\\n\")",
     )
-    .expect("the tilde expands");
+    .unwrap_or_else(|e| {
+        panic!(
+            "the tilde expands: {e}\nhome = {HOME:?}\ntree = {:?}",
+            world.fs.paths()
+        )
+    });
     assert_eq!(
         world.fs.read(&under_home(".zshrc")).expect("written"),
         b"export A=1\n"
