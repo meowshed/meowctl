@@ -75,10 +75,51 @@ fn the_global_flags_work_after_any_subcommand() {
     }
 }
 
-/// [R-CLI-005] each mutating command takes `--dry-run`, and `apply` takes the
-/// three it has as well.
+/// [R-CLI-005] the whole table, not one row of it.
+///
+/// The previous version of this test checked `--dry-run` on six commands and
+/// the other three on `apply`, and passed while five commands were missing
+/// `--no-rollback`, two were missing `--force`, and `verify` was missing
+/// `--dry-run`. A parity requirement that names six commands needs a test
+/// that tries six commands.
 #[test]
-fn the_mutating_commands_take_dry_run() {
+fn every_lifecycle_command_takes_the_flags_v0_1_0_gives_it() {
+    /// The command, then whether it takes `--force` and `--ignore-lock`.
+    const COMMANDS: [(&[&str], bool); 6] = [
+        (&["apply"], true),
+        (&["add", "zsh"], true),
+        (&["upgrade"], true),
+        (&["remove", "zsh"], false),
+        (&["update"], false),
+        (&["verify"], false),
+    ];
+
+    for (base, installs) in COMMANDS {
+        // Every one of them, in both spellings where there are two.
+        for flag in ["--dry-run", "-n", "--no-rollback", "--verbose", "-v"] {
+            let mut args = base.to_vec();
+            args.push(flag);
+            parse(&args).unwrap_or_else(|e| panic!("{base:?} should take {flag}: {e}"));
+        }
+
+        for flag in ["--force", "-f", "--ignore-lock"] {
+            let mut args = base.to_vec();
+            args.push(flag);
+            let parsed = parse(&args);
+            assert_eq!(
+                parsed.is_ok(),
+                installs,
+                "{base:?} and {flag}: v0.1.0 {} it",
+                if installs { "takes" } else { "does not take" }
+            );
+        }
+    }
+}
+
+/// [R-CLI-005] and `--dry-run` reaches the session, rather than being parsed
+/// and dropped. `verify` is the one this caught.
+#[test]
+fn dry_run_is_visible_on_every_command_that_takes_it() {
     for args in [
         vec!["apply", "--dry-run"],
         vec!["apply", "-n"],
@@ -86,12 +127,18 @@ fn the_mutating_commands_take_dry_run() {
         vec!["remove", "zsh", "-n"],
         vec!["upgrade", "--dry-run"],
         vec!["update", "-n"],
+        vec!["verify", "--dry-run"],
         vec!["dep", "sync", "--dry-run"],
     ] {
         let parsed = parse(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
         assert!(parsed.command.dry_run(), "{args:?}");
     }
+}
 
+/// [R-CLI-005] and the three that `apply` carries land in the parsed command,
+/// rather than being accepted and forgotten.
+#[test]
+fn the_install_flags_reach_the_parsed_command() {
     let parsed = parse(&["apply", "--force", "--no-rollback", "--ignore-lock"]).expect("apply");
     let Command::Apply {
         force,
@@ -103,6 +150,29 @@ fn the_mutating_commands_take_dry_run() {
         panic!("expected apply");
     };
     assert!(force && no_rollback && ignore_lock);
+
+    let parsed = parse(&["add", "zsh", "-f", "--no-rollback"]).expect("add");
+    let Command::Add {
+        force, no_rollback, ..
+    } = parsed.command
+    else {
+        panic!("expected add");
+    };
+    assert!(force && no_rollback);
+}
+
+/// [R-CLI-016] accepted, and inert. `v0.1.0` declares the flag and reads it
+/// nowhere, so neither binary resolves without the lock, and a test that
+/// asserted it did would be asserting a feature that has never existed.
+#[test]
+fn ignore_lock_is_accepted_and_does_nothing() {
+    for args in [
+        vec!["apply", "--ignore-lock"],
+        vec!["add", "zsh", "--ignore-lock"],
+        vec!["upgrade", "--ignore-lock"],
+    ] {
+        parse(&args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+    }
 }
 
 /// [R-CLI-006] `--format json` everywhere, and `--json` still accepted on the

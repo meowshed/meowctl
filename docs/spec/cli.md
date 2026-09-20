@@ -35,9 +35,25 @@ with no `git` subprocess.
 **[R-CLI-004]** `--config` MUST override the config directory resolution in
 [R-COMMON-020], and `--verbose` MUST be available on every command.
 
-**[R-CLI-005]** Each mutating command MUST accept `--dry-run`, and `apply`
-MUST additionally accept `--force`, `--no-rollback`, and `--ignore-lock`,
-matching `v0.1.0`.
+**[R-CLI-005]** Each lifecycle command MUST accept `--dry-run`, `--verbose`
+and `--no-rollback`, and `apply`, `add` and `upgrade` MUST additionally accept
+`--force` and `--ignore-lock`, matching `v0.1.0`:
+
+| Command | `-n` | `--no-rollback` | `-v` | `-f` | `--ignore-lock` |
+| --- | --- | --- | --- | --- | --- |
+| `apply` | yes | yes | yes | yes | yes |
+| `add` | yes | yes | yes | yes | yes |
+| `upgrade` | yes | yes | yes | yes | yes |
+| `remove` | yes | yes | yes | no | no |
+| `update` | yes | yes | yes | no | no |
+| `verify` | yes | yes | yes | no | no |
+
+An earlier draft said `--dry-run` on "each mutating command" and the other
+four on `apply` alone. `addLifecycleFlags` and `addInstallFlags` in
+`internal/cli/lifecycle.go` are the two groups, and the table is which command
+calls which. The draft was written from `apply` rather than from the helpers,
+and the implementation followed it: five commands shipped without
+`--no-rollback`, two without `--force`, and `verify` without `--dry-run`.
 
 **[R-CLI-006]** `--format json` MUST be available on every command and MUST
 select `JsonSink`; see [R-TUI-032]. `--json` MUST remain accepted as an alias
@@ -67,6 +83,20 @@ suspension that finishes the sink before the process stops, so the cursor is
 restored; see [R-TUI-023]. The handler belongs here because a signal arrives
 at the process, and a sink that installed one would be a library taking a
 process-wide resource.
+
+**[R-CLI-015]** `--no-rollback` on `verify` MUST be accepted and MUST change
+nothing. `verify` runs one read-only phase, which journals nothing, so there is
+never anything to undo; see [R-COMMON-012].
+
+**[R-CLI-016]** `--ignore-lock` MUST be accepted and MUST change nothing,
+which is what `v0.1.0` does.
+
+The flag is declared in `internal/cli/lifecycle.go:110` and read nowhere:
+`IgnoreLock` is set on `runConfig` and no code path consults it. Resolving
+without the lock is behaviour neither binary has ever had. Dropping the flag
+would break a script that passes it; implementing it would be new behaviour
+and needs its own requirement. Until then it is inert, and this says so rather
+than leaving a reader to infer it from a help string.
 
 ## Output
 

@@ -110,6 +110,15 @@ pub enum Command {
         /// Show what would change without writing files
         #[arg(long, short = 'n')]
         dry_run: bool,
+        /// Force re-install even if already completed
+        #[arg(long, short = 'f')]
+        force: bool,
+        /// Skip automatic rollback on failure
+        #[arg(long)]
+        no_rollback: bool,
+        /// Ignore lock file when resolving modules
+        #[arg(long)]
+        ignore_lock: bool,
     },
 
     /// Remove component(s) from local.star and uninstall them
@@ -120,6 +129,9 @@ pub enum Command {
         /// Show what would change without writing files
         #[arg(long, short = 'n')]
         dry_run: bool,
+        /// Skip automatic rollback on failure
+        #[arg(long)]
+        no_rollback: bool,
     },
 
     /// Run the upgrade phase set for all (or specified) components
@@ -129,12 +141,27 @@ pub enum Command {
         /// Print what would be done without executing
         #[arg(long, short = 'n')]
         dry_run: bool,
+        /// Force re-install even if already completed
+        #[arg(long, short = 'f')]
+        force: bool,
+        /// Skip automatic rollback on failure
+        #[arg(long)]
+        no_rollback: bool,
+        /// Ignore lock file when resolving modules
+        #[arg(long)]
+        ignore_lock: bool,
     },
 
     /// Verify the current environment against the dotfiles config
     Verify {
         /// Only these components
         components: Vec<String>,
+        /// Print what would be done without executing
+        #[arg(long, short = 'n')]
+        dry_run: bool,
+        /// Skip automatic rollback on failure
+        #[arg(long)]
+        no_rollback: bool,
     },
 
     /// Pull the latest dotfiles from the remote repo and apply changes
@@ -142,6 +169,9 @@ pub enum Command {
         /// Show what would change without writing files
         #[arg(long, short = 'n')]
         dry_run: bool,
+        /// Skip automatic rollback on failure
+        #[arg(long)]
+        no_rollback: bool,
         /// Auto-apply changes without prompting
         #[arg(long, short = 'y')]
         yes: bool,
@@ -269,6 +299,7 @@ impl Command {
             | Command::Add { dry_run, .. }
             | Command::Remove { dry_run, .. }
             | Command::Upgrade { dry_run, .. }
+            | Command::Verify { dry_run, .. }
             | Command::Update { dry_run, .. } => *dry_run,
             Command::Dep { command } => command.dry_run(),
             // A command that changes nothing has nothing to preview.
