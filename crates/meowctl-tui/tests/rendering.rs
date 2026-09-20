@@ -579,3 +579,20 @@ fn a_palette_from_a_file_reaches_the_rendered_line() {
 
     assert!(out.text().contains("255;0;0"), "{}", out.text());
 }
+
+/// [R-TUI-055] parsing takes text, not a path, because this crate depends on
+/// `meowctl-common` and on nothing else in the workspace.
+///
+/// Checked against the manifest rather than argued in a comment: a
+/// `meowctl-fs` added here for one read is the boundary going for a
+/// convenience, and it would be added in a diff nobody reads twice.
+#[test]
+fn this_crate_has_no_way_to_read_a_file() {
+    let manifest = include_str!("../Cargo.toml");
+    for forbidden in ["meowctl-fs", "meowctl-config", "meowctl-engine"] {
+        assert!(
+            !manifest.contains(forbidden),
+            "{forbidden} reached meowctl-tui"
+        );
+    }
+}
