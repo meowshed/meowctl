@@ -113,6 +113,15 @@ never reads `$XDG_CACHE_HOME`, so a machine that relocates its cache still has
 and it is why the compatibility corpus cannot share a cache with `v0.1.0`
 through that variable.
 
+**[R-COMMON-023]** The home directory MUST come from `$HOME`, and from
+`$USERPROFILE` when `$HOME` is unset on Windows. Neither being set MUST be an
+error rather than a guess.
+
+`os.UserHomeDir`, which `v0.1.0` calls, reads `$USERPROFILE` on Windows and
+`$HOME` everywhere else. Reading only `$HOME` makes every invocation on
+Windows fail before it does anything, which is what the test matrix caught
+once a test ran the binary rather than a function.
+
 **[R-COMMON-022]** Path resolution MUST expand a leading `~` to the home
 directory, matching `expandPath` in `internal/ctx/methods.go`, and MUST reject
 a path that is not absolute once expanded. A path that escapes the directory it

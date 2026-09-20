@@ -10,9 +10,9 @@ use clap::{CommandFactory as _, Parser as _};
 use meowctl_common::{Event, Level, Severity, paths};
 use meowctl_config::Layout;
 use meowctl_fs::FileSystem;
-use meowctl_tui::{Caps, JsonSink, LiveSink, Mode, PlainSink, Sink, SystemEnv, Theme};
+use meowctl_tui::{Caps, JsonSink, LiveSink, Mode, PlainSink, ShellSink, Sink, SystemEnv, Theme};
 
-use crate::cli::{Cli, Format};
+use crate::cli::{Cli, Command, Format};
 use crate::{CliError, CliResult};
 
 mod commands;
@@ -89,6 +89,14 @@ fn build_sink(cli: &Cli) -> Box<dyn Sink> {
     let json = matches!(cli.global.format, Some(Format::Json)) || cli.command.wants_json();
     if json {
         return Box::new(JsonSink::new(Box::new(std::io::stdout())));
+    }
+
+    // `hook` writes shell code that a shell evaluates, so its sink writes
+    // what the hooks emitted and nothing else. `--format json` above still
+    // wins, because a program reading events is not a shell evaluating them;
+    // see [R-TUI-013].
+    if matches!(cli.command, Command::Hook { .. }) {
+        return Box::new(ShellSink::new(Box::new(std::io::stdout())));
     }
 
     // A command whose standard output another program reads gets a sink that

@@ -6,11 +6,11 @@
 
 use std::sync::Arc;
 
-use meowctl_common::{ComponentId, Event, Level, PhaseSet};
-use meowctl_config::{InstalledLock, LockFile, Sentinel};
+use meowctl_common::{ComponentId, Event, Level, Phase, PhaseSet};
+use meowctl_config::{HookError, InstalledLock, LockFile, Sentinel};
 use meowctl_engine::{
-    ComponentSource, Declaration, Graph, Inputs, Plan, Progress, Runner, Settings, Sources,
-    discover, fingerprints, interrupted_run, stale_components,
+    ComponentSource, Declaration, Discovered, Graph, Inputs, Plan, Progress, Runner, Settings,
+    Sources, discover, fingerprints, interrupted_run, stale_components,
 };
 use meowctl_module::{Cache, ModuleLoader, Roots, Upgrade};
 use meowctl_starlark::{Evaluator, Loader, NoLoader};
@@ -68,19 +68,14 @@ pub(super) fn run(cli: &Cli, session: &mut Session<'_>) -> CliResult<()> {
         Command::Add { components, .. } => super::writing::add(session, components),
         Command::Remove { components, .. } => super::writing::remove(session, components),
         Command::Dep {
-            command: DepCommand::Add {
-                name,
-                version,
-                source,
-                local,
-            },
-        } => super::writing::dep_add(
-            session,
-            name,
-            version.as_deref(),
-            source.as_deref(),
-            *local,
-        ),
+            command:
+                DepCommand::Add {
+                    name,
+                    version,
+                    source,
+                    local,
+                },
+        } => super::writing::dep_add(session, name, version.as_deref(), source.as_deref(), *local),
         Command::Dep {
             command: DepCommand::Remove { name, local },
         } => super::writing::dep_remove(session, name, *local),
@@ -99,10 +94,13 @@ pub(super) fn run(cli: &Cli, session: &mut Session<'_>) -> CliResult<()> {
         } => super::writing::dep_tidy(session),
         Command::Update { yes, .. } => super::writing::update(session, *yes),
 
-        // Replacing the running binary is a different kind of work from
-        // everything else here, and nothing in the cutover needs it.
+        // Not absent, and not pretending. `v0.1.0` renames an unverified
+        // download over the running binary; reproducing that would ship the
+        // weakness deliberately, and there is no published checksum to verify
+        // against yet. See [R-CLI-070] and [R-CLI-071].
         Command::SelfUpdate => Err(CliError::General(
-            "self-update is not implemented in this build; install the new release the way you installed this one"
+            "self-update cannot update this build: no release publishes a checksum to verify a \
+             download against. Install the new release the way you installed this one"
                 .to_owned(),
         )),
     }
@@ -115,6 +113,14 @@ impl Session<'_> {
     pub(super) fn say(&mut self, text: &str) {
         self.sink.handle(&Event::Message {
             level: Level::Info,
+            text: text.to_owned(),
+        });
+    }
+
+    /// Says something the reader should act on.
+    pub(super) fn warn(&mut self, text: &str) {
+        self.sink.handle(&Event::Message {
+            level: Level::Warn,
             text: text.to_owned(),
         });
     }
@@ -262,6 +268,36 @@ fn declarations(session: &Session<'_>, loader: &dyn Loader) -> CliResult<Vec<Dec
     Ok(declared)
 }
 
+/// Reads the configuration and discovers what it declares.
+///
+/// The first pass, shared by every command that needs a graph. It evaluates
+/// each component file once and registers the package managers, so a hook in
+/// the first component can declare a package the last one handles; see
+/// [R-ENGINE-020].
+fn resolve(session: &Session<'_>, loader: &ModuleLoader<'_>) -> CliResult<Discovered> {
+    let declared = declarations(session, loader)?;
+    let components = session.layout.components();
+    let directories: Vec<std::path::PathBuf> = session
+        .fs
+        .read_dir(&components)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|path| {
+            matches!(
+                session.fs.entry(path),
+                Ok(Some(meowctl_fs::Entry::Directory))
+            )
+        })
+        .collect();
+    let sources = ConfigSources {
+        declared,
+        loader,
+        components,
+        directories,
+    };
+    Ok(discover(&sources, loader, &session.platform)?)
+}
+
 /// Runs a phase set.
 pub(super) fn apply(
     session: &mut Session<'_>,
@@ -282,28 +318,7 @@ pub(super) fn apply(
 
     let lock = session.lock()?;
     let loader = session.loader(&lock);
-    let declared = declarations(session, &loader)?;
-    let components = session.layout.components();
-    let directories: Vec<std::path::PathBuf> = session
-        .fs
-        .read_dir(&components)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|path| {
-            matches!(
-                session.fs.entry(path),
-                Ok(Some(meowctl_fs::Entry::Directory))
-            )
-        })
-        .collect();
-    let sources = ConfigSources {
-        declared,
-        loader: &loader,
-        components,
-        directories,
-    };
-
-    let discovered = discover(&sources, &loader, &session.platform)?;
+    let discovered = resolve(session, &loader)?;
     let graph = Graph::build(&discovered)?;
     let graph = graph.restricted_to(filter)?;
 
@@ -364,6 +379,7 @@ pub(super) fn apply(
             environment: session.environment.clone(),
             dry_run: false,
             rollback,
+            shell: None,
         },
     )
     .recording(progress);
@@ -375,12 +391,104 @@ pub(super) fn apply(
     }
 }
 
+/// The shell `ctx.shell` reports, from `$SHELL`.
+///
+/// The login shell rather than the one that spawned this process, which is
+/// what `v0.1.0` reads and what a component branching on `ctx.shell` means.
+fn current_shell(environment: &std::collections::BTreeMap<String, String>) -> Option<String> {
+    let path = environment.get("SHELL")?;
+    std::path::Path::new(path)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+}
+
 /// Runs the runtime hooks for a phase and emits what they contributed.
+///
+/// The command a shell runs on every spawn. Nothing it does reaches the exit
+/// code: a shell that cannot start is worse than a shell that starts without
+/// its integration, so a failure is recorded in `.hook-error` and the command
+/// still succeeds; see [R-CLI-062].
 fn hook(session: &mut Session<'_>, phase: &str) -> CliResult<()> {
-    let _ = (session, phase);
-    Err(CliError::General(
-        "this command is not implemented in this build yet".to_owned(),
-    ))
+    // Not every phase name, only the two a shell spawn runs. The rest belong
+    // to a phase set and are reached through `apply`; see [R-CLI-060].
+    let phase: Phase = match phase.parse() {
+        Ok(phase @ (Phase::Shell | Phase::Login)) => phase,
+        _ => {
+            return Err(CliError::Usage(format!(
+                "hook takes {} or {}, not {phase}",
+                Phase::Shell,
+                Phase::Login
+            )));
+        }
+    };
+
+    match run_hook(session, phase) {
+        Ok(()) => {
+            HookError::clear(session.fs.as_ref(), &session.layout.hook_error())?;
+            Ok(())
+        }
+        Err(reason) => {
+            let flag = HookError {
+                at: rfc3339(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| d.as_secs()),
+                ),
+                reason,
+            };
+            // The write failing is the one thing left to report, and even
+            // that goes to the flag's absence rather than to the shell.
+            let _ = flag.write(session.fs.as_ref(), &session.layout.hook_error());
+            Ok(())
+        }
+    }
+}
+
+/// Runs one runtime hook phase, reporting why it stopped rather than failing.
+///
+/// The error is a string because it is written to a file and read by a human,
+/// not mapped to an exit code: every path out of `hook` exits zero.
+fn run_hook(session: &mut Session<'_>, phase: Phase) -> Result<(), String> {
+    let describe = |e: &dyn std::fmt::Display| e.to_string();
+
+    let lock = session.lock().map_err(|e| describe(&e))?;
+    let loader = session.loader(&lock);
+    let discovered = resolve(session, &loader).map_err(|e| describe(&e))?;
+    let graph = Graph::build(&discovered).map_err(|e| describe(&e))?;
+
+    // No journal: a `shell` hook that writes is misusing the phase, and a
+    // rollback on a shell spawn would undo the previous one; see
+    // [R-CLI-065].
+    let effects = meowctl_ctx::Effects {
+        fs: Arc::clone(&session.fs),
+        exec: Arc::clone(&session.exec),
+        http: Arc::clone(&session.http),
+        interaction: Arc::clone(&session.interaction),
+        journal: None,
+        events: Arc::clone(&session.events),
+    };
+
+    let evaluator = Evaluator::new(session.platform.clone(), &loader);
+    let mut runner = Runner::new(
+        &graph,
+        &discovered.registry,
+        evaluator,
+        effects,
+        Settings {
+            home: session.home.clone(),
+            state_root: session.layout.root().join("state"),
+            platform: session.platform.clone(),
+            environment: session.environment.clone(),
+            dry_run: false,
+            rollback: false,
+            shell: current_shell(&session.environment),
+        },
+    );
+
+    match runner.run_hook(phase).failure {
+        None => Ok(()),
+        Some(failure) => Err(failure.to_string()),
+    }
 }
 
 /// Lists what the manifests declare.
@@ -589,6 +697,13 @@ fn rfc3339(seconds: u64) -> String {
 /// A directory with no configuration gets "no runs recorded" rather than a
 /// refusal, for the reason [R-CLI-050] gives.
 fn status(session: &mut Session<'_>, all: bool) -> CliResult<()> {
+    // A shell whose integration is missing is what the user came to ask
+    // about, so it is said before the run metadata rather than after it; see
+    // [R-CLI-064].
+    if HookError::present(session.fs.as_ref(), &session.layout.hook_error()) {
+        session.warn("the last runtime hook failed -- run 'meowctl doctor' for the reason");
+    }
+
     let sentinel = Sentinel::read(session.fs.as_ref(), &session.layout.state())?;
 
     if sentinel.last_run.phase_set.is_empty() && sentinel.completed_components.is_empty() {
@@ -658,6 +773,15 @@ fn doctor(session: &mut Session<'_>) -> CliResult<()> {
     ));
     session.say(&format!("module cache: {}", session.cache.display()));
     session.say(&format!("platform: {}", session.platform.os));
+
+    // `doctor` is where the reason lives, because `status` is piped and a
+    // traceback would bury what it reports; see [R-CLI-064].
+    if let Some(flag) = HookError::read(session.fs.as_ref(), &session.layout.hook_error()) {
+        session.warn(&format!(
+            "runtime hook failed at {}: {}",
+            flag.at, flag.reason
+        ));
+    }
     Ok(())
 }
 

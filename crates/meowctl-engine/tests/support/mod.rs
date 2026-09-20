@@ -209,5 +209,6 @@ pub fn settings(platform: &Platform, rollback: bool) -> meowctl_engine::Settings
         environment: std::collections::BTreeMap::new(),
         dry_run: false,
         rollback,
+        shell: Some("fish".to_owned()),
     }
 }

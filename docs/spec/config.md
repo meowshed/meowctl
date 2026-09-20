@@ -32,7 +32,11 @@ resolved by `meowctl-common`; see [R-COMMON-020].
 **[R-CONFIG-001]** The component MUST own exactly these names, as
 `internal/cli/config.go` declares them: `init.star`, `local.star`, `deps.mod`,
 `deps.lock`, `deps.local.mod`, `deps.local.lock`, `state.toml`,
-`installed.lock`, `pkgs.lock`, and `pkgs.local.lock`.
+`installed.lock`, `pkgs.lock`, `pkgs.local.lock`, and `.hook-error`.
+
+`.hook-error` was missing from an earlier draft of this list, which named the
+nine files a run reads and writes and overlooked the one a shell spawn writes;
+`internal/cli/config.go` declares all ten.
 
 **[R-CONFIG-002]** Every write MUST be atomic through `FileSystem`; see
 [R-FS-003]. These files are read by the next run and by a second binary, and a
@@ -181,6 +185,15 @@ MUST record the phase, the component, and a UTC timestamp for each.
 **[R-CONFIG-044]** The rollback outcome MUST be one of the empty string, `ok`,
 `partial`, or `failed`, matching the `RolledBack` constants and
 [R-OPS-024].
+
+## The hook error flag
+
+**[R-CONFIG-064]** `.hook-error` MUST hold an RFC 3339 timestamp on the first
+line and the failure on the second, and MUST be written with mode `0o600`.
+
+It is a flag rather than a log: each failure replaces the last, because what a
+user needs is the reason their shell has no integration now, not a history of
+every spawn since it broke.
 
 ## The Starlark editor
 

@@ -39,15 +39,29 @@ rather than to own it.
 
 ## Sinks
 
-**[R-TUI-010]** Three sinks MUST consume the same stream: `LiveSink` for a
-capable terminal, `PlainSink` for everything else, and `JsonSink` for
-`--format json`.
+**[R-TUI-010]** Four sinks MUST consume the same stream: `LiveSink` for a
+capable terminal, `PlainSink` for everything else, `JsonSink` for
+`--format json`, and `ShellSink` for `meowctl hook`.
+
+An earlier draft named three. `ShellSink` was missed because `hook` was the
+last command to be written, and it is not a rendering of a run at all: its
+output is evaluated by a shell.
 
 **[R-TUI-011]** A sink MUST be chosen once per command, from the detected
 capabilities and the flags, and MUST NOT change mid-run.
 
-**[R-TUI-012]** Every sink MUST render every event. A sink that silently drops
-a variant makes a command's output depend on where it runs.
+**[R-TUI-012]** Every sink that renders a run MUST render every event. A sink
+that silently drops a variant makes a command's output depend on where it
+runs.
+
+`ShellSink` is the exception and is not a rendering of a run. It MUST write
+each `ShellLine` verbatim, with no decoration, no indent and no colour, and
+MUST write nothing for any other event, because whatever it wrote the shell
+would evaluate; see [R-CLI-061] and [R-COMMON-044].
+
+**[R-TUI-013]** `ShellSink` MUST NOT be selectable by a flag. `hook` chooses
+it, and `--format json` on `hook` MUST still produce the event stream, because
+a program reading events is not a shell evaluating them.
 
 ## The live sink
 

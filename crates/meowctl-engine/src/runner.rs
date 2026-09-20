@@ -38,6 +38,12 @@ pub struct Settings {
     pub dry_run: bool,
     /// Whether a failure undoes what the run did; see [R-ENGINE-032].
     pub rollback: bool,
+    /// The shell a runtime hook is contributing to, as `ctx.shell` reports
+    /// it.
+    ///
+    /// `None` everywhere else, which is how a component tests whether it is
+    /// being asked to contribute to a shell; see [R-CTX-002].
+    pub shell: Option<String>,
 }
 
 /// How a run went.
@@ -250,6 +256,39 @@ impl<'a> Runner<'a> {
 
         if report.failure.is_some() && self.settings.rollback {
             report.rolled_back = self.roll_back();
+        }
+        report
+    }
+
+    /// Runs one runtime hook phase over every component, in graph order.
+    ///
+    /// Not `run`, and not given a [`Plan`], because the runtime hook phases
+    /// belong to no phase set and there is nothing to plan: `shell` runs on
+    /// every shell spawn, so skipping a component because it ran last time
+    /// would mean a shell without its integration. Nothing is recorded,
+    /// nothing is journalled, and nothing is rolled back; see
+    /// [R-ENGINE-035].
+    ///
+    /// The only events it emits are the ones a hook produces, so a sink
+    /// writing shell code sees shell code and nothing else; see [R-CLI-061].
+    pub fn run_hook(&mut self, phase: Phase) -> Report {
+        let mut report = Report::default();
+        let effects = self.effects.clone();
+
+        for component in self.graph.components() {
+            let outcome = self.run_component(&effects, component, phase);
+            report
+                .finished
+                .push((phase, component.id.clone(), outcome.clone()));
+
+            if let Outcome::Failed { error } = outcome {
+                report.failure = Some(Failure {
+                    phase,
+                    component: component.id.clone(),
+                    reason: error,
+                });
+                break;
+            }
         }
         report
     }
@@ -484,9 +523,13 @@ impl<'a> Runner<'a> {
             dry_run: self.settings.dry_run,
             component_dir: component.directory.clone(),
             state_dir: self.settings.state_root.join(component.logical_name()),
-            // `None` outside `shell.star`, which is how a component tests
-            // whether it is being asked to contribute to a shell.
-            shell: None,
+            // Set only in a runtime hook phase, which is how a component
+            // tests whether it is being asked to contribute to a shell; see
+            // [R-CTX-002].
+            shell: phase
+                .is_runtime_hook()
+                .then(|| self.settings.shell.clone())
+                .flatten(),
             platform: self.settings.platform.clone(),
             environment: self.settings.environment.clone(),
             phase,

@@ -101,6 +101,12 @@ impl Layout {
         self.root.join("rollback.jsonl")
     }
 
+    /// `.hook-error`, the flag a failed runtime hook leaves.
+    #[must_use]
+    pub fn hook_error(&self) -> PathBuf {
+        self.root.join(".hook-error")
+    }
+
     /// The `components/` directory.
     #[must_use]
     pub fn components(&self) -> PathBuf {

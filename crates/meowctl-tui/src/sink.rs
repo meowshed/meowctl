@@ -262,6 +262,42 @@ impl Sink for JsonSink {
     }
 }
 
+/// What a shell evaluates.
+///
+/// Not a rendering of a run. `meowctl hook shell` runs on every shell spawn
+/// and its stdout is passed to `eval`, so a glyph, an indent or a colour code
+/// would be evaluated as shell code. Every event but [`Event::ShellLine`] is
+/// dropped for the same reason; see [R-TUI-012] and [R-CLI-061].
+pub struct ShellSink {
+    out: Box<dyn Write>,
+}
+
+impl std::fmt::Debug for ShellSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ShellSink").finish_non_exhaustive()
+    }
+}
+
+impl ShellSink {
+    /// A sink writing to `out`.
+    #[must_use]
+    pub fn new(out: Box<dyn Write>) -> Self {
+        ShellSink { out }
+    }
+}
+
+impl Sink for ShellSink {
+    fn handle(&mut self, event: &Event) {
+        if let Event::ShellLine { line } = event {
+            let _ = writeln!(self.out, "{line}");
+        }
+    }
+
+    fn finish(&mut self) {
+        let _ = self.out.flush();
+    }
+}
+
 /// The plan as one entry per component, in the order it was planned.
 ///
 /// A component runs when any of its phases will, and carries a reason only

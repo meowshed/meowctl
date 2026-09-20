@@ -73,7 +73,9 @@ fn build(runs: Vec<ScriptedRun>, responses: ScriptedHttp, phase: Phase) -> (Ctx,
         dry_run: false,
         component_dir: PathBuf::from(COMPONENT_DIR),
         state_dir: PathBuf::from(STATE_DIR),
-        shell: None,
+        // Set in a runtime hook phase and nowhere else, as the engine sets
+        // it; see [R-CTX-002].
+        shell: phase.is_runtime_hook().then(|| "fish".to_owned()),
         platform: Platform {
             os: "macos".to_owned(),
             ..Platform::default()
@@ -687,5 +689,74 @@ fn the_surface_follows_from_the_phase() {
     }
     for phase in [Phase::Install, Phase::Update, Phase::Uninstall] {
         assert_eq!(Surface::for_phase(phase), Surface::Full, "{phase}");
+    }
+}
+
+/// [R-CTX-002] a component chooses between `set -gx` and `export` by reading
+/// this, so it has to name the shell that will evaluate the line.
+#[test]
+fn shell_names_the_shell_in_a_runtime_hook_phase() {
+    let (ctx, world) = build(Vec::new(), ScriptedHttp::new(), Phase::Shell);
+    call(
+        &ctx,
+        Surface::Shell,
+        "    ctx.emit(\"shell is \" + ctx.shell)",
+    )
+    .expect("the hook reads ctx.shell");
+
+    assert!(
+        world
+            .events
+            .lock()
+            .expect("events")
+            .iter()
+            .any(|e| matches!(e, Event::ShellLine { line } if line == "shell is fish")),
+        "ctx.shell named the shell"
+    );
+}
+
+/// [R-CTX-002] `None` everywhere else, which is how a component tests whether
+/// it is being asked to contribute to a shell at all.
+#[test]
+fn shell_is_none_outside_a_runtime_hook_phase() {
+    let (ctx, _) = plain();
+    call(
+        &ctx,
+        Surface::Full,
+        "    if ctx.shell != None:\n        fail(\"ctx.shell was set\")",
+    )
+    .expect("ctx.shell is None in install");
+}
+
+/// [R-CTX-031] a shell hook runs on every shell spawn, so the surface it gets
+/// carries nothing that could leave a trace behind.
+#[test]
+fn a_runtime_hook_reaches_only_the_eight_attributes() {
+    let (ctx, _) = build(Vec::new(), ScriptedHttp::new(), Phase::Shell);
+
+    // An absolute path on both platforms: [R-CTX-012] refuses anything else,
+    // and a Windows run would fail on the refusal rather than on the surface.
+    let somewhere = format!("ctx.file_exists({})", quoted(COMPONENT_DIR));
+    for allowed in [
+        "ctx.emit(\"x\")",
+        somewhere.as_str(),
+        "ctx.platform",
+        "ctx.shell",
+        "ctx.state_dir",
+    ] {
+        call(&ctx, Surface::Shell, &format!("    {allowed}"))
+            .unwrap_or_else(|e| panic!("{allowed} should be reachable: {e}"));
+    }
+
+    let write = format!("ctx.write_file({}, \"b\")", quoted(COMPONENT_DIR));
+    let link = format!(
+        "ctx.symlink({}, {})",
+        quoted(COMPONENT_DIR),
+        quoted(STATE_DIR)
+    );
+    for refused in [write.as_str(), link.as_str()] {
+        let err = call(&ctx, Surface::Shell, &format!("    {refused}"))
+            .expect_err("a shell hook must not reach a mutating method");
+        assert!(err.to_string().contains("ctx"), "{refused}: {err}");
     }
 }

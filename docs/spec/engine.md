@@ -156,6 +156,17 @@ The engine is the only place that knows both the flag and the phase. The
 command line knows the flag and not the phases; the executor knows the phase
 it was built for and not the flag.
 
+**[R-ENGINE-035]** A runtime hook phase MUST run over every component in graph
+order without a `Plan`. It MUST NOT consult the sentinel, MUST NOT record what
+finished, MUST NOT journal, and MUST NOT roll back.
+
+The runtime hook phases belong to no phase set, which is why there is nothing
+to plan: `shell` runs on every shell spawn, so skipping a component because it
+ran last time would mean a shell without its integration. The rest follows
+from that. Recording thousands of completions would grow `state.toml` without
+bound, and a rollback on a shell spawn would undo the previous one; see
+[R-COMMON-013] and [R-CLI-065].
+
 ## Sentinel and staleness
 
 **[R-ENGINE-040]** A component already recorded as completed for a phase MUST
