@@ -80,6 +80,16 @@ declaring `after = ["@stdlib//components/apt"]` is relying on apt being
 installed, and requiring it to be named twice would make every component file
 a change to `init.star` as well.
 
+**[R-ENGINE-018]** A bare name in the `after` list of a module's component
+MUST resolve inside that module, as `<module>//components/<name>`. A bare name
+in the configuration's own component resolves in the configuration.
+
+A module's components refer to each other by name: `@dotmeow`'s root component
+says `after = ["fish-config"]`, meaning the one beside it. Resolving that
+against the configuration looks for a file the user never wrote, and fails on
+every configuration that uses an aggregate module. `resolveBareDep` is the
+same rule.
+
 **[R-ENGINE-015]** A cycle MUST be reported with the components on it, and MUST
 exit with the configuration code. `TopoSort` reports only that there is one,
 which leaves a user with a hundred components and no way to find the two that

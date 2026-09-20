@@ -162,6 +162,32 @@ impl Declaration {
     }
 }
 
+/// Reads a dependency name in the context of whoever declared it.
+///
+/// A module's components refer to each other by name: `@dotmeow`'s root
+/// component says `after = ["fish-config"]`, meaning the one beside it.
+/// Resolving that against the configuration looks for a file the user never
+/// wrote. `resolveBareDep` is the same rule; see [R-ENGINE-018].
+#[must_use]
+pub fn resolve_bare(declarer: &ComponentId, name: &str) -> String {
+    if name.starts_with('@') || name.contains("//") {
+        return name.to_owned();
+    }
+    let Some(prefix) = module_prefix(declarer.as_str()) else {
+        return name.to_owned();
+    };
+    format!("{prefix}components/{name}")
+}
+
+/// The `<module>//` a component belongs to, when it belongs to one.
+fn module_prefix(url: &str) -> Option<String> {
+    if let Some(index) = url.find("//") {
+        return Some(url[..index + 2].to_owned());
+    }
+    // `@name` with no path is a module root, and its components are under it.
+    url.starts_with('@').then(|| format!("{url}//"))
+}
+
 /// Runs the first pass.
 ///
 /// # Errors
@@ -237,11 +263,14 @@ pub fn discover(
         };
 
         // A name the configuration does not declare is pulled in rather than
-        // ignored; see [R-ENGINE-014].
+        // ignored; see [R-ENGINE-014]. A bare name inside a module's
+        // component means the one beside it, not one in the configuration;
+        // see [R-ENGINE-018].
         for name in &after {
-            let logical = ComponentId::logical_of(name);
+            let resolved = resolve_bare(&id, name);
+            let logical = ComponentId::logical_of(&resolved);
             if !seen.contains_key(logical) {
-                pending.push_back((Declaration::new(name.clone()), false));
+                pending.push_back((Declaration::new(resolved), false));
             }
         }
 

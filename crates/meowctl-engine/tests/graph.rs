@@ -355,3 +355,56 @@ fn a_component_that_does_not_evaluate_names_itself() {
     let err = discover(&config, &loader, &macos()).expect_err("should refuse");
     assert!(err.to_string().contains("broken"), "{err}");
 }
+
+/// [R-ENGINE-018] a module's components refer to each other by name. Reading
+/// `after = ["fish-config"]` inside `@dotmeow` against the configuration
+/// looks for a file the user never wrote, and fails on every configuration
+/// that uses an aggregate module.
+#[test]
+fn a_bare_dependency_inside_a_module_resolves_inside_that_module() {
+    let config = Config::new()
+        .declaring(
+            Declaration::new("@dotmeow"),
+            "after = [\"fish-config\"]\ncomponent(\"@dotmeow\")\n",
+        )
+        .holding(
+            "@dotmeow//components/fish-config",
+            &plain("@dotmeow//components/fish-config"),
+        );
+
+    let graph = graph_of(&config, &macos()).expect("the graph builds");
+    // `@dotmeow` keeps its `@`: `logicalName` strips a path, not a sigil.
+    assert_eq!(graph.names(), ["fish-config", "@dotmeow"]);
+}
+
+/// [R-ENGINE-018] and the rule is about where the name is written, not about
+/// the name: the same bare name in the configuration's own component means a
+/// component in the configuration.
+#[test]
+fn a_bare_dependency_in_the_configuration_resolves_in_the_configuration() {
+    let config = Config::new()
+        .declaring(Declaration::new("mine").after(&["helper"]), &plain("mine"))
+        .holding("helper", &plain("helper"));
+
+    let graph = graph_of(&config, &macos()).expect("the graph builds");
+    assert_eq!(graph.names(), ["helper", "mine"]);
+}
+
+/// [R-ENGINE-018] a name that is already qualified is left alone, whoever
+/// wrote it: `@dotmeow` depending on `@stdlib//components/tmux` means that
+/// one, not a `tmux` of its own.
+#[test]
+fn a_qualified_dependency_is_left_alone_inside_a_module() {
+    let config = Config::new()
+        .declaring(
+            Declaration::new("@dotmeow").after(&["@stdlib//components/tmux"]),
+            &plain("@dotmeow"),
+        )
+        .holding(
+            "@stdlib//components/tmux",
+            &plain("@stdlib//components/tmux"),
+        );
+
+    let graph = graph_of(&config, &macos()).expect("the graph builds");
+    assert_eq!(graph.names(), ["tmux", "@dotmeow"]);
+}
