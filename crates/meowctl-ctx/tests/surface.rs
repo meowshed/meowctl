@@ -734,9 +734,12 @@ fn shell_is_none_outside_a_runtime_hook_phase() {
 fn a_runtime_hook_reaches_only_the_eight_attributes() {
     let (ctx, _) = build(Vec::new(), ScriptedHttp::new(), Phase::Shell);
 
+    // An absolute path on both platforms: [R-CTX-012] refuses anything else,
+    // and a Windows run would fail on the refusal rather than on the surface.
+    let somewhere = format!("ctx.file_exists({})", quoted(COMPONENT_DIR));
     for allowed in [
         "ctx.emit(\"x\")",
-        "ctx.file_exists(\"/nowhere\")",
+        somewhere.as_str(),
         "ctx.platform",
         "ctx.shell",
         "ctx.state_dir",
@@ -745,10 +748,13 @@ fn a_runtime_hook_reaches_only_the_eight_attributes() {
             .unwrap_or_else(|e| panic!("{allowed} should be reachable: {e}"));
     }
 
-    for refused in [
-        "ctx.write_file(\"/a\", \"b\")",
-        "ctx.symlink(\"/a\", \"/b\")",
-    ] {
+    let write = format!("ctx.write_file({}, \"b\")", quoted(COMPONENT_DIR));
+    let link = format!(
+        "ctx.symlink({}, {})",
+        quoted(COMPONENT_DIR),
+        quoted(STATE_DIR)
+    );
+    for refused in [write.as_str(), link.as_str()] {
         let err = call(&ctx, Surface::Shell, &format!("    {refused}"))
             .expect_err("a shell hook must not reach a mutating method");
         assert!(err.to_string().contains("ctx"), "{refused}: {err}");
