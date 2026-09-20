@@ -130,6 +130,18 @@ pub struct Colour {
     pub ansi16: u8,
 }
 
+/// Why a theme file could not be used.
+///
+/// One variant: a file that does not parse and a file naming a role that does
+/// not exist are the same mistake from the user's side, and the message
+/// carries which it was; see [R-TUI-052].
+#[derive(Debug, thiserror::Error)]
+#[error("the theme is unusable and the default is in use: {reason}")]
+pub struct ThemeError {
+    /// What the parser said.
+    reason: String,
+}
+
 /// The palette.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Palette {
@@ -145,6 +157,74 @@ pub struct Palette {
     pub info: Colour,
     /// Present but not the point.
     pub muted: Colour,
+}
+
+impl Palette {
+    /// The palette a theme file describes, over the default.
+    ///
+    /// A role the file does not name keeps its default, so a user who wants
+    /// one colour changed writes one table. A role it names is replaced
+    /// whole: a partial colour is four numbers with one missing, and guessing
+    /// which default to mix in produces a colour nobody chose; see
+    /// [R-TUI-054].
+    ///
+    /// Takes the text rather than a path, because this crate depends on
+    /// `meowctl-common` and on nothing else in the workspace and has no
+    /// `FileSystem` to read with; see [R-TUI-055].
+    ///
+    /// # Errors
+    ///
+    /// [`ThemeError`] when the text is not the table-per-role this expects.
+    pub fn parse(text: &str) -> Result<Palette, ThemeError> {
+        let file: ThemeFile = toml::from_str(text).map_err(|e| ThemeError {
+            reason: e.message().to_owned(),
+        })?;
+
+        let mut palette = CATPPUCCIN;
+        for (role, colour) in [
+            (&file.success, &mut palette.success),
+            (&file.failure, &mut palette.failure),
+            (&file.warning, &mut palette.warning),
+            (&file.accent, &mut palette.accent),
+            (&file.info, &mut palette.info),
+            (&file.muted, &mut palette.muted),
+        ] {
+            if let Some(named) = role {
+                *colour = Colour {
+                    r: named.r,
+                    g: named.g,
+                    b: named.b,
+                    ansi16: named.ansi16,
+                };
+            }
+        }
+        Ok(palette)
+    }
+}
+
+/// The file's shape: a table per role, each naming all four numbers.
+///
+/// `deny_unknown_fields` so a misspelled role is a mistake the user hears
+/// about rather than a table that silently does nothing; see [R-TUI-053].
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ThemeFile {
+    success: Option<NamedColour>,
+    failure: Option<NamedColour>,
+    warning: Option<NamedColour>,
+    accent: Option<NamedColour>,
+    info: Option<NamedColour>,
+    muted: Option<NamedColour>,
+}
+
+/// One role's colour, as the file names it.
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NamedColour {
+    r: u8,
+    g: u8,
+    b: u8,
+    ansi16: u8,
 }
 
 /// Catppuccin, which is what `v0.1.0` compiles in and what the rest of this
@@ -205,6 +285,12 @@ impl Theme {
             caps,
             palette: CATPPUCCIN,
         }
+    }
+
+    /// The same, with a palette of the caller's choosing.
+    #[must_use]
+    pub const fn with_palette(caps: Caps, palette: Palette) -> Self {
+        Theme { caps, palette }
     }
 
     /// The glyphs this destination can show.

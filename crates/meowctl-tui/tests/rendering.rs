@@ -500,3 +500,82 @@ fn the_palette_is_data() {
     let painted = theme.paint(meowctl_tui::Role::Muted, "x");
     assert!(painted.contains('x'), "{painted}");
 }
+
+/// [R-TUI-050] and [R-TUI-053]: a theme file names a role and its four
+/// numbers, and the palette that comes back carries them.
+#[test]
+fn a_theme_file_replaces_the_role_it_names() {
+    let palette = meowctl_tui::Palette::parse("[accent]\nr = 1\ng = 2\nb = 3\nansi16 = 4\n")
+        .expect("a role and its numbers");
+
+    assert_eq!(palette.accent.r, 1);
+    assert_eq!(palette.accent.g, 2);
+    assert_eq!(palette.accent.b, 3);
+    assert_eq!(palette.accent.ansi16, 4);
+}
+
+/// [R-TUI-054] a role the file does not name keeps its default, so a user who
+/// wants one colour changed writes one table.
+#[test]
+fn a_role_the_file_leaves_out_keeps_its_default() {
+    let palette = meowctl_tui::Palette::parse("[accent]\nr = 1\ng = 2\nb = 3\nansi16 = 4\n")
+        .expect("one role");
+
+    assert_eq!(palette.success, meowctl_tui::theme::CATPPUCCIN.success);
+    assert_eq!(palette.failure, meowctl_tui::theme::CATPPUCCIN.failure);
+    assert_eq!(palette.muted, meowctl_tui::theme::CATPPUCCIN.muted);
+    assert_ne!(palette.accent, meowctl_tui::theme::CATPPUCCIN.accent);
+}
+
+/// [R-TUI-054] a role it names is replaced whole. Three numbers and a missing
+/// one is a mistake, not a request to mix in a default nobody chose.
+#[test]
+fn a_role_with_a_missing_number_is_refused() {
+    let err = meowctl_tui::Palette::parse("[accent]\nr = 1\ng = 2\nb = 3\n")
+        .expect_err("a partial colour");
+    assert!(err.to_string().contains("ansi16"), "{err}");
+}
+
+/// [R-TUI-052] and [R-TUI-053]: a misspelled role is a mistake the user hears
+/// about, not a table that silently does nothing.
+#[test]
+fn a_role_that_is_not_a_role_is_refused() {
+    let err = meowctl_tui::Palette::parse("[acccent]\nr = 1\ng = 2\nb = 3\nansi16 = 4\n")
+        .expect_err("a misspelled role");
+    assert!(err.to_string().contains("acccent"), "{err}");
+}
+
+/// [R-TUI-052] a file that is not TOML at all falls back rather than failing
+/// the command, and says what the parser saw.
+#[test]
+fn a_file_that_is_not_toml_is_refused_with_a_reason() {
+    let err = meowctl_tui::Palette::parse("this is not toml {{{").expect_err("not toml");
+    assert!(!err.to_string().is_empty(), "the reason is empty");
+}
+
+/// [R-TUI-050] an empty file is a valid one that changes nothing, because a
+/// user who commented every role out has not made a mistake.
+#[test]
+fn an_empty_theme_file_is_the_default_palette() {
+    let palette = meowctl_tui::Palette::parse("# nothing here\n").expect("an empty file");
+    assert_eq!(palette, meowctl_tui::theme::CATPPUCCIN);
+}
+
+/// [R-TUI-051] and [R-TUI-050]: a palette from a file reaches what is
+/// rendered, which is the whole point of the file.
+#[test]
+fn a_palette_from_a_file_reaches_the_rendered_line() {
+    let palette = meowctl_tui::Palette::parse("[info]\nr = 255\ng = 0\nb = 0\nansi16 = 31\n")
+        .expect("one role");
+
+    let out = Captured::default();
+    let theme = Theme::with_palette(caps(ColourDepth::TrueColour, true), palette);
+    let mut sink = PlainSink::new(Box::new(out.clone()), theme);
+    sink.handle(&Event::Message {
+        level: Level::Info,
+        text: "hello".to_owned(),
+    });
+    sink.finish();
+
+    assert!(out.text().contains("255;0;0"), "{}", out.text());
+}

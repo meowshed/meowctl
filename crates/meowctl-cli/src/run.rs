@@ -10,7 +10,9 @@ use clap::{CommandFactory as _, Parser as _};
 use meowctl_common::{Event, Level, Severity, paths};
 use meowctl_config::Layout;
 use meowctl_fs::FileSystem;
-use meowctl_tui::{Caps, JsonSink, LiveSink, Mode, PlainSink, ShellSink, Sink, SystemEnv, Theme};
+use meowctl_tui::{
+    Caps, JsonSink, LiveSink, Mode, Palette, PlainSink, ShellSink, Sink, SystemEnv, Theme,
+};
 
 use crate::cli::{Cli, Command, Format};
 use crate::{CliError, CliResult};
@@ -49,7 +51,16 @@ pub fn run(cli: Cli) -> ExitCode {
     // puts the cursor back; see [R-CLI-014].
     let interrupted = crate::signals::watch_for_interruption();
 
-    let mut sink = build_sink(&cli);
+    // Read before the sink is built, because the sink is chosen once and does
+    // not change mid-run; see [R-TUI-011] and [R-TUI-056].
+    let (palette, complaint) = read_palette(&cli);
+    let mut sink = build_sink(&cli, palette);
+    if let Some(complaint) = complaint {
+        sink.handle(&Event::Message {
+            level: Level::Warn,
+            text: complaint,
+        });
+    }
     let outcome = dispatch(&cli, sink.as_mut(), interrupted);
     sink.finish();
 
@@ -85,7 +96,49 @@ fn report(error: &CliError) {
 /// Chooses the sink, once, from the flags and what the terminal can take.
 ///
 /// Once per command and never changed mid-run; see [R-TUI-011].
-fn build_sink(cli: &Cli) -> Box<dyn Sink> {
+/// The palette to render with, and what to say about how it was reached.
+///
+/// Absence is silent: almost nobody has this file, and a warning on every
+/// command for one the user never wrote is noise. Unreadable and malformed
+/// both warn and fall back, because a user who wrote a theme and is not
+/// seeing it needs to hear why; see [R-TUI-052] and [R-TUI-056].
+fn read_palette(cli: &Cli) -> (Palette, Option<String>) {
+    let Some(path) = theme_path(cli) else {
+        return (meowctl_tui::theme::CATPPUCCIN, None);
+    };
+    let fs = meowctl_fs::RealFs;
+    let bytes = match fs.read(&path) {
+        Ok(bytes) => bytes,
+        Err(meowctl_fs::FsError::NotFound { .. }) => {
+            return (meowctl_tui::theme::CATPPUCCIN, None);
+        }
+        Err(e) => {
+            return (
+                meowctl_tui::theme::CATPPUCCIN,
+                Some(format!("{}: {e}", path.display())),
+            );
+        }
+    };
+
+    match Palette::parse(&String::from_utf8_lossy(&bytes)) {
+        Ok(palette) => (palette, None),
+        Err(e) => (
+            meowctl_tui::theme::CATPPUCCIN,
+            Some(format!("{}: {e}", path.display())),
+        ),
+    }
+}
+
+/// Where the theme file is, when the configuration directory can be found.
+fn theme_path(cli: &Cli) -> Option<PathBuf> {
+    let root = match &cli.global.config {
+        Some(given) => given.clone(),
+        None => paths::config_dir(&paths::SystemEnv).ok()?,
+    };
+    Some(Layout::new(root).theme())
+}
+
+fn build_sink(cli: &Cli, palette: Palette) -> Box<dyn Sink> {
     let json = matches!(cli.global.format, Some(Format::Json)) || cli.command.wants_json();
     if json {
         return Box::new(JsonSink::new(Box::new(std::io::stdout())));
@@ -115,7 +168,7 @@ fn build_sink(cli: &Cli) -> Box<dyn Sink> {
             .map_or(Mode::Auto, |value| Mode::parse(&value)),
     };
     let caps = Caps::detect(mode, &SystemEnv);
-    let theme = Theme::new(caps);
+    let theme = Theme::with_palette(caps, palette);
 
     if caps.motion {
         Box::new(LiveSink::new(destination, theme))
