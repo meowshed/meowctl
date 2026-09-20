@@ -55,9 +55,20 @@ commands that migrate it, and MUST exit with the configuration code.
 
 ## Declarations
 
-**[R-CONFIG-010]** `init.star` and `local.star` MUST be evaluated by
-[`meowctl-starlark`](starlark.md), not parsed here. This component owns what
-the resulting declarations mean on disk, not how they are produced.
+**[R-CONFIG-010]** `init.star`, `local.star` and `deps.mod` MUST be evaluated
+by [`meowctl-starlark`](starlark.md). This component never evaluates one: a
+second implementation of the language is a second set of semantics, and the two
+drift. It owns what the resulting declarations mean on disk, not how they are
+produced.
+
+It does parse them, for [R-CONFIG-050] and [R-CONFIG-051], which change one
+declaration without disturbing the rest of the file. Parsing to locate a
+statement is not evaluating it, and the two need different things: editing
+needs the syntax tree, evaluation needs the builtins and the accumulator.
+
+Both MUST use the same dialect. A file one accepts and the other rejects would
+mean `meowctl add` succeeding on a configuration that then fails to apply, so
+the dialect is named in both crates and a test runs one file through both.
 
 **[R-CONFIG-011]** `deps.mod` MUST support the three statements
 `internal/modfile/modfile.go` documents: `module(name, version)`,
@@ -158,6 +169,10 @@ MUST record the phase, the component, and a UTC timestamp for each.
 **[R-CONFIG-050]** Adding or removing a `component()` declaration in
 `init.star` or `local.star` MUST preserve every comment, every blank line, and
 the formatting of every statement it does not touch.
+
+The file belongs to the user. A round trip through a parsed model and a printer
+would lose the comments they wrote and the grouping they chose, so the edit is
+made to the text at the position the parse reports.
 
 **[R-CONFIG-051]** Changing a `dep()` version in `deps.mod` MUST work
 regardless of the order the keyword arguments are written in.

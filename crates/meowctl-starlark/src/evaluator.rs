@@ -248,10 +248,20 @@ fn build_globals() -> Globals {
     GlobalsBuilder::standard().with(meowctl_globals).build()
 }
 
+/// The dialect every configuration is parsed with.
+///
+/// Named here and again in `meowctl-config`'s editor, which parses the same
+/// files to change one declaration without disturbing the rest. A file one
+/// accepts and the other rejects would mean `meowctl add` succeeding on a
+/// configuration that then fails to apply, and a test in that crate runs one
+/// file through both to keep the two honest.
+fn dialect() -> Dialect {
+    Dialect::Extended
+}
+
 /// Parses a file, turning a syntax error into a diagnostic with its position.
 fn parse(name: &str, source: &str) -> StarlarkResult<AstModule> {
-    AstModule::parse(name, source.to_owned(), &Dialect::Extended)
-        .map_err(|e| evaluation_error(&e, &[]))
+    AstModule::parse(name, source.to_owned(), &dialect()).map_err(|e| evaluation_error(&e, &[]))
 }
 
 /// Turns a `starlark` failure into one of ours, keeping the span.
@@ -294,7 +304,7 @@ impl FileLoader for CachingLoader<'_> {
 
         self.chain.borrow_mut().push(file.name.clone());
 
-        let ast = AstModule::parse(&file.name, file.source, &Dialect::Extended)?;
+        let ast = AstModule::parse(&file.name, file.source, &dialect())?;
         let context = Context {
             accumulator: Accumulator::new(),
             platform: self.platform.clone(),
