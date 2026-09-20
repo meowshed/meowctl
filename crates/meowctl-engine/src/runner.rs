@@ -19,6 +19,7 @@ use meowctl_starlark::{Argument, Evaluator, PackageAction, Platform};
 use crate::discovery::Component;
 use crate::graph::Graph;
 use crate::plan::Plan;
+use crate::progress::Progress;
 
 /// What the caller is willing to have happen.
 #[derive(Debug, Clone)]
@@ -102,6 +103,11 @@ pub struct Runner<'a> {
     effects: Effects,
     settings: Settings,
     evaluator: Evaluator<'a>,
+    /// What has been done, written as it is done; see [R-ENGINE-041].
+    ///
+    /// Absent when the caller is not tracking it, which is what a dry run
+    /// and a one-off `verify` do.
+    progress: Option<Progress>,
 }
 
 impl std::fmt::Debug for Runner<'_> {
@@ -129,7 +135,22 @@ impl<'a> Runner<'a> {
             effects,
             settings,
             evaluator,
+            progress: None,
         }
+    }
+
+    /// Records what finishes, in this file.
+    #[must_use]
+    pub fn recording(mut self, progress: Progress) -> Self {
+        self.progress = Some(progress);
+        self
+    }
+
+    /// What was recorded, for a caller that wants to write something beside
+    /// it.
+    #[must_use]
+    pub const fn progress(&self) -> Option<&Progress> {
+        self.progress.as_ref()
     }
 
     /// Runs the plan, stopping at the first component that fails.
@@ -190,6 +211,23 @@ impl<'a> Runner<'a> {
                 report
                     .finished
                     .push((phase, component.id.clone(), outcome.clone()));
+
+                // Recorded as soon as it succeeds, so a run interrupted at
+                // the next component resumes here rather than at the start of
+                // the phase; see [R-ENGINE-041].
+                if !matches!(outcome, Outcome::Failed { .. })
+                    && let Some(progress) = self.progress.as_mut()
+                    && let Err(e) = progress.record(
+                        self.effects.fs.as_ref(),
+                        phase.as_str(),
+                        component.logical_name(),
+                    )
+                {
+                    self.effects.emit(Event::Message {
+                        level: Level::Warn,
+                        text: format!("could not record what finished: {e}"),
+                    });
+                }
 
                 if let Outcome::Failed { error } = outcome {
                     failed = 1;
