@@ -11,8 +11,8 @@ Architecture-level decisions. These change rarely and always deliberately.
 | --- | --- |
 | [`design/0.2.0-rust-rewrite.md`](design/0.2.0-rust-rewrite.md) | The plan for the Rust rewrite: why it is a rewrite rather than a port, the ten defects it fixes, the crate layout, the terminal output redesign, the Starlark parity risk, and the milestone order |
 | [`design/0.2.0-decisions.md`](design/0.2.0-decisions.md) | The architecture decisions and what each costs, and the thirty requirements where a different answer was available |
-| [`design/0.2.0-requirement-tradeoffs.md`](design/0.2.0-requirement-tradeoffs.md) | Every one of the 284 requirements, with the alternative that was available, why it lost, and what would reverse it |
-| [`design/0.2.0-execution-plan.md`](design/0.2.0-execution-plan.md) | The 284 requirements decomposed into 34 issues with dependencies, sizes, and a coverage check |
+| [`design/0.2.0-requirement-tradeoffs.md`](design/0.2.0-requirement-tradeoffs.md) | Every one of the 306 requirements, with the alternative that was available, why it lost, and what would reverse it |
+| [`design/0.2.0-execution-plan.md`](design/0.2.0-execution-plan.md) | The 306 requirements decomposed into 34 issues with dependencies, sizes, and a coverage check |
 
 ## Specifications
 
@@ -36,7 +36,7 @@ except where the higher layer constrains the lower on purpose.
 | [`spec/ctx.md`](spec/ctx.md) | `meowctl-ctx` | The `ctx` object a hook receives, and its restricted forms |
 | [`spec/engine.md`](spec/engine.md) | `meowctl-engine` | The staged pipeline, the component graph, phases, staleness, and rollback |
 | [`spec/tui.md`](spec/tui.md) | `meowctl-tui` | The three event sinks, the theme, capability detection, and prompts |
-| [`spec/cli.md`](spec/cli.md) | `meowctl-cli` | The command surface, exit-code mapping, and the compat corpus |
+| [`spec/cli.md`](spec/cli.md) | `meowctl-cli` | The command surface and the exit-code mapping |
 
 ## Elsewhere in the repository
 
@@ -48,4 +48,3 @@ except where the higher layer constrains the lower on purpose.
 | [`../Cargo.toml`](../Cargo.toml) | Workspace members, shared package metadata, the lints every crate inherits, and the build profiles |
 | [`../.markdownlint.yaml`](../.markdownlint.yaml) | Which Markdown rules are relaxed for this content, and why |
 | [`../deny.toml`](../deny.toml) | Which licences a dependency may carry, and why copyleft is excluded |
-| [`../tests/compat/README.md`](../tests/compat/README.md) | The v0.1.0 compatibility corpus: what it compares, what it normalises, and why fixtures are per platform |

@@ -12,13 +12,13 @@ meowctl manages dotfiles and developer environments. Users declare components
 in Starlark; the binary supplies the evaluator, the module system, the
 lifecycle engine, and the terminal output.
 
-The repository is mid-transition. `v0.1.0` is the final Go implementation and
-is tagged and released. `v0.2.0` is a ground-up rewrite in canonical Rust — not
-a transliteration of the Go code. The plan is
-`docs/design/0.2.0-rust-rewrite.md`: it names the architectural defects that
-justify a rewrite, the target crate layout, the terminal output redesign, and
-the milestone order. Until the Rust tree exists, `cmd/` and `internal/` are the
-Go codebase and stay buildable.
+`v0.1.0` was the Go implementation. `v0.2.0` is a ground-up rewrite in
+canonical Rust — not a transliteration of the Go code — and it replaced the Go
+tree at the cutover. The plan is `docs/design/0.2.0-rust-rewrite.md`: it names
+the architectural defects that justified a rewrite, the crate layout, the
+terminal output redesign, and the milestone order. Every milestone in it is
+done; what it says about `cmd/` and `internal/` describes a tree that is no
+longer here.
 </project>
 
 <principles>
@@ -41,15 +41,21 @@ afterwards. The `spec-driven` skill has the method.
 </principle>
 
 <principle name="parity_is_the_contract">
-`v0.1.0` is the oracle. The Starlark API, the command surface, and every config
-and lock format — `init.star`, `local.star`, `deps.mod`, `deps.lock`,
-`pkgs.lock`, `installed.lock`, `state.toml` — stay compatible, byte for byte
-where the file is machine-written. A change that makes the Rust internals
-tidier at the cost of a format or a builtin signature is a regression, not a
-refactor.
+The Starlark API, the command surface, and every config and lock format —
+`init.star`, `local.star`, `deps.mod`, `deps.lock`, `pkgs.lock`,
+`installed.lock`, `state.toml` — stay compatible with `v0.1.0`, byte for byte
+where the file is machine-written. A change that makes the internals tidier at
+the cost of a format or a builtin signature is a regression, not a refactor.
 
 Terminal output is the single carve-out, redesigned under §4 of the plan. It is
 bounded by what that section names.
+
+The compat corpus proved this and was deleted with the Go tree, which is what
+`docs/design/0.2.0-execution-plan.md` issue 34 records. Nothing regenerates an
+oracle now, so a format change is caught by the specification and by the
+fixtures in `crates/meowctl-module/tests/fixtures/`, not by a diff against a
+binary. Opening the API is a 0.3.0 decision and needs `/amend-spec`, not a
+pull request that happens to widen a signature.
 </principle>
 
 <principle name="effects_are_traits">
@@ -81,8 +87,7 @@ compiler asks for the inverse.
 </principle>
 
 <principle name="reviewable_history">
-`main` is the only long-lived branch and carries both trees: the Go
-implementation released as `v0.1.0`, and the `v0.2.0` Rust workspace under
+`main` is the only long-lived branch and carries the Rust workspace under
 `crates/`. Work on a feature branch off `main`, open a pull request, and squash
 merge it. Never commit to `main` directly, including for a one-line fix.
 Conventional commit subjects. The `scm` skill has the branch names, the pull
@@ -131,7 +136,6 @@ table is the index, not the decision.
 | `meowctl-engine` | Phases, graph, the `Plan` as a value, the runner, sentinel state, rollback driving |
 | `meowctl-tui` | Live, plain, and JSON sinks; theme as data; the `Interaction` trait |
 | `meowctl-cli` | The clap surface and exit-code mapping |
-| `meowctl-xtask` | Developer tasks: the compat corpus, release checks |
 
 Three boundaries carry the design, and crossing one is a defect however small
 the change looks:
@@ -156,25 +160,23 @@ manager is a component exporting `pm_name`, `install_pkg`, `uninstall_pkg`, and
 `interrogate`.
 
 `v0.2.0` runs `starlark-rust` rather than `go.starlark.net`. They are
-independent implementations of the same specification, and the differences are
-load-bearing here: `load()` interception for the composite loader, custom
+independent implementations of the same specification, and four differences
+were load-bearing: `load()` interception for the composite loader, custom
 values with attributes for `ctx`, per-evaluation state reachable from a
-builtin, and calling a Starlark function from Rust. **M0 is a throwaway spike
-that answers this before any `meowctl-*` crate is written**, and its findings
-may amend the design. Do not start M1 before it lands.
+builtin, and calling a Starlark function from Rust. The M0 spike answered all
+four; `docs/spec/starlark.md` carries the findings.
 
 The `meowctl-stdlib` and `dotmeow` repositories are the real corpus. A change
 that makes them evaluate differently is a defect, whatever the tests say.
+`crates/meowctl-starlark/tests/stdlib.rs` runs against them when they are
+checked out beside this repository, and skips when they are not.
 
 </starlark_surface>
 
 <build>
 
-Both trees build with mise tasks. `mise install` gets the toolchain: one
-pinned Rust channel, its language server, the test runner, and the Go
-toolchain that keeps `v0.1.0` buildable.
-
-The Rust tree is the default. Run the whole gate before opening a pull
+`mise install` gets the toolchain: one pinned Rust channel, its language
+server, and the test runner. Run the whole gate before opening a pull
 request:
 
 ```bash
@@ -192,9 +194,6 @@ mise run deny           # advisories, licences, bans, sources
 mise run unused-deps    # cargo machete
 mise run snapshots      # cargo insta review
 ```
-
-The frozen Go tree keeps its own tasks, prefixed so they never shadow the
-Rust ones: `go-build`, `go-test`, `go-lint`.
 
 Workspace lints are in the root `Cargo.toml` and every crate inherits them
 with `lints.workspace = true`. Two of them encode principles from this file:

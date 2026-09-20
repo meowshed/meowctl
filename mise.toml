@@ -1,10 +1,4 @@
 # Development tooling for meowctl. Run `mise install` once, then `mise run all`.
-#
-# This branch carries two trees. The Rust tree under `crates/` is v0.2.0 and is
-# what the tasks below drive. The Go tree under `cmd/` and `internal/` is
-# v0.1.0 and stays buildable until M9, because it is the oracle the compat
-# corpus diffs against - which is why golangci-lint and the Go tasks are still
-# here.
 
 [tools]
 # The compiler, the formatter, the linter, and the language server all come
@@ -27,10 +21,6 @@ gh = "latest"
 # neither is on the CI critical path.
 "cargo:cargo-machete" = "latest"         # unused dependencies
 "cargo:cargo-watch" = "latest"           # re-run clippy on change
-
-# The frozen Go tree, v0.1.0. It stays until the Rust tree replaces it at M9.
-go            = "1.25"
-golangci-lint = "latest"
 
 "pipx:pre-commit" = "latest"
 
@@ -84,31 +74,12 @@ run = "cargo machete"
 description = "Find dependencies nothing uses"
 
 [tasks.lint-md]
-run = "markdownlint-cli2 '**/*.md' '#target' '#node_modules' '#.claude' '#CLAUDE.md' '#tests/compat/fixtures'"
-description = "Lint the Markdown we write (prompt files and corpus recordings are not it)"
+run = "markdownlint-cli2 '**/*.md' '#target' '#node_modules' '#.claude' '#CLAUDE.md'"
+description = "Lint the Markdown we write (prompt files are not it)"
 
 [tasks.watch]
 run = "cargo watch -x 'clippy --workspace --all-targets'"
 description = "Re-run clippy on every change"
-
-# The v0.1.0 compatibility corpus. `record` captures what the Go binary does;
-# `check` replays the same commands under the Rust binary and diffs.
-[tasks.compat-record]
-run = "cargo xtask compat record"
-description = "Re-record the corpus fixtures from the v0.1.0 binary"
-depends = ["go-build"]
-
-[tasks.compat-check]
-run = "cargo xtask compat check"
-description = "Diff the Rust binary against the recorded v0.1.0 behaviour"
-
-# Checks the harness rather than the rewrite: the committed fixtures must still
-# match what the Go binary does. A failure here means the fixtures drifted, not
-# that the rewrite is wrong.
-[tasks.compat-self-check]
-run = "MEOWCTL_COMPAT_SUBJECT=$PWD/bin/meowctl cargo xtask compat check"
-description = "Check the committed fixtures against the v0.1.0 binary"
-depends = ["go-build"]
 
 # The test matrix includes Windows and the local gate does not. Code behind
 # cfg(unix) is where that difference bites, so check the other side before
@@ -135,28 +106,6 @@ depends = [
 ]
 description = "Everything CI checks"
 
-# The frozen Go tree. These keep v0.1.0 buildable and testable while it serves
-# as the parity oracle.
-[tasks.go-build]
-description = "Build the v0.1.0 Go binary"
-run = [
-  "mkdir -p bin",
-  """CGO_ENABLED=0 go build \
-    -ldflags="-s -w \
-      -X github.com/meowshed/meowctl/internal/version.Version=$(git describe --tags --exact-match 2>/dev/null || echo dev) \
-      -X github.com/meowshed/meowctl/internal/version.Commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) \
-      -X github.com/meowshed/meowctl/internal/version.BuildDate=$(date -u +%Y-%m-%d)" \
-    -o bin/meowctl ./cmd/meowctl""",
-]
-
-[tasks.go-test]
-description = "Run the Go test suite"
-run = "CGO_ENABLED=0 go test -race -count=1 ./..."
-
-[tasks.go-lint]
-description = "Run golangci-lint over the Go tree"
-run = "golangci-lint run ./..."
-
 [tasks.clean]
-description = "Remove build artifacts from both trees"
-run = "rm -rf bin target"
+description = "Remove build artifacts"
+run = "rm -rf target"

@@ -6,8 +6,8 @@
 //! found that `json` had to be a module rather than a function.
 //!
 //! Skipped when the repositories are not beside this one, so a machine that
-//! has only this checkout still runs the suite. The compat corpus is where
-//! this becomes a gate.
+//! has only this checkout still runs the suite. Clone them beside it and the
+//! suite gates on them.
 
 // `clippy.toml` exempts tests from `expect_used`, but only a function carrying
 // `#[test]`. A helper in a test binary is test code by construction.

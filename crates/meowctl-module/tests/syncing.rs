@@ -22,7 +22,7 @@ use support::{Entry as ArchiveEntry, github_tarball, tarball};
 /// The lock `v0.1.0` wrote from the manifest below, against the registry
 /// below. Regenerate with
 /// `MEOWCTL_WRITE_FIXTURE=1 go test ./internal/starlark/loader -run TestWriteSyncFixture`.
-const V0_1_0_SYNCED: &str = include_str!("../../../tests/compat/fixtures/deps.lock.synced");
+const V0_1_0_SYNCED: &str = include_str!("fixtures/deps.lock.synced");
 
 const REGISTRY: &str = "https://registry.invalid";
 const INDEX_URL: &str = "https://registry.invalid/index.toml";
@@ -35,11 +35,11 @@ const CHECKOUT: &str = "/checkout";
 /// same tree, and then the two locks would agree on every field but the
 /// hashes -- which are the fields a lock exists to carry.
 fn stdlib() -> Vec<u8> {
-    include_bytes!("../../../tests/compat/fixtures/synced-stdlib-0.2.17.tar.gz").to_vec()
+    include_bytes!("fixtures/synced-stdlib-0.2.17.tar.gz").to_vec()
 }
 
 fn helper() -> Vec<u8> {
-    include_bytes!("../../../tests/compat/fixtures/synced-helper-1.1.0.tar.gz").to_vec()
+    include_bytes!("fixtures/synced-helper-1.1.0.tar.gz").to_vec()
 }
 
 /// The same index the Go fixture generator served.

@@ -1,11 +1,5 @@
 # Build output
-bin/
 /meowctl
-
-# Corpus fixtures for a configuration outside the repository. A real dotfiles
-# configuration is personal and changes under its owner, so what it produces is
-# recorded locally and never committed.
-/tests/compat/fixtures/*/extra/
 
 # Rust. Cargo.lock is committed on purpose: meowctl ships a binary, so CI and
 # a local build must resolve the same dependency set, and cargo-deny must check

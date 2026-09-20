@@ -1,3 +1,0 @@
-# `cargo xtask <task>` runs the developer tasks in crates/meowctl-xtask.
-[alias]
-xtask = "run --quiet --package meowctl-xtask --"

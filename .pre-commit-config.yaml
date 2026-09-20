@@ -2,44 +2,31 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
-      # The compat fixtures are byte-exact recordings of what v0.1.0 wrote.
-      # A hook that trims a trailing blank line or a trailing space rewrites
-      # the thing the comparison is against, and the corpus then measures the
-      # hook rather than the rewrite -- which it did once, on a `deps.mod`
-      # that ends with two newlines.
       - id: trailing-whitespace
-        exclude: ^tests/compat/fixtures/
       - id: end-of-file-fixer
-        exclude: ^tests/compat/fixtures/
       - id: check-yaml
       - id: check-added-large-files
       - id: check-merge-conflict
       - id: mixed-line-ending
         args: [--fix=lf]
-        exclude: ^tests/compat/fixtures/
-
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v2.12.2
-    hooks:
-      - id: golangci-lint
 
   - repo: local
     hooks:
-      - id: gosec
-        name: gosec security scanner
-        language: golang
-        entry: gosec
-        args: [./...]
+      # The two gates CI runs first, so a push does not fail on something a
+      # commit could have caught.
+      - id: cargo-fmt
+        name: cargo fmt
+        language: system
+        entry: cargo fmt --all -- --check
         pass_filenames: false
-        additional_dependencies: [github.com/securego/gosec/v2/cmd/gosec@v2.26.1]
+        types: [rust]
 
-      - id: govulncheck
-        name: govulncheck vulnerability scanner
-        language: golang
-        entry: govulncheck
-        args: [./...]
+      - id: cargo-clippy
+        name: cargo clippy
+        language: system
+        entry: cargo clippy --workspace --all-targets -- -D warnings
         pass_filenames: false
-        additional_dependencies: [golang.org/x/vuln/cmd/govulncheck@latest]
+        types: [rust]
 
   - repo: https://github.com/trufflesecurity/trufflehog
     rev: v3.88.14

@@ -127,7 +127,8 @@ directory. It is also why [R-CONFIG-023] excludes this table.
 
 **[R-CONFIG-023]** A lock file written by `v0.2.0` from the same resolution as
 `v0.1.0` MUST be byte-identical outside the `meta` table, including key order
-and table order. The compat corpus checks this; see [R-CLI-042].
+and table order. A lock `v0.1.0` wrote is checked in beside the resolver
+test that reproduces it.
 
 `meta` is excluded because it is the one table the two binaries are meant to
 disagree about; see [R-CONFIG-022]. Everything a run depends on -- versions,

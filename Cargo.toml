@@ -14,7 +14,7 @@ meowctl-cli = { path = "crates/meowctl-cli" }
 workspace = true
 
 [workspace]
-members = ["crates/meowctl-common", "crates/meowctl-ctx", "crates/meowctl-engine", "crates/meowctl-cli", "crates/meowctl-config", "crates/meowctl-exec", "crates/meowctl-fs", "crates/meowctl-module", "crates/meowctl-net", "crates/meowctl-ops", "crates/meowctl-pm", "crates/meowctl-starlark", "crates/meowctl-tui", "crates/meowctl-xtask"]
+members = ["crates/meowctl-common", "crates/meowctl-ctx", "crates/meowctl-engine", "crates/meowctl-cli", "crates/meowctl-config", "crates/meowctl-exec", "crates/meowctl-fs", "crates/meowctl-module", "crates/meowctl-net", "crates/meowctl-ops", "crates/meowctl-pm", "crates/meowctl-starlark", "crates/meowctl-tui"]
 resolver = "3"
 
 [workspace.package]
@@ -23,7 +23,7 @@ resolver = "3"
 # rather than as wildcard versions, which it refuses for a publishable crate
 # because crates.io disallows path dependencies.
 publish = false
-version = "0.2.0-alpha.0"
+version = "0.2.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/meowshed/meowctl"
