@@ -896,7 +896,6 @@ version = "0.2.0-alpha.0"
 dependencies = [
  "allocative",
  "anyhow",
- "derive_more",
  "meowctl-common",
  "serde",
  "serde_json",
