@@ -1,0 +1,8 @@
+# Default: let git normalise line endings in text it checks out.
+* text=auto
+
+# Byte-exact fixtures. These were produced by the v0.1.0 binary and are
+# compared byte for byte, so a checkout that rewrote their line endings would
+# fail the parity test on Windows and nowhere else.
+tests/fixtures/** -text
+crates/*/tests/fixtures/** -text

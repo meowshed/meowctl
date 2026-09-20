@@ -1,0 +1,21 @@
+[package]
+name = "meowctl-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Every on-disk format meowctl reads and writes"
+
+[dependencies]
+meowctl-common = { path = "../meowctl-common" }
+meowctl-fs = { path = "../meowctl-fs" }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+toml = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
