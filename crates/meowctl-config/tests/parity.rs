@@ -338,18 +338,17 @@ fn a_pre_rename_directory_is_told_how_to_migrate() {
     let err = layout.check(&fs).expect_err("should refuse");
     let message = err.to_string();
 
-    assert!(
-        message.contains("mv /cfg/meowctl.star /cfg/init.star"),
-        "{message}"
-    );
-    assert!(
-        message.contains("mv /cfg/meowctl.mod /cfg/deps.mod"),
-        "{message}"
-    );
-    assert!(
-        message.contains("mv /cfg/meowctl.lock /cfg/deps.lock"),
-        "{message}"
-    );
+    // Built rather than written out: a path separator is the platform's, and
+    // hard-coding one checks the test's spelling instead of the message.
+    let shown = |p: std::path::PathBuf| p.display().to_string();
+    let root = Path::new("/cfg");
+    for (from, to) in [
+        (shown(root.join("meowctl.star")), shown(layout.entry())),
+        (shown(root.join("meowctl.mod")), shown(layout.modfile())),
+        (shown(root.join("meowctl.lock")), shown(layout.lock())),
+    ] {
+        assert!(message.contains(&format!("mv {from} {to}")), "{message}");
+    }
 }
 
 /// [R-CLI-050] someone who has not run `init` should be told to, not handed a
