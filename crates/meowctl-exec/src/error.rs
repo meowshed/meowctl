@@ -15,7 +15,7 @@ pub enum ExecError {
     /// Distinct from a general spawn failure because it is the common case: a
     /// hook calling a package manager that is not installed. "no such file or
     /// directory" without the program name sends the reader hunting; see
-    /// [R-EXEC-030].
+    /// [REQ-1630].
     #[error("{program} is not on PATH")]
     NotOnPath {
         /// The program that was looked for.

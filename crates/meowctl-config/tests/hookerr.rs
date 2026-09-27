@@ -1,8 +1,8 @@
-//! [R-CONFIG-064]: the flag a failed runtime hook leaves behind.
+//! [REQ-1264, REQ-1316]: the flag a failed runtime hook leaves behind.
 //!
 //! Small, and load-bearing. `meowctl hook shell` runs on every shell spawn
 //! and reports nothing, so this file is the only place a user's broken
-//! configuration is recorded; see [R-CLI-062].
+//! configuration is recorded; see [REQ-3462, REQ-3522].
 
 // `clippy.toml` exempts a function carrying `#[test]`; a helper in a test
 // binary is test code by construction.
@@ -30,7 +30,7 @@ fn flag() -> HookError {
     }
 }
 
-/// [R-CONFIG-064] the timestamp is the first line and the failure the second.
+/// [REQ-1264, REQ-1316] the timestamp is the first line and the failure the second.
 #[test]
 fn the_timestamp_leads_and_the_reason_follows() {
     let fs = configured();
@@ -43,7 +43,7 @@ fn the_timestamp_leads_and_the_reason_follows() {
     );
 }
 
-/// [R-CONFIG-064] what was written reads back, so `doctor` renders what
+/// [REQ-1264, REQ-1316] what was written reads back, so `doctor` renders what
 /// `hook` recorded rather than an approximation of it.
 #[test]
 fn what_was_written_reads_back() {
@@ -53,7 +53,7 @@ fn what_was_written_reads_back() {
     assert_eq!(HookError::read(&fs, Path::new(FLAG)), Some(flag()));
 }
 
-/// [R-CONFIG-064] a reason spanning several lines survives, because a
+/// [REQ-1264, REQ-1316] a reason spanning several lines survives, because a
 /// Starlark traceback is the usual case.
 #[test]
 fn a_reason_of_several_lines_survives() {
@@ -67,7 +67,7 @@ fn a_reason_of_several_lines_survives() {
     assert_eq!(HookError::read(&fs, Path::new(FLAG)), Some(long));
 }
 
-/// [R-CONFIG-064] each failure replaces the last. A log would grow on every
+/// [REQ-1264, REQ-1316] each failure replaces the last. A log would grow on every
 /// shell spawn, and what a user needs is the reason it is broken now.
 #[test]
 fn a_second_failure_replaces_the_first() {
@@ -82,7 +82,7 @@ fn a_second_failure_replaces_the_first() {
     assert_eq!(HookError::read(&fs, Path::new(FLAG)), Some(second));
 }
 
-/// [R-CLI-063] a run in which nothing failed removes it.
+/// [REQ-3463] a run in which nothing failed removes it.
 #[test]
 fn clearing_removes_the_flag() {
     let fs = configured();
@@ -94,7 +94,7 @@ fn clearing_removes_the_flag() {
     assert_eq!(HookError::read(&fs, Path::new(FLAG)), None);
 }
 
-/// [R-CLI-063] absence is the success case, so clearing one that is not
+/// [REQ-3463] absence is the success case, so clearing one that is not
 /// there succeeds. Every shell spawn that works takes this path.
 #[test]
 fn clearing_a_flag_that_is_not_there_succeeds() {

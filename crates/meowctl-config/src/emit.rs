@@ -5,7 +5,7 @@
 //! handling of empty tables. Both are correct TOML and neither is wrong, but
 //! two binaries share a configuration directory during the rewrite, and a lock
 //! file that differs only in whitespace still shows up as a change in every
-//! `git diff` a user takes of their dotfiles; see [R-CONFIG-023].
+//! `git diff` a user takes of their dotfiles; see [REQ-1223].
 //!
 //! So the layout is reproduced rather than approximated. What `v0.1.0` does,
 //! read from a file it wrote:

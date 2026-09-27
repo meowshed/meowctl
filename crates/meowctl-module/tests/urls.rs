@@ -1,4 +1,4 @@
-//! [R-STAR-020] and [R-STAR-021]: what a `load()` argument means.
+//! [REQ-2220] and [REQ-2221, REQ-2304]: what a `load()` argument means.
 //!
 //! The `init.star` convention is the part worth pinning. `RegistryLoader`'s
 //! doc comment in `v0.1.0` says `@stdlib//components/apt` and
@@ -42,7 +42,7 @@ fn the_four_schemes_parse() {
     );
 }
 
-/// [R-STAR-020] a path with no scheme is relative to the config directory,
+/// [REQ-2220] a path with no scheme is relative to the config directory,
 /// which is the one form `v0.1.0`'s composite loader rejects outright.
 #[test]
 fn a_bare_path_resolves_against_the_config_directory() {
@@ -55,7 +55,7 @@ fn a_bare_path_resolves_against_the_config_directory() {
     );
 }
 
-/// [R-STAR-021] a final segment with no `.` means the directory's
+/// [REQ-2221, REQ-2304] a final segment with no `.` means the directory's
 /// `init.star`, which is how every stdlib component is laid out.
 #[test]
 fn a_path_without_an_extension_means_the_directorys_init_star() {
@@ -75,7 +75,7 @@ fn a_path_without_an_extension_means_the_directorys_init_star() {
     );
 }
 
-/// [R-STAR-021] and the same path with an extension is that file. The two are
+/// [REQ-2221, REQ-2304] and the same path with an extension is that file. The two are
 /// not the same file, whatever the doc comment says.
 #[test]
 fn a_path_with_an_extension_is_taken_as_written() {

@@ -37,7 +37,7 @@ fn two_components() -> Config {
         .declaring(Declaration::new("neovim"), &plain("neovim"))
 }
 
-/// [R-ENGINE-002] the plan names the phases, the components in each, and the
+/// [REQ-3002, REQ-3100] the plan names the phases, the components in each, and the
 /// order. The order is the set's order of phases and the graph's order of
 /// components within each.
 #[test]
@@ -63,7 +63,7 @@ fn the_plan_is_every_phase_of_the_set_over_every_component() {
     );
 }
 
-/// [R-ENGINE-002] a component whose phase is already recorded is reported as
+/// [REQ-3002, REQ-3100] a component whose phase is already recorded is reported as
 /// skipped rather than listed as pending work. Listing it is what made the
 /// dry run say 120 components before and after a successful apply alike.
 #[test]
@@ -111,7 +111,7 @@ fn force_runs_everything_regardless_of_what_completed() {
     assert!(plan.steps.iter().all(|s| s.skipped.is_none()), "{plan:?}");
 }
 
-/// [R-ENGINE-052] a component the filter leaves out is reported as filtered
+/// [REQ-3052] a component the filter leaves out is reported as filtered
 /// out rather than being absent, because a component a user expected and
 /// cannot find is a bug report.
 #[test]
@@ -144,7 +144,7 @@ fn a_filtered_component_is_named_with_its_reason() {
     );
 }
 
-/// [R-ENGINE-016] and a filter keeps what the named components depend on, so
+/// [REQ-3016, REQ-3106] and a filter keeps what the named components depend on, so
 /// the plan does not promise to install a tool without its package manager.
 #[test]
 fn a_filter_keeps_the_dependencies_of_what_it_names() {
@@ -173,7 +173,7 @@ fn a_filter_keeps_the_dependencies_of_what_it_names() {
     assert_eq!(running, ["mise", "test-mise"]);
 }
 
-/// [R-ENGINE-052] a component a guard dropped is in the plan with the guard,
+/// [REQ-3052] a component a guard dropped is in the plan with the guard,
 /// rather than missing from it.
 #[test]
 fn a_component_a_guard_dropped_is_in_the_plan_with_its_reason() {
@@ -204,7 +204,7 @@ fn a_component_a_guard_dropped_is_in_the_plan_with_its_reason() {
     assert!(guard.contains("linux"), "{guard}");
 }
 
-/// [R-ENGINE-003] a plan with nothing to do says so, which is what lets a
+/// [REQ-3003, REQ-3101, REQ-3102] a plan with nothing to do says so, which is what lets a
 /// command report "nothing to do" instead of a phase heading and no lines.
 #[test]
 fn a_plan_with_nothing_to_run_is_empty() {

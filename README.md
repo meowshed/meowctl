@@ -68,8 +68,8 @@ The rewrite keeps the Starlark API, the command surface, and every config and
 lock format byte for byte. A configuration `v0.1.0` applied applies here. What
 changed is the inside and the terminal output: see
 [CHANGELOG.md](CHANGELOG.md) for the summary and
-[`docs/design/0.2.0-rust-rewrite.md`](docs/design/0.2.0-rust-rewrite.md) for
-why each change is a rewrite rather than a refactor.
+[ADR-0001](project/adrs/ADR-0001-rewrite-rather-than-port.md) for why each
+change is a rewrite rather than a refactor.
 
 ## Repositories
 
@@ -97,9 +97,11 @@ mise run all          # everything CI checks
 
 ## Documentation
 
-[`docs/README.md`](docs/README.md) indexes every document. The two starting
-points are [`docs/design/`](docs/design) for the architecture and
-[`docs/spec/`](docs/spec) for the normative behaviour, one file per crate.
+The record under [`project/`](project) holds what meowctl must do and why.
+Start with [`project/vision.md`](project/vision.md), then the specifications
+indexed in [`project/README.md`](project/README.md), one per crate. The
+requirements are in [`project/requirements/`](project/requirements) and the
+decisions in [`project/adrs/`](project/adrs).
 
 ## License
 

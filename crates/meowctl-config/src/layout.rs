@@ -10,13 +10,13 @@ use crate::{ConfigError, ConfigResult};
 ///
 /// A directory that has it and no `init.star` was written before the rename,
 /// and the user is told how to migrate rather than left with a missing-file
-/// error; see [R-CONFIG-004].
+/// error; see [REQ-1204, REQ-1301].
 pub const LEGACY_ENTRY: &str = "meowctl.star";
 
 /// The configuration directory and the files in it.
 ///
 /// The names come from `internal/cli/config.go` and are the ones a user has on
-/// disk, so they are fixed; see [R-CONFIG-001].
+/// disk, so they are fixed; see [REQ-1201].
 #[derive(Debug, Clone)]
 pub struct Layout {
     root: PathBuf,
@@ -105,7 +105,7 @@ impl Layout {
     ///
     /// In the configuration directory rather than somewhere of its own,
     /// because a user who moves their configuration between machines expects
-    /// their colours to come with it; see [R-TUI-053].
+    /// their colours to come with it; see [REQ-3253, REQ-3314].
     #[must_use]
     pub fn theme(&self) -> PathBuf {
         self.root.join("theme.toml")

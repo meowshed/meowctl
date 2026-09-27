@@ -30,7 +30,7 @@ pub enum OpsError {
     ///
     /// Fails the operation rather than being logged: an effect applied with no
     /// record of how to undo it is the state this crate exists to prevent; see
-    /// [R-OPS-032].
+    /// [REQ-2032].
     #[error("journaling {kind}: {source}")]
     Journal {
         /// The operation that could not be recorded.
@@ -42,7 +42,7 @@ pub enum OpsError {
     /// A journal record could not be read back.
     ///
     /// Reported and skipped rather than fatal, because one corrupt line must
-    /// not strand every earlier operation; see [R-OPS-030].
+    /// not strand every earlier operation; see [REQ-2030, REQ-2120].
     #[error("journal record {seq} is unreadable: {reason}")]
     UnreadableRecord {
         /// Which record.

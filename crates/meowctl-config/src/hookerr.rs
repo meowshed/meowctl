@@ -4,7 +4,7 @@
 //! start is worse than a shell that starts without its integration. So the
 //! command reports nothing and exits zero, and writes what went wrong here
 //! instead; `status` and `doctor` are where the user meets it. See
-//! [R-CLI-062] and [R-CONFIG-064].
+//! [REQ-3462, REQ-3522] and [REQ-1264, REQ-1316].
 
 use std::path::Path;
 
@@ -48,8 +48,8 @@ impl HookError {
     ///
     /// A flag rather than a log: what a user needs is the reason their shell
     /// has no integration now, not a history of every spawn since it broke;
-    /// see [R-CONFIG-064]. The `0o600` that requirement asks for is what
-    /// [R-FS-004] gives every created file.
+    /// see [REQ-1264, REQ-1316]. The `0o600` that requirement asks for is what
+    /// [REQ-1404] gives every created file.
     ///
     /// # Errors
     ///
@@ -63,7 +63,7 @@ impl HookError {
     /// Removes the flag.
     ///
     /// Absence is the success case, so removing one that is not there is not
-    /// an error; see [R-CLI-063].
+    /// an error; see [REQ-3463].
     ///
     /// # Errors
     ///

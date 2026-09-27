@@ -13,7 +13,7 @@ use crate::{OpsError, OpsResult};
 ///
 /// These strings are what `internal/rollback/rollback.go` writes, and a
 /// journal left by one binary has to replay under the other, so they are
-/// fixed; see [R-OPS-020].
+/// fixed; see [REQ-2020, REQ-2116].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpKind {
     /// Replacing a file's contents.
@@ -88,7 +88,7 @@ impl fmt::Display for OpKind {
 /// One reversible effect.
 ///
 /// Adding a variant means the compiler asks for its inverse, which is the
-/// whole reason this is an enum rather than a set of methods; see [R-OPS-001].
+/// whole reason this is an enum rather than a set of methods; see [REQ-2001, REQ-2100, REQ-2101].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Op {
     /// Replace a file's contents.
@@ -103,7 +103,7 @@ pub enum Op {
     ///
     /// Truncating instead would lose an edit made between apply and undo, and
     /// a component re-running with the same marker replaces its own block
-    /// rather than appending a second copy; see [R-OPS-011] and [R-CTX-028].
+    /// rather than appending a second copy; see [REQ-2011, REQ-2106, REQ-2107, REQ-2108] and [REQ-2828, REQ-2910].
     AppendFile {
         /// The file.
         path: PathBuf,
@@ -260,7 +260,7 @@ impl Op {
     ///
     /// Computed before applying, because it depends on the state the effect is
     /// about to destroy: the prior content of a file, the prior target of a
-    /// symlink, whether a directory already existed; see [R-OPS-003].
+    /// symlink, whether a directory already existed; see [REQ-2003].
     ///
     /// # Errors
     ///
@@ -269,7 +269,7 @@ impl Op {
         Ok(match self {
             // Restoring prior content when the file existed, deleting when it
             // did not. Always deleting would destroy the user's original; see
-            // [R-OPS-010].
+            // [REQ-2010, REQ-2105].
             Op::WriteFile { path, .. } | Op::Download { path, .. } => match fs.read(path) {
                 Ok(prior) => Op::WriteFile {
                     path: path.clone(),
@@ -285,7 +285,7 @@ impl Op {
             // Appending to a file that is not there creates it, and removing
             // the block afterwards would leave a zero-byte file where there
             // was none. `applyInverseAppendFile` does exactly that; undoing it
-            // properly means removing the file, which is what [R-OPS-004]
+            // properly means removing the file, which is what [REQ-2004, REQ-2103, REQ-2104]
             // asks for and what a replayed v0.1.0 record cannot express.
             Op::AppendFile { path, marker, .. } => {
                 if fs.entry(path)?.is_some() {
@@ -310,7 +310,7 @@ impl Op {
             },
 
             // The backup is the user's original file. Not restoring it is data
-            // loss; see [R-OPS-015].
+            // loss; see [REQ-2015, REQ-2111].
             Op::LinkFile { link, backup, .. } => match fs.entry(link)? {
                 Some(Entry::Symlink { target }) => Op::Symlink {
                     target,
@@ -325,7 +325,7 @@ impl Op {
 
             // Removing a directory meowctl did not create would delete
             // `~/.config` because a component put a file in it; see
-            // [R-OPS-013].
+            // [REQ-2013, REQ-2109].
             Op::Mkdir { path } => {
                 if fs.entry(path)?.is_some() {
                     Op::Nothing
@@ -361,7 +361,7 @@ impl Op {
                     },
                     // No prior value: delete the key rather than write an
                     // empty one, which would leave the machine in a state it
-                    // was never in; see [R-OPS-017].
+                    // was never in; see [REQ-2017, REQ-2113, REQ-2114, REQ-2115].
                     None => Op::DefaultsWrite {
                         domain: domain.clone(),
                         key: key.clone(),
@@ -386,7 +386,7 @@ impl Op {
     /// Performs the effect.
     ///
     /// Everything goes through the [`FileSystem`] and the [`Executor`], so a
-    /// dry run and an in-memory test both work; see [R-OPS-002].
+    /// dry run and an in-memory test both work; see [REQ-2002, REQ-2102].
     ///
     /// # Errors
     ///

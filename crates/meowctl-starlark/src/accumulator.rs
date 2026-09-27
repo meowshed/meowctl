@@ -1,10 +1,10 @@
 //! What a configuration declared.
 //!
 //! Collected per evaluation rather than in a global, so two evaluations in one
-//! process cannot see each other's declarations; see [R-STAR-010]. M0 made the
+//! process cannot see each other's declarations; see [REQ-2210]. M0 made the
 //! other half a fact the compiler enforces: a module's heap is scoped to a
 //! closure, so nothing Starlark allocated escapes and every declaration here
-//! is owned data; see [R-STAR-011].
+//! is owned data; see [REQ-2211].
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -32,7 +32,7 @@ pub enum Argument {
 /// A `component()` declaration.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ComponentDecl {
-    /// What it names, in one of the three forms; see [R-COMMON-001].
+    /// What it names, in one of the three forms; see [REQ-1001, REQ-1100].
     pub name: String,
     /// Components this one must run after, without depending on them.
     pub after: Vec<String>,
@@ -117,7 +117,7 @@ pub struct ModuleDecl {
 /// Everything one evaluation declared, in declaration order.
 ///
 /// Order is preserved because it is the tie-break the component graph uses
-/// between components with no dependency between them; see [R-STAR-012].
+/// between components with no dependency between them; see [REQ-2212].
 #[derive(Debug, Default, ProvidesStaticType, Allocative)]
 pub struct Accumulator {
     #[allocative(skip)]

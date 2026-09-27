@@ -2,7 +2,7 @@
 //!
 //! No network and no filesystem. Everything here takes bytes somebody else
 //! fetched and returns a decision, which is what makes `self-update`
-//! testable without publishing a release to test against; see [R-CLI-070].
+//! testable without publishing a release to test against; see [REQ-3470, REQ-3527, REQ-3528].
 //!
 //! The one thing this crate is for is the check `v0.1.0` never made.
 //! `runSelfUpdate` renames a download over the running binary and its own
@@ -89,7 +89,7 @@ pub struct Asset {
     pub url: String,
 }
 
-/// The name of the file listing every asset's hash; see [R-CLI-071].
+/// The name of the file listing every asset's hash; see [REQ-3471, REQ-3529].
 pub const CHECKSUMS: &str = "checksums.sri";
 
 impl Release {
@@ -124,7 +124,7 @@ impl Release {
     ///
     /// A tag is `v0.2.0` and a version is `0.2.0`, which is one `v` apart and
     /// the reason this is a function rather than an equality at the call
-    /// site; see [R-CLI-072].
+    /// site; see [REQ-3472, REQ-3530, REQ-3531].
     #[must_use]
     pub fn is(&self, version: &str) -> bool {
         self.tag.strip_prefix('v').unwrap_or(&self.tag) == version
@@ -135,7 +135,7 @@ impl Release {
     /// # Errors
     ///
     /// [`ReleaseError::NoAsset`] when the release publishes none, naming the
-    /// platform and where to look; see [R-CLI-073].
+    /// platform and where to look; see [REQ-3473, REQ-3532].
     pub fn asset_for(&self, platform: &str) -> Result<&Asset, ReleaseError> {
         let wanted = format!("meowctl-{platform}");
         self.assets
@@ -154,7 +154,7 @@ impl Release {
     ///
     /// [`ReleaseError::NoChecksums`] when the release publishes none. A
     /// release nothing can be verified against is refused rather than
-    /// treated as one that needs no verification; see [R-CLI-071].
+    /// treated as one that needs no verification; see [REQ-3471, REQ-3529].
     pub fn checksums(&self) -> Result<&Asset, ReleaseError> {
         self.assets
             .iter()
@@ -175,7 +175,7 @@ impl Release {
 /// [`ReleaseError::Unparsable`] when a line is not a hash and a name,
 /// [`ReleaseError::Unlisted`] when the asset has no line, and
 /// [`ReleaseError::Mismatch`] when the bytes are not what it names; see
-/// [R-CLI-070].
+/// [REQ-3470, REQ-3527, REQ-3528].
 pub fn verify(checksums: &str, asset: &str, bytes: &[u8]) -> Result<(), ReleaseError> {
     let expected = published_hash(checksums, asset)?;
     let actual = Integrity::compute(bytes);

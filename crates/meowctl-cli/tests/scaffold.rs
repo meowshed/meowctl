@@ -103,7 +103,7 @@ fn the_layout_names_the_files_v0_1_0_names() {
 
 /// A configuration directory with nothing in it is not one, and saying so is
 /// what tells a user to run `init` rather than sending them after a missing
-/// file; see [R-CLI-050].
+/// file; see [REQ-3450, REQ-3515, REQ-3516].
 #[test]
 fn an_empty_directory_is_not_a_configuration() {
     let fs = MemFs::new();
@@ -115,7 +115,7 @@ fn an_empty_directory_is_not_a_configuration() {
     assert!(layout.check(&fs).is_ok());
 }
 
-/// [R-CLI-021] the four snippets are byte-exact, because a user's `.zshrc`
+/// [REQ-3421, REQ-3511] the four snippets are byte-exact, because a user's `.zshrc`
 /// evaluates one of them and a changed line is a shell that stops working.
 #[test]
 fn each_shell_gets_its_own_snippet_and_it_is_not_empty() {

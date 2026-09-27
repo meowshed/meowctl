@@ -3,7 +3,7 @@
 //! The commit and the build date are captured here rather than patched in by
 //! linker flags, so `meowctl version` reports what was actually built and a
 //! build with no `-ldflags` does not report `dev/unknown/unknown`; see
-//! [R-CLI-013].
+//! [REQ-3413, REQ-3507].
 
 use std::process::Command;
 

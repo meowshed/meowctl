@@ -2,7 +2,7 @@
 #
 # `self-update` refuses a release with no `checksums.sri`, so this workflow is
 # not optional dressing: a tag without it produces a release nobody can update
-# to. See [R-CLI-070] and [R-CLI-071].
+# to. See [REQ-3470, REQ-3527, REQ-3528] and [REQ-3471, REQ-3529].
 name: Release
 
 on:
@@ -79,7 +79,7 @@ jobs:
       # SHA-384 in standard base64, prefixed `sha384-`: the W3C Subresource
       # Integrity form, which is what `Integrity` computes and what every
       # other download meowctl verifies already uses. One line per asset,
-      # `<sri>  <name>`; see [R-COMMON-005].
+      # `<sri>  <name>`; see [REQ-1005].
       - name: Compute the checksums
         working-directory: dist
         run: |

@@ -1,7 +1,7 @@
 //! `meowctl hook`, run as the binary a shell runs.
 //!
 //! The only test here that drives the process rather than a library, and it
-//! has to: what [R-CLI-062] promises is about the exit code and the streams,
+//! has to: what [REQ-3462, REQ-3522] promises is about the exit code and the streams,
 //! which a function call cannot observe. A shell evaluates this stdout, so
 //! the assertions are on exact bytes.
 
@@ -42,7 +42,7 @@ fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-/// [R-CLI-061] what the hooks emitted, and nothing around it. A glyph or an
+/// [REQ-3461, REQ-3521] what the hooks emitted, and nothing around it. A glyph or an
 /// indent here would be evaluated as a command.
 #[test]
 fn what_the_hooks_emitted_is_the_whole_of_stdout() {
@@ -57,7 +57,7 @@ fn what_the_hooks_emitted_is_the_whole_of_stdout() {
     assert_eq!(stdout(&output), "export A=1\nexport B=2\n");
 }
 
-/// [R-CTX-002] a component chooses between `set -gx` and `export` by reading
+/// [REQ-2802, REQ-2900, REQ-2901] a component chooses between `set -gx` and `export` by reading
 /// `ctx.shell`, so the runtime hook has to name it.
 #[test]
 fn the_hook_knows_which_shell_it_is_contributing_to() {
@@ -70,7 +70,7 @@ fn the_hook_knows_which_shell_it_is_contributing_to() {
     assert_eq!(stdout(&hook(&root, "shell")), "shell is zsh\n");
 }
 
-/// [R-CLI-062] a shell that cannot start is worse than a shell that starts
+/// [REQ-3462, REQ-3522] a shell that cannot start is worse than a shell that starts
 /// without its integration, so the failure is recorded and the command still
 /// succeeds.
 #[test]
@@ -92,7 +92,7 @@ fn a_failing_hook_is_recorded_and_exits_zero() {
     assert!(flag.contains("deliberate"), "{flag}");
 }
 
-/// [R-CLI-063] a run in which nothing failed removes it, so a fixed
+/// [REQ-3463] a run in which nothing failed removes it, so a fixed
 /// configuration stops warning.
 #[test]
 fn a_clean_run_clears_the_flag() {
@@ -114,7 +114,7 @@ fn a_clean_run_clears_the_flag() {
     assert!(!root.join(".hook-error").exists(), "the flag was cleared");
 }
 
-/// [R-CLI-060] only the two phases a shell spawn runs. The rest belong to a
+/// [REQ-3460, REQ-3520] only the two phases a shell spawn runs. The rest belong to a
 /// phase set and are reached through `apply`.
 #[test]
 fn a_phase_that_is_not_a_runtime_hook_is_a_usage_error() {
@@ -128,7 +128,7 @@ fn a_phase_that_is_not_a_runtime_hook_is_a_usage_error() {
     }
 }
 
-/// [R-CLI-060] and both of the two are accepted.
+/// [REQ-3460, REQ-3520] and both of the two are accepted.
 #[test]
 fn both_runtime_hook_phases_are_accepted() {
     let root = sandbox(
@@ -148,7 +148,7 @@ fn report(root: &Path, command: &str) -> Output {
         .expect("the binary runs")
 }
 
-/// [R-CLI-064] the user meets the failure here, because `hook` itself says
+/// [REQ-3464, REQ-3523, REQ-3524, REQ-3525] the user meets the failure here, because `hook` itself says
 /// nothing. `status` says that it happened and `doctor` says what it was.
 #[test]
 fn status_and_doctor_report_the_flag() {
@@ -167,7 +167,7 @@ fn status_and_doctor_report_the_flag() {
     assert!(diagnosed.contains("deliberate"), "{diagnosed}");
 }
 
-/// [R-CLI-064] and neither says anything when there is nothing to say.
+/// [REQ-3464, REQ-3523, REQ-3524, REQ-3525] and neither says anything when there is nothing to say.
 #[test]
 fn nothing_is_reported_when_the_last_run_was_clean() {
     let root = sandbox(
@@ -181,7 +181,7 @@ fn nothing_is_reported_when_the_last_run_was_clean() {
     assert!(!stdout(&report(&root, "doctor")).contains("runtime hook"));
 }
 
-/// [R-CLI-065] nothing a shell spawn does is journalled, so a rollback on the
+/// [REQ-3465, REQ-3526] nothing a shell spawn does is journalled, so a rollback on the
 /// next failure cannot undo the previous spawn.
 #[test]
 fn a_runtime_hook_opens_no_journal() {

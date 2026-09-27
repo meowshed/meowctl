@@ -1,7 +1,7 @@
 //! `{{name}}` substitution, as `renderTemplate` does it.
 //!
 //! Not a template language. Substitution is what components use, and a
-//! language would be a dependency and a surface; see [R-CTX-027].
+//! language would be a dependency and a surface; see [REQ-2827, REQ-2907, REQ-2908, REQ-2909].
 
 use std::collections::BTreeMap;
 
@@ -31,7 +31,7 @@ mod tests {
             .collect()
     }
 
-    /// [R-CTX-027] the shape `renderTemplate` accepts, which every component
+    /// [REQ-2827, REQ-2907, REQ-2908, REQ-2909] the shape `renderTemplate` accepts, which every component
     /// that renders a config file depends on.
     #[test]
     fn a_placeholder_is_replaced_everywhere_it_appears() {

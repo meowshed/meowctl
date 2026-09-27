@@ -2,7 +2,7 @@
 //!
 //! The parity test is the one that matters: the fixture was produced by
 //! `v0.1.0`'s own `SyncModules` against a scripted registry, and the bytes
-//! here have to match it outside the `meta` table; see [R-CONFIG-023].
+//! here have to match it outside the `meta` table; see [REQ-1223].
 
 // `clippy.toml` exempts a function carrying `#[test]`; a helper in a test
 // binary is test code by construction.
@@ -102,8 +102,8 @@ fn from_source(name: &str, source: &str) -> Dep {
 
 /// The lock rendered, with the `meta` table dropped.
 ///
-/// [R-CONFIG-023] excludes it: it is the one table the two binaries are meant
-/// to disagree about, and [R-CONFIG-022] says why.
+/// [REQ-1223] excludes it: it is the one table the two binaries are meant
+/// to disagree about, and [REQ-1222] says why.
 fn without_meta(fs: &MemFs, lock: &LockFile) -> String {
     lock.write(fs, Path::new("/cfg/deps.lock"))
         .expect("the lock writes");
@@ -118,7 +118,7 @@ fn without_meta(fs: &MemFs, lock: &LockFile) -> String {
     text[modules..].to_owned()
 }
 
-/// [R-CONFIG-023] and [R-MODULE-051]: the same manifest against the same
+/// [REQ-1223] and [REQ-2451]: the same manifest against the same
 /// registry produces the lock `v0.1.0` produced, byte for byte.
 #[test]
 fn the_lock_matches_the_one_v0_1_0_writes() {
@@ -158,7 +158,7 @@ fn the_lock_matches_the_one_v0_1_0_writes() {
     assert_eq!(without_meta(&fs, &synced.lock), expected);
 }
 
-/// [R-CONFIG-022] the two fields `v0.1.0` declares and never fills are what
+/// [REQ-1222] the two fields `v0.1.0` declares and never fills are what
 /// tell a user which binary last wrote their lock.
 #[test]
 fn the_lock_records_which_binary_wrote_it() {
@@ -184,7 +184,7 @@ fn the_lock_records_which_binary_wrote_it() {
     assert_eq!(synced.lock.meta.updated_at, "2026-09-20T00:00:00Z");
 }
 
-/// [R-MODULE-050] resolution that ran again on every sync would move with
+/// [REQ-2450] resolution that ran again on every sync would move with
 /// whatever the registry published today, which is what a lock exists to stop.
 #[test]
 fn a_locked_version_is_kept_even_when_a_newer_one_is_published() {
@@ -223,7 +223,7 @@ fn a_locked_version_is_kept_even_when_a_newer_one_is_published() {
     );
 }
 
-/// [R-MODULE-053] an upgrade of one module must not move the others, because
+/// [REQ-2453] an upgrade of one module must not move the others, because
 /// `meowctl dep upgrade stdlib` says nothing about anything else.
 #[test]
 fn an_upgrade_moves_only_the_modules_it_names() {
@@ -269,7 +269,7 @@ fn an_upgrade_moves_only_the_modules_it_names() {
     );
 }
 
-/// [R-MODULE-050] and [R-MODULE-053]: ignoring the lock entirely is what
+/// [REQ-2450] and [REQ-2453]: ignoring the lock entirely is what
 /// `--update` means, and it moves everything to what the index publishes now.
 #[test]
 fn ignoring_the_lock_resolves_everything_again() {
@@ -301,7 +301,7 @@ fn ignoring_the_lock_resolves_everything_again() {
     );
 }
 
-/// [R-MODULE-020] a replaced module is recorded as replaced and never
+/// [REQ-2420, REQ-2504] a replaced module is recorded as replaced and never
 /// fetched, so a checkout somebody is editing does not have to be re-locked on
 /// every save.
 #[test]
@@ -335,7 +335,7 @@ fn a_replaced_module_is_locked_by_path_and_never_fetched() {
     );
 }
 
-/// [R-MODULE-064] a `replace` pointing at nothing is a typo, and falling back
+/// [REQ-2464] a `replace` pointing at nothing is a typo, and falling back
 /// to upstream would silently do the opposite of what it asked.
 #[test]
 fn a_replacement_that_is_not_there_fails_the_sync() {
@@ -361,7 +361,7 @@ fn a_replacement_that_is_not_there_fails_the_sync() {
     assert!(http.asked().is_empty(), "nothing was fetched");
 }
 
-/// [R-MODULE-021] a fork is remote input like anything else: the directive
+/// [REQ-2421, REQ-2505] a fork is remote input like anything else: the directive
 /// says where to fetch, not that the code is trusted.
 #[test]
 fn a_remote_replacement_is_fetched_and_pinned_like_any_other_module() {
@@ -406,7 +406,7 @@ fn a_remote_replacement_is_fetched_and_pinned_like_any_other_module() {
     );
 }
 
-/// [R-MODULE-012] an aggregate module brings its dependencies with it, read
+/// [REQ-2412] an aggregate module brings its dependencies with it, read
 /// from its own manifest.
 #[test]
 fn a_github_modules_transitive_dependencies_are_walked() {
@@ -458,7 +458,7 @@ fn a_github_modules_transitive_dependencies_are_walked() {
     );
 }
 
-/// [R-MODULE-001] the version a module's own manifest asks for is selected
+/// [REQ-2401] the version a module's own manifest asks for is selected
 /// too, which is what makes a lock cover the whole graph rather than the
 /// names somebody typed.
 #[test]
@@ -505,7 +505,7 @@ source = "{REGISTRY}/t/{{name}}-{{version_no_v}}.tar.gz"
     );
 }
 
-/// [R-MODULE-022] a machine-local override exists precisely to differ from
+/// [REQ-2422] a machine-local override exists precisely to differ from
 /// what the configuration commits.
 #[test]
 fn a_local_override_wins_over_the_shared_one() {
@@ -544,7 +544,7 @@ fn a_local_override_wins_over_the_shared_one() {
     assert_eq!(by_name.get("extra"), Some(&"/added"));
 }
 
-/// [R-MODULE-052] the two manifests produce two locks, and a module in both
+/// [REQ-2452, REQ-2513] the two manifests produce two locks, and a module in both
 /// resolves in each rather than one of them winning silently.
 #[test]
 fn each_manifest_produces_its_own_lock() {
@@ -574,7 +574,7 @@ fn each_manifest_produces_its_own_lock() {
     assert_eq!(local.lock.modules.keys().collect::<Vec<_>>(), ["helper"]);
 }
 
-/// [R-MODULE-010] a registry module resolves through the index, and nothing
+/// [REQ-2410] a registry module resolves through the index, and nothing
 /// else does: a sync whose every dependency is local or on GitHub must not
 /// fetch it, because a machine with no network still has to be able to run
 /// one. `OfflineHttp` is what proves there was no request.
@@ -597,7 +597,7 @@ fn the_index_is_fetched_only_when_a_registry_module_needs_it() {
         .expect("nothing needed the index");
 }
 
-/// [R-MODULE-061] and [R-MODULE-062]: a version the index does not publish is
+/// [REQ-2461] and [REQ-2462]: a version the index does not publish is
 /// a different mistake from a module it does not publish, and both are the
 /// user's to fix. The error names the module and what was asked for, because
 /// "no matching version" across a graph of twenty is not an answer.
@@ -682,7 +682,7 @@ fn a_sync_carries_the_other_tables_through() {
     assert_eq!(synced.lock.github, previous.github);
 }
 
-/// [R-MODULE-050] Minimal Version Selection takes the maximum any path
+/// [REQ-2450] Minimal Version Selection takes the maximum any path
 /// requires, and equal requirements do not move it.
 ///
 /// Mutation testing asked for the second half: `other > self` could become

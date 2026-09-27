@@ -28,7 +28,7 @@ component(name = "helix")
 # component("kubernetes")
 "#;
 
-/// [R-CONFIG-050] the file belongs to the user. This is the test the whole
+/// [REQ-1250] the file belongs to the user. This is the test the whole
 /// design decision was for.
 #[test]
 fn adding_a_component_changes_nothing_else() {
@@ -43,7 +43,7 @@ fn adding_a_component_changes_nothing_else() {
     assert!(after.contains("# component(\"kubernetes\")"));
 }
 
-/// [R-CONFIG-052] `AppendComponent` in `v0.1.0` appends whatever it is given,
+/// [REQ-1252] `AppendComponent` in `v0.1.0` appends whatever it is given,
 /// so running `meowctl add` twice leaves two declarations.
 #[test]
 fn adding_a_component_that_is_already_there_does_nothing() {
@@ -72,7 +72,7 @@ fn a_name_inside_a_string_does_not_count_as_declared() {
     assert!(!edit::has_component("init.star", source, "ghost").expect("check"));
 }
 
-/// [R-CONFIG-050] removing takes the declaration and the newline that ended
+/// [REQ-1250] removing takes the declaration and the newline that ended
 /// it, and leaves the comment above it alone: a section header belongs to
 /// whoever wrote it, not to the entry below.
 #[test]
@@ -96,7 +96,7 @@ fn a_component_named_by_keyword_is_found() {
     assert!(!after.contains("helix"), "{after}");
 }
 
-/// [R-CONFIG-052] a silent no-op leaves the user believing something happened.
+/// [REQ-1252] a silent no-op leaves the user believing something happened.
 #[test]
 fn removing_a_component_that_is_not_there_is_reported() {
     let err = edit::remove_component("init.star", CONFIG, "absent").expect_err("should report");
@@ -114,7 +114,7 @@ dep(name = "stdlib", version = "0.2.17")
 dep(name = "plug", source = "github:o/r@v1")
 "#;
 
-/// [R-CONFIG-051] the ordinary case, which `v0.1.0` also handles.
+/// [REQ-1251, REQ-1314] the ordinary case, which `v0.1.0` also handles.
 #[test]
 fn a_dep_version_changes_and_the_rest_of_the_file_does_not() {
     let after = edit::set_dep_version("deps.mod", MANIFEST, "stdlib", "0.3.0").expect("bump");
@@ -125,7 +125,7 @@ fn a_dep_version_changes_and_the_rest_of_the_file_does_not() {
     );
 }
 
-/// [R-CONFIG-051] the case `v0.1.0` documents as unsupported: its regular
+/// [REQ-1251, REQ-1314] the case `v0.1.0` documents as unsupported: its regular
 /// expression requires `name` before `version`, so a hand-edited manifest
 /// reports "not found" for a declaration that is plainly there.
 #[test]
@@ -146,7 +146,7 @@ fn a_dep_with_a_source_keeps_it() {
     assert!(after.contains("version = \"2.0.0\""), "{after}");
 }
 
-/// [R-CONFIG-052] again, for the manifest.
+/// [REQ-1252] again, for the manifest.
 #[test]
 fn bumping_a_module_that_is_not_declared_is_reported() {
     let err =
@@ -154,7 +154,7 @@ fn bumping_a_module_that_is_not_declared_is_reported() {
     assert!(err.to_string().contains("absent"), "{err}");
 }
 
-/// [R-CONFIG-053] `meowctl add` after removing the last component has to have
+/// [REQ-1253] `meowctl add` after removing the last component has to have
 /// somewhere to write.
 #[test]
 fn removing_the_last_component_leaves_a_file_that_still_parses() {
@@ -174,7 +174,7 @@ fn an_unparseable_file_is_refused() {
     assert!(err.to_string().contains("init.star"), "{err}");
 }
 
-/// [R-CONFIG-010] the dialect is named in two crates, so a file this module
+/// [REQ-1210, REQ-1302] the dialect is named in two crates, so a file this module
 /// accepts has to be one the evaluator accepts. A disagreement would mean
 /// `meowctl add` succeeding on a configuration that then fails to apply.
 #[test]
@@ -198,7 +198,7 @@ fn the_editor_and_the_evaluator_accept_the_same_file() {
     assert_eq!(names, ["@dotmeow", "neovim", "helix", "ripgrep"]);
 }
 
-/// [R-CONFIG-050] a file with Windows line endings keeps them, and a removal
+/// [REQ-1250] a file with Windows line endings keeps them, and a removal
 /// takes the whole `\r\n` rather than leaving a stray carriage return.
 ///
 /// Mutation testing asked for this: the two-byte step could become any
@@ -215,7 +215,7 @@ fn removing_from_a_file_with_windows_endings_takes_both_bytes() {
     );
 }
 
-/// [R-CONFIG-050] and a declaration on the last line, with no newline after
+/// [REQ-1250] and a declaration on the last line, with no newline after
 /// it, is removed without taking a byte that is not there.
 #[test]
 fn removing_the_last_declaration_of_a_file_with_no_final_newline() {

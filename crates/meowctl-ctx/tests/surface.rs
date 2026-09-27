@@ -22,7 +22,7 @@ use meowctl_tui::Always;
 
 /// An absolute home directory for the platform the test runs on.
 ///
-/// `/home/u` is not absolute on Windows, and [R-CTX-012] refuses a path that
+/// `/home/u` is not absolute on Windows, and [REQ-2812, REQ-2902] refuses a path that
 /// is not absolute after `~` expands, so a test that hard-coded a Unix path
 /// would fail there for the wrong reason.
 #[cfg(unix)]
@@ -74,7 +74,7 @@ fn build(runs: Vec<ScriptedRun>, responses: ScriptedHttp, phase: Phase) -> (Ctx,
         component_dir: PathBuf::from(COMPONENT_DIR),
         state_dir: PathBuf::from(STATE_DIR),
         // Set in a runtime hook phase and nowhere else, as the engine sets
-        // it; see [R-CTX-002].
+        // it; see [REQ-2802, REQ-2900, REQ-2901].
         shell: phase.is_runtime_hook().then(|| "fish".to_owned()),
         platform: Platform {
             os: "macos".to_owned(),
@@ -127,7 +127,7 @@ fn indent(lines: &str) -> String {
         .join("\n")
 }
 
-/// [R-CTX-010] and [R-CTX-001]: the names a component written for `v0.1.0`
+/// [REQ-2810] and [REQ-2801]: the names a component written for `v0.1.0`
 /// reaches for. `dir(ctx)` is what a hook sees, and a missing name is a
 /// component that stops working.
 #[test]
@@ -173,7 +173,7 @@ fn every_attribute_v0_1_0_registers_is_there() {
     }
 }
 
-/// [R-CTX-011] a typo has to read as a typo rather than as an internal error.
+/// [REQ-2811] a typo has to read as a typo rather than as an internal error.
 #[test]
 fn an_unknown_attribute_reports_attribute_not_found() {
     let (ctx, _) = plain();
@@ -181,7 +181,7 @@ fn an_unknown_attribute_reports_attribute_not_found() {
     assert!(err.to_string().contains("nonesuch"), "{err}");
 }
 
-/// [R-CTX-001], [R-CTX-002] and [R-CTX-003]: what each property carries,
+/// [REQ-2801], [REQ-2802, REQ-2900, REQ-2901] and [REQ-2803]: what each property carries,
 /// including the two directories a component writes into -- its own source
 /// directory, which `render_file` reads against, and its persistent state
 /// directory, which survives the run.
@@ -204,7 +204,7 @@ if ctx.platform.os != "macos": fail("platform")
     call(&ctx, Surface::Full, &indent(source.trim())).expect("the properties read");
 }
 
-/// [R-CTX-020] and [R-CTX-043]: the three fields, and a non-zero exit being a
+/// [REQ-2820] and [REQ-2843]: the three fields, and a non-zero exit being a
 /// result the hook reads rather than a failure.
 #[test]
 fn run_returns_three_fields_and_does_not_fail_on_a_non_zero_exit() {
@@ -230,7 +230,7 @@ if result["stdout"] != "": fail("stdout")
     assert_eq!(world.exec.ran(), ["brew list git"]);
 }
 
-/// [R-CTX-042] a component tests and then reads, and conflating the two turns
+/// [REQ-2842, REQ-2912] a component tests and then reads, and conflating the two turns
 /// a test into an error.
 #[test]
 fn file_exists_answers_where_read_file_fails() {
@@ -259,7 +259,7 @@ if ctx.read_file("~/.config/there") != "content": fail("contents")
     assert!(err.to_string().contains("read_file"), "{err}");
 }
 
-/// [R-CTX-012] a hook has no defined working directory, so a relative path
+/// [REQ-2812, REQ-2902] a hook has no defined working directory, so a relative path
 /// resolves somewhere its author cannot predict.
 #[test]
 fn a_relative_path_is_refused_and_a_tilde_is_expanded() {
@@ -284,7 +284,7 @@ fn a_relative_path_is_refused_and_a_tilde_is_expanded() {
     assert!(err.to_string().contains("relative"), "{err}");
 }
 
-/// [R-CTX-013] every mutation goes through an `Op`, and an `Op` announces
+/// [REQ-2813] every mutation goes through an `Op`, and an `Op` announces
 /// itself. A method that touched the filesystem directly would be silent here.
 #[test]
 fn every_mutation_announces_itself_as_an_operation() {
@@ -316,7 +316,7 @@ ctx.copy_file("~/.config/nvim/init.lua", "~/.config/nvim/copy.lua")
     assert_eq!(applied, ["mkdir", "write_file", "copy_file"]);
 }
 
-/// [R-CTX-028] a component that re-runs with the same marker replaces its own
+/// [REQ-2828, REQ-2910] a component that re-runs with the same marker replaces its own
 /// block rather than appending a second copy.
 #[test]
 fn appending_twice_with_one_marker_leaves_one_block() {
@@ -335,7 +335,7 @@ fn appending_twice_with_one_marker_leaves_one_block() {
     );
 }
 
-/// [R-CTX-027] `render` substitutes and returns; it writes nothing.
+/// [REQ-2827, REQ-2907, REQ-2908, REQ-2909] `render` substitutes and returns; it writes nothing.
 #[test]
 fn render_substitutes_and_render_file_reads_the_components_own_directory() {
     let (ctx, world) = plain();
@@ -358,7 +358,7 @@ if rendered != "editor = nvim\n": fail("render_file gave " + rendered)
     .expect("both render");
 }
 
-/// [R-CTX-027] a variable that is not a string would otherwise be substituted
+/// [REQ-2827, REQ-2907, REQ-2908, REQ-2909] a variable that is not a string would otherwise be substituted
 /// with whatever Starlark's formatting produces.
 #[test]
 fn a_non_string_variable_is_refused() {
@@ -368,7 +368,7 @@ fn a_non_string_variable_is_refused() {
     assert!(err.to_string().contains("vars"), "{err}");
 }
 
-/// [R-CTX-024] stdout in any other phase corrupts a piped run.
+/// [REQ-2824, REQ-2905] stdout in any other phase corrupts a piped run.
 #[test]
 fn emit_speaks_only_in_a_runtime_hook_phase() {
     let (shell_ctx, shell_world) = build(Vec::new(), ScriptedHttp::new(), Phase::Shell);
@@ -396,7 +396,7 @@ fn emit_speaks_only_in_a_runtime_hook_phase() {
     );
 }
 
-/// [R-CTX-030] and [R-CTX-032]: a check that writes is a check with a side
+/// [REQ-2830, REQ-2911] and [REQ-2832]: a check that writes is a check with a side
 /// effect. `v0.1.0` has the machinery for this restriction and wires none of
 /// it up.
 ///
@@ -442,7 +442,7 @@ fn a_read_only_surface_has_no_mutating_method() {
     }
 }
 
-/// [R-CTX-031] a shell hook runs on every shell spawn and must have no
+/// [REQ-2831] a shell hook runs on every shell spawn and must have no
 /// persistent effect beyond what it emits.
 #[test]
 fn the_shell_surface_is_the_eight_attributes_and_nothing_else() {
@@ -467,7 +467,7 @@ fn the_shell_surface_is_the_eight_attributes_and_nothing_else() {
     }
 }
 
-/// [R-CTX-044] a mistyped path must not delete something real.
+/// [REQ-2844] a mistyped path must not delete something real.
 #[test]
 fn remove_symlink_refuses_a_regular_file() {
     let (ctx, world) = plain();
@@ -478,7 +478,7 @@ fn remove_symlink_refuses_a_regular_file() {
     assert!(world.fs.read(&under_home("real")).is_ok(), "still there");
 }
 
-/// [R-CTX-021] asking whether a tool is installed is a question, and a
+/// [REQ-2821] asking whether a tool is installed is a question, and a
 /// question's answer can be no.
 #[test]
 fn which_answers_none_rather_than_failing() {
@@ -497,8 +497,8 @@ if ctx.which("nonesuch") != None: fail("nonesuch is not")
     .expect("both answers");
 }
 
-/// [R-CTX-023] a checksum is checked before anything is written, for the
-/// reason [R-MODULE-030] gives: a check afterwards has already written.
+/// [REQ-2823, REQ-2903, REQ-2904] a checksum is checked before anything is written, for the
+/// reason [REQ-2430, REQ-2506] gives: a check afterwards has already written.
 #[test]
 fn download_verifies_before_it_writes() {
     let body = b"payload".to_vec();
@@ -538,7 +538,7 @@ fn download_verifies_before_it_writes() {
     );
 }
 
-/// [R-CTX-022] cloning is running `git`, not implementing a fetch.
+/// [REQ-2822] cloning is running `git`, not implementing a fetch.
 #[test]
 fn git_clone_runs_git() {
     let (ctx, world) = build(
@@ -567,7 +567,7 @@ fn git_clone_runs_git() {
     );
 }
 
-/// [R-CTX-025] the name suggests a shell statement and it is not one: the
+/// [REQ-2825, REQ-2906] the name suggests a shell statement and it is not one: the
 /// standard library calls it so the next `ctx.run` finds a binary it just
 /// installed.
 #[test]
@@ -587,7 +587,7 @@ fn add_path_reports_the_directory_rather_than_emitting_a_statement() {
     );
 }
 
-/// [R-CTX-014] no method asks whether this is a dry run. The property is
+/// [REQ-2814] no method asks whether this is a dry run. The property is
 /// readable and changes nothing about what the methods do.
 #[test]
 fn dry_run_is_a_property_and_not_a_branch() {
@@ -636,7 +636,7 @@ if ctx.env("ABSENT") != "": fail("an unset variable is empty")
     );
 }
 
-/// [R-CTX-013] and [R-OPS-021]: a mutation is journaled before it is applied,
+/// [REQ-2813] and [REQ-2021]: a mutation is journaled before it is applied,
 /// so an interrupted run has something to undo.
 ///
 /// The journal is a real file because that is what `Journal` writes; the rest
@@ -684,7 +684,7 @@ fn a_mutation_is_journaled_before_it_happens() {
     assert!(written.contains("\"phase\":\"install\""), "{written}");
 }
 
-/// [R-OPS-032] a journal that cannot be appended to fails the operation.
+/// [REQ-2032] a journal that cannot be appended to fails the operation.
 ///
 /// An effect applied with no record of how to undo it is the state the
 /// journal exists to prevent, so the write must not happen at all. The
@@ -738,7 +738,7 @@ fn an_effect_whose_journal_cannot_be_written_does_not_happen() {
     );
 }
 
-/// [R-COMMON-012] and [R-CTX-030]: which surface a phase gets follows from
+/// [REQ-1012] and [REQ-2830, REQ-2911]: which surface a phase gets follows from
 /// whether the phase is read-only, and nothing else decides it.
 #[test]
 fn the_surface_follows_from_the_phase() {
@@ -755,7 +755,7 @@ fn the_surface_follows_from_the_phase() {
     }
 }
 
-/// [R-CTX-002] a component chooses between `set -gx` and `export` by reading
+/// [REQ-2802, REQ-2900, REQ-2901] a component chooses between `set -gx` and `export` by reading
 /// this, so it has to name the shell that will evaluate the line.
 #[test]
 fn shell_names_the_shell_in_a_runtime_hook_phase() {
@@ -778,7 +778,7 @@ fn shell_names_the_shell_in_a_runtime_hook_phase() {
     );
 }
 
-/// [R-CTX-002] `None` everywhere else, which is how a component tests whether
+/// [REQ-2802, REQ-2900, REQ-2901] `None` everywhere else, which is how a component tests whether
 /// it is being asked to contribute to a shell at all.
 #[test]
 fn shell_is_none_outside_a_runtime_hook_phase() {
@@ -791,13 +791,13 @@ fn shell_is_none_outside_a_runtime_hook_phase() {
     .expect("ctx.shell is None in install");
 }
 
-/// [R-CTX-031] a shell hook runs on every shell spawn, so the surface it gets
+/// [REQ-2831] a shell hook runs on every shell spawn, so the surface it gets
 /// carries nothing that could leave a trace behind.
 #[test]
 fn a_runtime_hook_reaches_only_the_eight_attributes() {
     let (ctx, _) = build(Vec::new(), ScriptedHttp::new(), Phase::Shell);
 
-    // An absolute path on both platforms: [R-CTX-012] refuses anything else,
+    // An absolute path on both platforms: [REQ-2812, REQ-2902] refuses anything else,
     // and a Windows run would fail on the refusal rather than on the surface.
     let somewhere = format!("ctx.file_exists({})", quoted(COMPONENT_DIR));
     for allowed in [
@@ -824,7 +824,7 @@ fn a_runtime_hook_reaches_only_the_eight_attributes() {
     }
 }
 
-/// [R-CTX-040] a method called with the wrong type names the method and the
+/// [REQ-2840] a method called with the wrong type names the method and the
 /// argument, because a component author reads this and has no source for the
 /// binary that produced it.
 #[test]
@@ -837,13 +837,13 @@ fn a_wrong_argument_type_names_the_method_and_the_argument() {
     assert!(said.contains("write_file"), "{said}");
 }
 
-/// [R-CTX-041] an effect that fails fails the hook, which fails the component
+/// [REQ-2841] an effect that fails fails the hook, which fails the component
 /// and lets the run roll back. Swallowing it would leave a component
 /// reporting success over a file that was never written.
 #[test]
 fn a_failed_effect_fails_the_hook() {
     let (ctx, _) = plain();
-    // A directory that does not exist, which [R-FS-033] makes a failure on
+    // A directory that does not exist, which [REQ-1433] makes a failure on
     // every implementation.
     let err = call(
         &ctx,
@@ -858,7 +858,7 @@ fn a_failed_effect_fails_the_hook() {
     assert!(err.to_string().contains("missing"), "{err}");
 }
 
-/// [R-CTX-026] a prompt goes through the `Interaction` trait, so a run with
+/// [REQ-2826] a prompt goes through the `Interaction` trait, so a run with
 /// no terminal answers rather than blocking on a stdin nobody is typing at.
 #[test]
 fn a_prompt_goes_through_the_interaction_trait() {
@@ -868,7 +868,7 @@ fn a_prompt_goes_through_the_interaction_trait() {
     call(&ctx, Surface::Full, "    ctx.prompt(\"go ahead?\")").expect("the prompt is answered");
 }
 
-/// [R-CTX-044] `remove_symlink` removes a symlink and refuses a file.
+/// [REQ-2844] `remove_symlink` removes a symlink and refuses a file.
 ///
 /// The guard is what stops a mistyped path from deleting something real: the
 /// method's name says what it is for, and a component that reached a regular
@@ -896,7 +896,7 @@ fn remove_symlink_refuses_something_that_is_not_one() {
     );
 }
 
-/// [R-CTX-020] `list_dir` answers with what is in the directory, sorted, and
+/// [REQ-2820] `list_dir` answers with what is in the directory, sorted, and
 /// with names rather than paths.
 #[test]
 fn list_dir_answers_with_the_names_in_the_directory() {
@@ -938,7 +938,7 @@ impl meowctl_tui::Interaction for Says {
     }
 }
 
-/// [R-CTX-026] `prompt` answers with what the `Interaction` gave it, so a
+/// [REQ-2826] `prompt` answers with what the `Interaction` gave it, so a
 /// component that asks a question gets the answer rather than a placeholder.
 ///
 /// `Always` answers with an empty string, which is also what a `prompt` that
@@ -977,7 +977,7 @@ fn prompt_answers_with_what_the_interaction_said() {
     .expect("the answer arrives");
 }
 
-/// [R-CTX-010] a value reaches a command as the shell spells it: `defaults
+/// [REQ-2810] a value reaches a command as the shell spells it: `defaults
 /// write` and `PlistBuddy` both reject Starlark's `True`, so the method has
 /// to render it rather than pass it through.
 #[test]
@@ -1004,7 +1004,7 @@ fn a_boolean_reaches_a_command_as_the_shell_spells_it() {
     );
 }
 
-/// [R-CTX-030] and [R-CTX-031]: the restricted surfaces answer `hasattr`
+/// [REQ-2830, REQ-2911] and [REQ-2831]: the restricted surfaces answer `hasattr`
 /// honestly, because a component that checks before calling would otherwise
 /// be told a method is there and then refused.
 #[test]
@@ -1026,7 +1026,7 @@ fn the_restricted_surfaces_do_not_claim_what_they_refuse() {
     .expect("the shell surface is honest");
 }
 
-/// [R-CTX-001] and [R-CTX-031]: `dir(ctx)` lists what is there, which is how
+/// [REQ-2801] and [REQ-2831]: `dir(ctx)` lists what is there, which is how
 /// a component author finds out what they have without reading the source of
 /// a binary they do not have.
 #[test]
@@ -1048,7 +1048,7 @@ fn dir_lists_the_surface_the_phase_gets() {
     .expect("the shell surface lists itself");
 }
 
-/// [R-OPS-015] and [R-CTX-013]: `link_file` with no backup given puts the
+/// [REQ-2015, REQ-2111] and [REQ-2813]: `link_file` with no backup given puts the
 /// user's file at
 /// `<name>.meowctl-backup` beside it, which is where `v0.1.0` puts it and
 /// therefore where a user who has been through this before will look.

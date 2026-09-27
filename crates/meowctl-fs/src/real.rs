@@ -9,7 +9,7 @@ use crate::{Displaced, Entry, FileSystem, FsError, FsResult};
 /// Mode for a file meowctl creates.
 ///
 /// `0o600` because a configuration holds whatever a user's components put in
-/// it, and the narrow default is the safe one; see [R-FS-004].
+/// it, and the narrow default is the safe one; see [REQ-1404].
 ///
 /// Declared for every platform even though only Unix applies it, so that a
 /// call site does not need a `cfg` of its own; [`set_mode`] is where the
@@ -23,7 +23,7 @@ const DIR_MODE: u32 = 0o700;
 ///
 /// `v0.1.0` normalises every extracted entry to one of two modes rather than
 /// carrying the archive's exact bits, so a module cannot ship something
-/// group-writable; see [R-MODULE-032].
+/// group-writable; see [REQ-2432].
 const EXECUTABLE_MODE: u32 = 0o755;
 
 /// Mode for a file a module tarball did not mark executable.
@@ -42,7 +42,7 @@ impl RealFs {
 }
 
 /// Checks that a path's parent directory exists, so a write fails with a
-/// reason a dry run could also have predicted; see [R-FS-033].
+/// reason a dry run could also have predicted; see [REQ-1433].
 fn require_parent(path: &Path) -> FsResult<&Path> {
     let parent = path.parent().ok_or_else(|| FsError::NoParent {
         path: path.to_path_buf(),
@@ -74,7 +74,7 @@ fn is_executable(meta: &fs::Metadata) -> bool {
 #[cfg(not(unix))]
 fn is_executable(_meta: &fs::Metadata) -> bool {
     // Nothing on Windows carries the bit, so nothing can report it; see
-    // [R-FS-005].
+    // [REQ-1405, REQ-1501].
     false
 }
 
@@ -119,7 +119,7 @@ impl FileSystem for RealFs {
         fs::rename(&temp, path).map_err(|e| {
             // Leaving the temporary file behind litters the configuration
             // directory, which is what `v0.1.0` guards on every error branch;
-            // see [R-FS-031].
+            // see [REQ-1431].
             let _ = fs::remove_file(&temp);
             FsError::io("renaming into place", path, e)
         })?;
@@ -144,7 +144,7 @@ impl FileSystem for RealFs {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(FsError::io("inspecting", path, e)),
             // A directory needs `remove_dir`, and it refuses a directory with
-            // anything in it, which is the behaviour [R-FS-006] wants.
+            // anything in it, which is the behaviour [REQ-1406, REQ-1502, REQ-1503] wants.
             // `Op::RemoveDir` walks a chain of directories it created and
             // stops at the first one that is not empty, so this is the call it
             // has been making all along.

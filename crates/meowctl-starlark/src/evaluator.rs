@@ -19,7 +19,7 @@ use crate::{StarlarkError, StarlarkResult};
 ///
 /// The implementation lives in `meowctl-module`, which knows about the
 /// registry, GitHub, and integrity. This crate only needs the source text and
-/// a name to report in a diagnostic; see [R-STAR-020].
+/// a name to report in a diagnostic; see [REQ-2220].
 pub trait Loader {
     /// Resolves a module URL to the source of the file it names.
     ///
@@ -44,7 +44,7 @@ pub struct LoadedFile {
 /// component's file, which is an evaluation this crate cannot start from
 /// inside a builtin of the evaluation already running. So it arrives as a
 /// trait, the way [`Loader`] does, and the engine supplies one; see
-/// [R-STAR-005] and [R-PM-020].
+/// [REQ-2205] and [REQ-2620].
 pub trait PackageManagers: std::fmt::Debug {
     /// What the manager reports is installed.
     ///
@@ -103,7 +103,7 @@ pub trait HookArgument {
     ///
     /// Empty for a lifecycle hook, which takes `ctx` alone. A
     /// package-manager handler takes `install_pkg(ctx, name, version)`; see
-    /// [R-STAR-030] and [R-PM-010].
+    /// [REQ-2230] and [REQ-2610].
     fn positional<'v>(&self, heap: Heap<'v>) -> Vec<Value<'v>> {
         let _ = heap;
         Vec::new()
@@ -123,13 +123,13 @@ pub struct Evaluator<'a> {
     /// Modules already evaluated in this command, by URL.
     ///
     /// A graph that loads one helper from twenty components pays for it once;
-    /// see [R-STAR-023].
+    /// see [REQ-2223].
     cache: RefCell<HashMap<String, FrozenModule>>,
-    /// Where `query_pm` sends its question; see [R-STAR-005].
+    /// Where `query_pm` sends its question; see [REQ-2205].
     ///
     /// Swappable because `query_pm` passes the asking component's `ctx`, so
     /// the answer depends on who is asking, while the evaluation cache this
-    /// evaluator holds must survive across components; see [R-STAR-023].
+    /// evaluator holds must survive across components; see [REQ-2223].
     package_managers: RefCell<Arc<dyn PackageManagers>>,
 }
 
@@ -149,17 +149,17 @@ pub struct Evaluated {
     /// Its top-level names, sorted.
     pub globals: Vec<String>,
     /// Which of those are functions, so a hook can be found without calling
-    /// it; see [R-STAR-032].
+    /// it; see [REQ-2232].
     pub callables: Vec<String>,
-    /// Those bound to a string, with their values; see [R-STAR-033].
+    /// Those bound to a string, with their values; see [REQ-2233].
     pub strings: BTreeMap<String, String>,
     /// What a called hook returned, when it returned a list of strings.
     ///
     /// `interrogate` returns the packages a manager has installed, and a
     /// Starlark value cannot leave the heap it was allocated on, so it is
-    /// copied out while the heap is still open; see [R-PM-020].
+    /// copied out while the heap is still open; see [REQ-2620].
     pub returned: Option<Vec<String>>,
-    /// Those bound to a list of strings; see [R-STAR-034].
+    /// Those bound to a list of strings; see [REQ-2234].
     ///
     /// A list holding anything else is absent rather than partial: a
     /// `platforms` that is not a list of names is ignored by `v0.1.0` too,
@@ -200,7 +200,7 @@ impl<'a> Evaluator<'a> {
     /// Points `query_pm` somewhere else for the calls that follow.
     ///
     /// The engine does this per component, because `query_pm` runs a handler
-    /// with the asking component's `ctx`; see [R-PM-020].
+    /// with the asking component's `ctx`; see [REQ-2620].
     pub fn set_package_managers(&self, managers: Arc<dyn PackageManagers>) {
         *self.package_managers.borrow_mut() = managers;
     }
@@ -219,7 +219,7 @@ impl<'a> Evaluator<'a> {
     /// Evaluates a file and calls one of its functions with `argument`.
     ///
     /// A hook that is absent is a success with nothing to do, because most
-    /// components define three of the thirteen phases; see [R-STAR-031].
+    /// components define three of the thirteen phases; see [REQ-2231].
     ///
     /// # Errors
     ///
@@ -244,7 +244,7 @@ impl<'a> Evaluator<'a> {
     /// The accumulator is per evaluation and the hook runs inside it, so a
     /// `pkg()` the hook made is in the result alongside the ones the file
     /// made at its top level. The engine needs both: it dispatches them in
-    /// declaration order; see [R-PM-015].
+    /// declaration order; see [REQ-2615, REQ-2703].
     ///
     /// # Errors
     ///
@@ -306,7 +306,7 @@ impl<'a> Evaluator<'a> {
                 .cloned()
                 .collect();
 
-            // [R-STAR-033]: the value of every top-level string, because
+            // [REQ-2233]: the value of every top-level string, because
             // `pm_name` is what decides whether a component handles a package
             // manager, and which one.
             let strings: BTreeMap<String, String> = globals_found
@@ -318,7 +318,7 @@ impl<'a> Evaluator<'a> {
                 })
                 .collect();
 
-            // [R-STAR-034]: `platforms` and `distros` are two, and they
+            // [REQ-2234]: `platforms` and `distros` are two, and they
             // decide whether a component runs on this machine.
             let lists: BTreeMap<String, Vec<String>> = globals_found
                 .iter()
@@ -378,8 +378,8 @@ impl<'a> Evaluator<'a> {
 
             // What the function returned, when it returned a list of
             // strings. `interrogate` does, and the value cannot leave the
-            // heap, so it is copied out here; see [R-PM-020] and
-            // [R-STAR-011].
+            // heap, so it is copied out here; see [REQ-2620] and
+            // [REQ-2211].
             let returned_strings =
                 starlark::values::list::ListRef::from_value(returned).and_then(|items| {
                     items
@@ -413,7 +413,7 @@ fn is_callable(value: Value<'_>) -> bool {
 fn build_globals() -> Globals {
     // `standard()` rather than `extended()`: the extended set adds builtins
     // `v0.1.0` does not provide, and a component using one would not run on
-    // the Go binary; see [R-STAR-001].
+    // the Go binary; see [REQ-2201, REQ-2300].
     GlobalsBuilder::standard().with(meowctl_globals).build()
 }
 

@@ -1,7 +1,7 @@
 //! Rendering a recorded stream, with no terminal and no engine.
 //!
 //! That is the point of the design: a sink takes events, so a test supplies
-//! them; see [R-TUI-080]. Every test here builds a stream, renders it, and
+//! them; see [REQ-3280]. Every test here builds a stream, renders it, and
 //! asserts on the text.
 
 // `clippy.toml` exempts tests from `expect_used`, but only a function carrying
@@ -98,7 +98,7 @@ fn an_apply() -> Vec<Event> {
     ]
 }
 
-/// [R-TUI-002] column zero is the command talking about itself, two spaces is
+/// [REQ-3202] column zero is the command talking about itself, two spaces is
 /// one item, six is captured detail. Nothing goes deeper.
 #[test]
 fn output_uses_two_levels_of_indent() {
@@ -113,7 +113,7 @@ fn output_uses_two_levels_of_indent() {
     }
 }
 
-/// [R-TUI-003] a monochrome terminal loses decoration and never information,
+/// [REQ-3203, REQ-3300] a monochrome terminal loses decoration and never information,
 /// so the same run says the same things without colour.
 #[test]
 fn colour_carries_no_information_of_its_own() {
@@ -141,7 +141,7 @@ fn strip_escapes(text: &str) -> String {
     out
 }
 
-/// [R-TUI-043] an ASCII terminal loses shape, not meaning: the same states are
+/// [REQ-3243, REQ-3309] an ASCII terminal loses shape, not meaning: the same states are
 /// still told apart.
 #[test]
 fn the_ascii_tier_says_the_same_things() {
@@ -156,7 +156,7 @@ fn the_ascii_tier_says_the_same_things() {
     assert_eq!(unicode.lines().count(), ascii.lines().count());
 }
 
-/// [R-ENGINE-052] "120 components skipped" is the line that made `v0.1.0`'s
+/// [REQ-3052] "120 components skipped" is the line that made `v0.1.0`'s
 /// dry run useless, because a user cannot act on it.
 #[test]
 fn every_skip_says_why() {
@@ -221,7 +221,7 @@ fn a_plan_says_how_much_of_it_runs() {
     assert!(rendered.contains("1 of 2"), "{rendered}");
 }
 
-/// [R-ENGINE-033] a component with nothing to do in a phase has succeeded at
+/// [REQ-3033, REQ-3111] a component with nothing to do in a phase has succeeded at
 /// it, and saying so on every line would bury what did happen.
 #[test]
 fn nothing_to_do_says_nothing() {
@@ -255,7 +255,7 @@ fn a_failure_names_the_component_and_the_error() {
     assert!(rendered.contains("brew exited 1"), "{rendered}");
 }
 
-/// [R-STAR-040] the span is what `v0.1.0` cannot show, so the sink has to.
+/// [REQ-2240] the span is what `v0.1.0` cannot show, so the sink has to.
 #[test]
 fn a_diagnostic_shows_where_it_happened() {
     let rendered = plain(
@@ -276,7 +276,7 @@ fn a_diagnostic_shows_where_it_happened() {
     assert!(rendered.contains("component()"), "{rendered}");
 }
 
-/// [R-TUI-030] one object per event, one per line, in order.
+/// [REQ-3230] one object per event, one per line, in order.
 #[test]
 fn the_json_sink_writes_one_object_per_line() {
     let captured = Captured::default();
@@ -297,7 +297,7 @@ fn the_json_sink_writes_one_object_per_line() {
     assert!(lines[0].contains("phase_started"), "{}", lines[0]);
 }
 
-/// [R-TUI-031] a consumer that had to strip terminal decoration would be
+/// [REQ-3231] a consumer that had to strip terminal decoration would be
 /// parsing a rendering.
 #[test]
 fn the_json_sink_writes_no_decoration() {
@@ -314,10 +314,10 @@ fn the_json_sink_writes_no_decoration() {
     }
 }
 
-/// [R-TUI-012] a sink that dropped a variant would make a command's output
+/// [REQ-3212, REQ-3302, REQ-3303] a sink that dropped a variant would make a command's output
 /// depend on where it ran.
 ///
-/// Also [R-TUI-010] and [R-TUI-032]: the stream is one stream, and each of
+/// Also [REQ-3210] and [REQ-3232]: the stream is one stream, and each of
 /// the sinks that renders a run consumes all of it. `--format json` selects
 /// this one, and a command whose events it did not carry would be a command
 /// nothing could script.
@@ -344,7 +344,7 @@ fn every_event_reaches_the_json_sink() {
     assert_eq!(captured.text().lines().count(), events.len());
 }
 
-/// [R-TUI-070] a closed pipe is normal when output goes into `head`, and a run
+/// [REQ-3270, REQ-3323] a closed pipe is normal when output goes into `head`, and a run
 /// must not abort for it.
 #[test]
 fn a_write_that_fails_does_not_panic() {
@@ -376,7 +376,7 @@ fn the_plain_sink_ignores_the_terminal_hand_off() {
     assert_eq!(rendered, "");
 }
 
-/// [R-TUI-012] a shell evaluates whatever the sink writes, so it writes the
+/// [REQ-3212, REQ-3302, REQ-3303] a shell evaluates whatever the sink writes, so it writes the
 /// line and not a rendering of it.
 #[test]
 fn the_shell_sink_writes_the_line_and_nothing_around_it() {
@@ -391,7 +391,7 @@ fn the_shell_sink_writes_the_line_and_nothing_around_it() {
     assert_eq!(out.text(), "export EDITOR=nvim\n");
 }
 
-/// [R-TUI-012] every other event is dropped, because a shell would evaluate
+/// [REQ-3212, REQ-3302, REQ-3303] every other event is dropped, because a shell would evaluate
 /// a heading as a command.
 #[test]
 fn the_shell_sink_writes_nothing_for_any_other_event() {
@@ -426,7 +426,7 @@ fn the_shell_sink_writes_nothing_for_any_other_event() {
     assert_eq!(out.text(), "");
 }
 
-/// [R-TUI-013] `--format json` on `hook` is the event stream, not shell code:
+/// [REQ-3213, REQ-3304] `--format json` on `hook` is the event stream, not shell code:
 /// a program reading events is not a shell evaluating them, so the two sinks
 /// render the same event differently and both are right.
 #[test]
@@ -444,7 +444,7 @@ fn the_json_sink_still_carries_a_shell_line() {
     assert!(text.contains("export EDITOR=nvim"), "{text}");
 }
 
-/// [R-TUI-071] every sink that renders a run handles every variant, which the
+/// [REQ-3271] every sink that renders a run handles every variant, which the
 /// compiler already guarantees: `Event` is not `#[non_exhaustive]` and the
 /// matches are exhaustive, so a new variant is an error in each one.
 ///
@@ -468,7 +468,7 @@ fn no_sink_that_renders_a_run_has_a_catch_all() {
     }
 }
 
-/// [R-TUI-040] detection resolves four things independently, so a pipe on a
+/// [REQ-3240] detection resolves four things independently, so a pipe on a
 /// colour terminal is not confused with a dumb terminal on a tty.
 #[test]
 fn the_four_capabilities_are_resolved_independently() {
@@ -488,7 +488,7 @@ fn the_four_capabilities_are_resolved_independently() {
     );
 }
 
-/// [R-TUI-050] the palette is one table, so pointing at a user file later is
+/// [REQ-3250, REQ-3313] the palette is one table, so pointing at a user file later is
 /// a reader rather than a restructuring.
 #[test]
 fn the_palette_is_data() {
@@ -496,12 +496,12 @@ fn the_palette_is_data() {
     assert_eq!(theme.palette, meowctl_tui::theme::CATPPUCCIN);
 
     // Every role resolves through the table rather than through a literal at
-    // the call site; see [R-TUI-051].
+    // the call site; see [REQ-3251].
     let painted = theme.paint(meowctl_tui::Role::Muted, "x");
     assert!(painted.contains('x'), "{painted}");
 }
 
-/// [R-TUI-050] and [R-TUI-053]: a theme file names a role and its four
+/// [REQ-3250, REQ-3313] and [REQ-3253, REQ-3314]: a theme file names a role and its four
 /// numbers, and the palette that comes back carries them.
 #[test]
 fn a_theme_file_replaces_the_role_it_names() {
@@ -514,7 +514,7 @@ fn a_theme_file_replaces_the_role_it_names() {
     assert_eq!(palette.accent.ansi16, 4);
 }
 
-/// [R-TUI-054] a role the file does not name keeps its default, so a user who
+/// [REQ-3254, REQ-3315] a role the file does not name keeps its default, so a user who
 /// wants one colour changed writes one table.
 #[test]
 fn a_role_the_file_leaves_out_keeps_its_default() {
@@ -527,7 +527,7 @@ fn a_role_the_file_leaves_out_keeps_its_default() {
     assert_ne!(palette.accent, meowctl_tui::theme::CATPPUCCIN.accent);
 }
 
-/// [R-TUI-054] a role it names is replaced whole. Three numbers and a missing
+/// [REQ-3254, REQ-3315] a role it names is replaced whole. Three numbers and a missing
 /// one is a mistake, not a request to mix in a default nobody chose.
 #[test]
 fn a_role_with_a_missing_number_is_refused() {
@@ -536,7 +536,7 @@ fn a_role_with_a_missing_number_is_refused() {
     assert!(err.to_string().contains("ansi16"), "{err}");
 }
 
-/// [R-TUI-052] and [R-TUI-053]: a misspelled role is a mistake the user hears
+/// [REQ-3252] and [REQ-3253, REQ-3314]: a misspelled role is a mistake the user hears
 /// about, not a table that silently does nothing.
 #[test]
 fn a_role_that_is_not_a_role_is_refused() {
@@ -545,7 +545,7 @@ fn a_role_that_is_not_a_role_is_refused() {
     assert!(err.to_string().contains("acccent"), "{err}");
 }
 
-/// [R-TUI-052] a file that is not TOML at all falls back rather than failing
+/// [REQ-3252] a file that is not TOML at all falls back rather than failing
 /// the command, and says what the parser saw.
 #[test]
 fn a_file_that_is_not_toml_is_refused_with_a_reason() {
@@ -553,7 +553,7 @@ fn a_file_that_is_not_toml_is_refused_with_a_reason() {
     assert!(!err.to_string().is_empty(), "the reason is empty");
 }
 
-/// [R-TUI-050] an empty file is a valid one that changes nothing, because a
+/// [REQ-3250, REQ-3313] an empty file is a valid one that changes nothing, because a
 /// user who commented every role out has not made a mistake.
 #[test]
 fn an_empty_theme_file_is_the_default_palette() {
@@ -561,7 +561,7 @@ fn an_empty_theme_file_is_the_default_palette() {
     assert_eq!(palette, meowctl_tui::theme::CATPPUCCIN);
 }
 
-/// [R-TUI-051] and [R-TUI-050]: a palette from a file reaches what is
+/// [REQ-3251] and [REQ-3250, REQ-3313]: a palette from a file reaches what is
 /// rendered, which is the whole point of the file.
 #[test]
 fn a_palette_from_a_file_reaches_the_rendered_line() {
@@ -580,7 +580,7 @@ fn a_palette_from_a_file_reaches_the_rendered_line() {
     assert!(out.text().contains("255;0;0"), "{}", out.text());
 }
 
-/// [R-TUI-055] parsing takes text, not a path, because this crate depends on
+/// [REQ-3255] parsing takes text, not a path, because this crate depends on
 /// `meowctl-common` and on nothing else in the workspace.
 ///
 /// Checked against the manifest rather than argued in a comment: a
@@ -597,7 +597,7 @@ fn this_crate_has_no_way_to_read_a_file() {
     }
 }
 
-/// [R-TUI-042] a 24-bit colour is downsampled to the nearest of the 256
+/// [REQ-3242, REQ-3308] a 24-bit colour is downsampled to the nearest of the 256
 /// levels, and the boundary between two levels goes to the nearer one.
 ///
 /// `95` and `135` are adjacent levels; `115` is exactly between them, and the

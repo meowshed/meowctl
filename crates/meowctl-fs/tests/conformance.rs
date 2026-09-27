@@ -2,16 +2,16 @@
 //!
 //! The three are interchangeable behind a trait object, which is what lets
 //! `meowctl-cli` choose one from the flags and nothing below it care; see
-//! [R-FS-014]. A suite that ran against only the real filesystem would let the
+//! [REQ-1414]. A suite that ran against only the real filesystem would let the
 //! other two drift, and the drift would show up as a dry run that plans
 //! something the run does not do.
 //!
 //! `RealFs` is exercised inside a temporary directory, so these are the tests
 //! that touch a disk. Everything else in the workspace uses `MemFs`.
 //!
-//! [R-FS-001] is held by the file rather than by one test: the operations the
+//! [REQ-1401] is held by the file rather than by one test: the operations the
 //! trait covers are the ones exercised below, and a method the workspace does
-//! not need would have nothing here. [R-FS-010] likewise -- every case runs
+//! not need would have nothing here. [REQ-1410] likewise -- every case runs
 //! against `RealFs` as well as the other two, which is what "performs the
 //! effect against the real filesystem" means.
 
@@ -93,7 +93,7 @@ fn for_each(check: impl Fn(&Subject)) {
     }
 }
 
-/// [R-FS-012] a hook that writes a file and reads it back must take the same
+/// [REQ-1412] a hook that writes a file and reads it back must take the same
 /// branch under a dry run as it will for real, which means the dry run has to
 /// remember what it pretended to write.
 #[test]
@@ -118,7 +118,7 @@ fn an_append_extends_what_is_there() {
     });
 }
 
-/// [R-FS-033] a write into a directory that does not exist fails everywhere,
+/// [REQ-1433] a write into a directory that does not exist fails everywhere,
 /// so a dry run does not promise something the run will refuse.
 #[test]
 fn a_write_into_a_missing_directory_fails_with_the_directory_named() {
@@ -144,7 +144,7 @@ fn a_write_into_a_directory_this_run_created_succeeds() {
     });
 }
 
-/// [R-OPS-013] the inverse of a `mkdir` removes the directory only when
+/// [REQ-2013, REQ-2109] the inverse of a `mkdir` removes the directory only when
 /// meowctl created it, so the answer here decides whether rollback deletes
 /// something the user had.
 #[test]
@@ -156,7 +156,7 @@ fn creating_a_directory_reports_whether_it_made_one() {
     });
 }
 
-/// [R-FS-020] re-running `apply` re-links an existing symlink, and the caller
+/// [REQ-1420, REQ-1506] re-running `apply` re-links an existing symlink, and the caller
 /// needs the previous target to journal an inverse that puts it back.
 #[test]
 fn replacing_a_symlink_reports_what_it_displaced() {
@@ -184,7 +184,7 @@ fn replacing_a_symlink_reports_what_it_displaced() {
     });
 }
 
-/// [R-FS-021] a user's own file must not disappear without a record.
+/// [REQ-1421, REQ-1507, REQ-1508] a user's own file must not disappear without a record.
 #[test]
 fn a_symlink_over_a_regular_file_is_refused_without_a_backup() {
     for_each(|s| {
@@ -234,7 +234,7 @@ fn a_symlink_over_a_regular_file_moves_it_aside_when_asked() {
     });
 }
 
-/// [R-FS-022] a mistyped path must not delete something real.
+/// [REQ-1422] a mistyped path must not delete something real.
 /// The refusal is deliberate, and a test that skipped it would let the
 /// platform behaviour change without anybody noticing.
 #[cfg(not(unix))]
@@ -271,7 +271,7 @@ fn removing_a_symlink_refuses_a_regular_file() {
     });
 }
 
-/// [R-FS-032] a missing lock file is a clean slate and a missing `init.star`
+/// [REQ-1432] a missing lock file is a clean slate and a missing `init.star`
 /// is fatal, so the caller has to be able to tell them apart.
 #[test]
 fn a_missing_file_is_distinguishable_from_another_failure() {
@@ -285,7 +285,7 @@ fn a_missing_file_is_distinguishable_from_another_failure() {
     });
 }
 
-/// [R-CTX-042] asking is how a component tests before it reads, so asking must
+/// [REQ-2842, REQ-2912] asking is how a component tests before it reads, so asking must
 /// not be an error.
 #[test]
 fn asking_about_a_missing_path_is_not_an_error() {
@@ -319,7 +319,7 @@ fn a_copy_reproduces_the_contents() {
     });
 }
 
-/// [R-FS-030] the path and the operation are in the error, because
+/// [REQ-1430] the path and the operation are in the error, because
 /// "permission denied" with no file sends the user reading a hook's source.
 #[test]
 fn every_error_names_its_path() {
@@ -331,7 +331,7 @@ fn every_error_names_its_path() {
     });
 }
 
-/// [R-FS-005] a module tarball ships scripts meowctl later runs, and the bit
+/// [REQ-1405, REQ-1501] a module tarball ships scripts meowctl later runs, and the bit
 /// is what makes them runnable. Every implementation has to agree on it, or a
 /// dry run reports a plan the real run does not produce.
 ///
@@ -390,7 +390,7 @@ fn making_a_missing_file_executable_fails() {
     });
 }
 
-/// [R-FS-005] a copy creates a file and [R-FS-004] gives a created file
+/// [REQ-1405, REQ-1501] a copy creates a file and [REQ-1404] gives a created file
 /// `0o600`, so the bit does not travel. A rename moves the file, so it does.
 /// The two differ, and a caller that copies a script has to set it again.
 #[test]
@@ -426,7 +426,7 @@ fn a_copy_drops_the_executable_bit_and_a_rename_keeps_it() {
     });
 }
 
-/// [R-FS-006] `Op::RemoveDir` walks the chain of directories a `mkdir -p`
+/// [REQ-1406, REQ-1502, REQ-1503] `Op::RemoveDir` walks the chain of directories a `mkdir -p`
 /// created and stops at the first one that is not empty, which only works if
 /// `remove` refuses a directory with something in it and removes an empty one.
 #[test]
@@ -445,7 +445,7 @@ fn removing_a_directory_takes_an_empty_one_and_refuses_the_rest() {
     });
 }
 
-/// [R-FS-006] the module cache replaces a module's directory when what is in
+/// [REQ-1406, REQ-1502, REQ-1503] the module cache replaces a module's directory when what is in
 /// it no longer matches what was recorded, and nothing there is worth keeping.
 #[test]
 fn removing_a_directory_recursively_takes_the_whole_subtree() {
@@ -498,7 +498,7 @@ fn removing_a_missing_directory_recursively_succeeds() {
 /// Renaming a directory takes everything under it. The module cache stages an
 /// extraction beside its destination and renames it into place, so a rename
 /// that moved only the directory itself would leave an empty module; see
-/// [R-MODULE-063].
+/// [REQ-2463].
 #[test]
 fn renaming_a_directory_moves_everything_under_it() {
     for_each(|s| {
@@ -534,7 +534,7 @@ fn renaming_a_directory_moves_everything_under_it() {
     });
 }
 
-/// [R-FS-002] a relative path is refused rather than resolved against
+/// [REQ-1402, REQ-1500] a relative path is refused rather than resolved against
 /// whatever the working directory happens to be.
 ///
 /// The three implementations would resolve it differently -- `MemFs` has no
@@ -557,7 +557,7 @@ fn a_relative_path_is_refused_by_every_implementation() {
     }
 }
 
-/// [R-FS-013] `MemFs` touches no disk, which is what lets the engine's tests
+/// [REQ-1413] `MemFs` touches no disk, which is what lets the engine's tests
 /// run without a temporary directory.
 #[test]
 fn the_in_memory_filesystem_writes_nothing_to_disk() {
@@ -574,7 +574,7 @@ fn the_in_memory_filesystem_writes_nothing_to_disk() {
     );
 }
 
-/// [R-FS-031] a write that fails removes its temporary file, because
+/// [REQ-1431] a write that fails removes its temporary file, because
 /// `.meowctl-*.tmp` accumulating in a configuration directory is the litter
 /// this is here to avoid.
 ///

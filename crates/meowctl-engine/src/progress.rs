@@ -22,7 +22,7 @@ pub struct Progress {
     /// What to stamp a record with.
     ///
     /// A value rather than a reading of the clock, because a component that
-    /// asks the clock cannot be tested; see [R-ENGINE-041].
+    /// asks the clock cannot be tested; see [REQ-3041].
     now: Option<toml::value::Datetime>,
 }
 
@@ -55,7 +55,7 @@ impl Progress {
     /// Written immediately rather than at the end of the phase, because the
     /// point of recording it is that an interrupted run resumes where it
     /// stopped, and a record still in memory when the process dies records
-    /// nothing; see [R-ENGINE-041] and [R-ENGINE-062].
+    /// nothing; see [REQ-3041] and [REQ-3062, REQ-3121].
     ///
     /// # Errors
     ///
@@ -107,7 +107,7 @@ impl Progress {
 /// `computeStaleComponents` is the same computation, and
 /// `fix: correct module updates` is why it exists: without it a bumped module
 /// reported its components already installed and left the symlinks pointing
-/// at the old cached version; see [R-ENGINE-043] and [R-ENGINE-044].
+/// at the old cached version; see [REQ-3043, REQ-3116] and [REQ-3044].
 #[must_use]
 pub fn stale_components(
     components: &[ComponentId],
@@ -164,7 +164,7 @@ pub fn fingerprints(
 ///
 /// Reported before anything else happens, because a non-empty journal means
 /// the last run stopped partway and the machine is in a state nobody chose;
-/// see [R-ENGINE-042] and [R-OPS-025].
+/// see [REQ-3042] and [REQ-2025, REQ-2118].
 ///
 /// # Errors
 ///

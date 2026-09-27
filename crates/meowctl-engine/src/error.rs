@@ -31,7 +31,7 @@ pub enum EngineError {
     ///
     /// The components on it are named. `TopoSort` reports only that there is
     /// one, which leaves a user with a hundred components and no way to find
-    /// the two that point at each other; see [R-ENGINE-015].
+    /// the two that point at each other; see [REQ-3015, REQ-3105].
     #[error("these components depend on each other: {}", names(on_it))]
     Cycle {
         /// The components that could not be ordered, sorted.
@@ -40,7 +40,7 @@ pub enum EngineError {
 
     /// A filter named something the configuration does not declare.
     ///
-    /// An empty run would look like a successful one; see [R-ENGINE-016].
+    /// An empty run would look like a successful one; see [REQ-3016, REQ-3106].
     #[error("no component is named {name}")]
     NoSuchComponent {
         /// What the caller asked for.

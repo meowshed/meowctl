@@ -26,11 +26,11 @@ const MANIFEST: &str = "MODULE.meow";
 pub enum Upgrade {
     /// Keep every locked version; resolve only what is missing.
     ///
-    /// The ordinary `meowctl dep sync`, and what [R-MODULE-050] describes.
+    /// The ordinary `meowctl dep sync`, and what [REQ-2450] describes.
     #[default]
     Nothing,
     /// Clear these modules' locked versions and resolve them again, leaving
-    /// the rest of the lock where it is; see [R-MODULE-053].
+    /// the rest of the lock where it is; see [REQ-2453].
     Named(BTreeSet<String>),
     /// Ignore the lock entirely.
     Everything,
@@ -84,7 +84,7 @@ impl<'a> Syncer<'a> {
     ///
     /// Both arrive as values rather than being read here, because a component
     /// that asks the clock cannot be tested and a crate below the binary does
-    /// not know the binary's version; see [R-CONFIG-022].
+    /// not know the binary's version; see [REQ-1222].
     #[must_use]
     pub fn new(
         fs: &'a dyn FileSystem,
@@ -123,7 +123,7 @@ impl<'a> Syncer<'a> {
     /// `previous` is the lock as it stands. A module in it keeps its version
     /// unless `upgrade` says otherwise, because resolution that ran again on
     /// every sync would move with whatever the registry published today; see
-    /// [R-MODULE-050].
+    /// [REQ-2450].
     ///
     /// # Errors
     ///
@@ -167,7 +167,7 @@ impl<'a> Syncer<'a> {
                 if !replace.source.is_empty() {
                     // A fork is fetched like any other remote module and
                     // verified like one: the directive says where to look, not
-                    // that the code is trusted; see [R-MODULE-021].
+                    // that the code is trusted; see [REQ-2421, REQ-2505].
                     self.lock_github(&mut out, &dep.name, &replace.source)?;
                     continue;
                 }
@@ -191,7 +191,7 @@ impl<'a> Syncer<'a> {
     fn lock_replacement(&self, out: &mut Synced, module: &str, path: &str) -> ModuleResult<()> {
         let path = PathBuf::from(path);
         // A typo here must not quietly fetch upstream, which is the opposite
-        // of what the directive asked for; see [R-MODULE-064].
+        // of what the directive asked for; see [REQ-2464].
         if !self.fs.exists(&path)? {
             return Err(ModuleError::NoSuchReplacement {
                 module: module.to_owned(),
@@ -251,7 +251,7 @@ impl<'a> Syncer<'a> {
         out.resolved.insert(module.to_owned(), commit);
 
         // An aggregate module brings its dependencies with it, and they are
-        // read from its own manifest; see [R-MODULE-012].
+        // read from its own manifest; see [REQ-2412].
         for transitive in self.manifest_deps(module, &dir)? {
             if out.lock.modules.contains_key(&transitive.name) || transitive.source.is_empty() {
                 continue;
@@ -409,7 +409,7 @@ impl Requirements for ManifestRequirements<'_> {
 ///
 /// A machine-local override exists precisely to differ from what the
 /// configuration commits, so it wins wherever both name a module; see
-/// [R-MODULE-022].
+/// [REQ-2422].
 #[must_use]
 pub fn overlay_replaces(shared: &[Replace], local: &[Replace]) -> Vec<Replace> {
     let mut merged: Vec<Replace> = shared.to_vec();

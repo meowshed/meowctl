@@ -67,7 +67,7 @@ fn evaluate_tree(root: &Path) -> (usize, Vec<(PathBuf, String)>) {
     (evaluated, failed)
 }
 
-/// [R-STAR-001] the predeclared set has to be enough for what people have
+/// [REQ-2201, REQ-2300] the predeclared set has to be enough for what people have
 /// already written.
 #[test]
 fn every_standard_library_component_evaluates() {
@@ -127,7 +127,7 @@ fn a_real_configuration_evaluates() {
 /// These are written by module authors rather than by meowctl, and they carry
 /// `compat`, which the evaluator's `module()` in `v0.1.0` rejects: only the
 /// third grammar, inside the loader, tolerates it. One evaluator has to read
-/// all three files, so it accepts the union; see [R-STAR-006].
+/// all three files, so it accepts the union; see [REQ-2206, REQ-2303].
 #[test]
 fn every_module_manifest_evaluates() {
     let loader = NoLoader;
@@ -208,7 +208,7 @@ fn a_manifest_declares_dependencies_like_a_deps_mod() {
     assert_eq!(result.declarations.deps[1].source, "github:o/r@v1");
 }
 
-/// [R-STAR-052] nothing claims to bound an evaluation, which is what the
+/// [REQ-2252, REQ-2307] nothing claims to bound an evaluation, which is what the
 /// requirement now says. A test that asserted a bound would be asserting
 /// something no reader could rely on.
 ///
@@ -226,7 +226,7 @@ fn the_evaluator_installs_no_bound_it_cannot_honour() {
     ] {
         assert!(
             !source.contains(claim),
-            "the evaluator reaches for {claim}, so [R-STAR-052] needs rewriting"
+            "the evaluator reaches for {claim}, so [REQ-2252, REQ-2307] needs rewriting"
         );
     }
 }

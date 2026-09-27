@@ -25,7 +25,7 @@ pub struct LockMeta {
 /// One resolved module.
 ///
 /// The key names are `internal/lock/lock.go`'s, and their order is the one a
-/// file written by `v0.1.0` has; see [R-CONFIG-020].
+/// file written by `v0.1.0` has; see [REQ-1220, REQ-1305, REQ-1306, REQ-1307].
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModuleEntry {
     /// The selected semver version, for a registry module.
@@ -40,7 +40,7 @@ pub struct ModuleEntry {
     /// Each extracted file, relative to the module root, to its own hash.
     ///
     /// Per file rather than per tarball, so a cache mutated after extraction
-    /// is detectable; see [R-CONFIG-021].
+    /// is detectable; see [REQ-1221].
     #[serde(default)]
     pub files: BTreeMap<String, String>,
     /// The commit a GitHub reference resolved to.
@@ -60,7 +60,7 @@ impl ModuleEntry {
     /// The version, then the commit, then the integrity hash.
     /// `moduleFingerprint` is the same chain, and it is a chain rather than
     /// one field so a GitHub module re-synced to a new commit invalidates
-    /// even though no version changed; see [R-CONFIG-033].
+    /// even though no version changed; see [REQ-1233].
     #[must_use]
     pub fn fingerprint(&self) -> &str {
         if !self.version.is_empty() {
@@ -120,7 +120,7 @@ impl LockFile {
     ///
     /// A file that is not there is an empty lock rather than an error: a first
     /// run has none, and treating that as a failure would make `init` the only
-    /// command that works; see [R-CONFIG-003].
+    /// command that works; see [REQ-1203, REQ-1300].
     ///
     /// # Errors
     ///
@@ -146,7 +146,7 @@ impl LockFile {
     /// replaced module has no hash and an empty string is not one. Checking
     /// here gives the same guarantee at the same moment: a malformed hash
     /// fails where the file is read, rather than comparing unequal forever
-    /// and looking like tampering; see [R-CONFIG-061] and [R-COMMON-004].
+    /// and looking like tampering; see [REQ-1261] and [REQ-1004, REQ-1102].
     fn check_hashes(&self, path: &Path) -> ConfigResult<()> {
         let check = |what: &str, value: &str| -> ConfigResult<()> {
             if value.is_empty() || value.parse::<Integrity>().is_ok() {
@@ -205,7 +205,7 @@ impl LockFile {
     /// Merges a local lock over this one.
     ///
     /// An entry in both wins from the local file, because the local one is how
-    /// a machine differs from the committed configuration; see [R-CONFIG-024].
+    /// a machine differs from the committed configuration; see [REQ-1224, REQ-1308].
     #[must_use]
     pub fn overlaid_with(&self, local: &LockFile) -> LockFile {
         let mut merged = self.clone();

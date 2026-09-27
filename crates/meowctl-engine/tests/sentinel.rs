@@ -30,7 +30,7 @@ fn recorded(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         .collect()
 }
 
-/// [R-ENGINE-041] a component is recorded as soon as its hook succeeds, so a
+/// [REQ-3041] a component is recorded as soon as its hook succeeds, so a
 /// run interrupted at the next one resumes here rather than at the start of
 /// the phase. `v0.1.0` records the whole order once the phase is clean, which
 /// loses everything that phase had done.
@@ -82,7 +82,7 @@ fn a_component_is_recorded_as_soon_as_it_succeeds() {
     );
 }
 
-/// [R-ENGINE-033] a component with nothing to do in a phase is recorded as
+/// [REQ-3033, REQ-3111] a component with nothing to do in a phase is recorded as
 /// having done it: absence means it has nothing to do, which is a success,
 /// and re-running it every time would be work with no result.
 #[test]
@@ -130,7 +130,7 @@ fn a_component_with_nothing_to_do_is_still_recorded() {
     );
 }
 
-/// [R-ENGINE-040] a recorded component is skipped on the next run, which is
+/// [REQ-3040] a recorded component is skipped on the next run, which is
 /// the whole point of recording it.
 #[test]
 fn what_was_recorded_is_skipped_next_time() {
@@ -156,7 +156,7 @@ fn what_was_recorded_is_skipped_next_time() {
     assert_eq!(plan.running_in(meowctl_common::Phase::Install), 0);
 }
 
-/// [R-ENGINE-043] a bumped module clears every component that came from it,
+/// [REQ-3043, REQ-3116] a bumped module clears every component that came from it,
 /// including the transitive ones `installed.lock` does not name. Without this
 /// a plain apply reported them already installed and left the symlinks
 /// pointing at the old cached version.
@@ -179,7 +179,7 @@ fn a_changed_module_makes_all_of_its_components_stale() {
     );
 }
 
-/// [R-ENGINE-043] and a component the recorded file names but that the
+/// [REQ-3043, REQ-3116] and a component the recorded file names but that the
 /// configuration no longer resolves is not stale: it is gone, and removing it
 /// is a different command.
 #[test]
@@ -190,7 +190,7 @@ fn a_component_that_no_longer_resolves_is_not_stale() {
     assert!(stale_components(&components, &was, &now).is_empty());
 }
 
-/// [R-ENGINE-044] the fingerprint is the version, then the commit, then the
+/// [REQ-3044] the fingerprint is the version, then the commit, then the
 /// hash, so a GitHub module re-synced to a new commit invalidates even though
 /// no version changed.
 #[test]
@@ -242,7 +242,7 @@ fn the_fingerprint_falls_back_from_version_to_commit_to_hash() {
     );
 }
 
-/// [R-ENGINE-043] clearing a stale component throws away every phase it had
+/// [REQ-3043, REQ-3116] clearing a stale component throws away every phase it had
 /// recorded, so the next run redoes the whole component rather than the part
 /// of it that happened to be stale.
 #[test]
@@ -268,7 +268,7 @@ fn clearing_a_stale_component_forgets_every_phase() {
     assert!(world.fs.exists(&state).expect("asking"));
 }
 
-/// [R-ENGINE-042] a journal left behind means the last run stopped partway
+/// [REQ-3042] a journal left behind means the last run stopped partway
 /// and the machine is in a state nobody chose, so it is something to report
 /// before anything else happens.
 #[test]

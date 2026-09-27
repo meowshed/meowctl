@@ -7,15 +7,15 @@ pub type NetResult<T> = Result<T, NetError>;
 
 /// Why a request did not produce bytes.
 ///
-/// Five variants for five different fixes. [R-MODULE-060] requires a module
+/// Five variants for five different fixes. [REQ-2460, REQ-2514] requires a module
 /// resolution to say whether an index failed on the network, on the status, or
-/// on the parse, and it can only say what it is told; see [R-NET-010].
+/// on the parse, and it can only say what it is told; see [REQ-1810].
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum NetError {
     /// The URL was rejected before anything was sent.
     ///
     /// A scheme that is not `https`, or a URL that does not parse; see
-    /// [R-NET-003].
+    /// [REQ-1803, REQ-1900].
     #[error("refused to fetch {url}: {reason}")]
     Refused {
         /// The URL, as the caller wrote it.
@@ -53,7 +53,7 @@ pub enum NetError {
 
     /// No request was attempted, because this implementation makes none.
     ///
-    /// What [`OfflineHttp`] returns; see [R-NET-014].
+    /// What [`OfflineHttp`] returns; see [REQ-1814, REQ-1905].
     ///
     /// [`OfflineHttp`]: crate::OfflineHttp
     #[error("{url} was not fetched: this run makes no network requests")]
@@ -66,7 +66,7 @@ pub enum NetError {
 impl NetError {
     /// The URL the failure is about.
     ///
-    /// Every variant carries one, per [R-NET-011], and a caller reporting a
+    /// Every variant carries one, per [REQ-1811], and a caller reporting a
     /// resolution failure wants it without matching on five variants.
     #[must_use]
     pub fn url(&self) -> &str {
@@ -93,7 +93,7 @@ impl NetError {
 mod tests {
     use super::*;
 
-    /// [R-NET-010] the four cases, kept apart because a resolution that
+    /// [REQ-1810] the four cases, kept apart because a resolution that
     /// failed on the network is a retry and one that failed on a 404 is a
     /// mistake in the manifest.
     #[test]
@@ -115,7 +115,7 @@ mod tests {
         );
     }
 
-    /// [R-NET-011] every case carries its URL, whichever of the three a
+    /// [REQ-1811] every case carries its URL, whichever of the three a
     /// resolution was fetching when it failed.
     #[test]
     fn every_case_carries_its_url() {

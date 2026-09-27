@@ -1,8 +1,8 @@
-//! [R-CONFIG-002], [R-CONFIG-062], and [R-CONFIG-063]: what every format
+//! [REQ-1202], [REQ-1262], and [REQ-1263]: what every format
 //! promises about how it reaches the disk.
 //!
 //! These three are properties of all the writers rather than of one, and the
-//! atomic rename in [R-FS-003] is what provides them. What is checked here is
+//! atomic rename in [REQ-1403] is what provides them. What is checked here is
 //! that each writer goes through the trait, so the guarantee holds for every
 //! format rather than for the two `v0.1.0` happened to make atomic.
 
@@ -79,8 +79,8 @@ fn seeded() -> MemFs {
     fs
 }
 
-/// [R-CONFIG-062] a write that fails leaves the previous file, because
-/// [R-FS-003] renames into place rather than truncating first. `v0.1.0` uses
+/// [REQ-1262] a write that fails leaves the previous file, because
+/// [REQ-1403] renames into place rather than truncating first. `v0.1.0` uses
 /// a plain `os.WriteFile` for `deps.mod`, where a failure halfway through
 /// leaves a manifest that no longer parses.
 #[test]
@@ -109,7 +109,7 @@ fn a_failed_write_leaves_the_previous_file() {
     );
 }
 
-/// [R-CONFIG-002] every format goes through the trait, so every format gets
+/// [REQ-1202] every format goes through the trait, so every format gets
 /// the atomic write. The check is that each writer produces a file a reader
 /// can read back, through a filesystem that is the only route to the disk.
 #[test]
@@ -134,7 +134,7 @@ fn every_format_writes_through_the_filesystem() {
     }
 }
 
-/// [R-CONFIG-063] two runs writing the same file cannot interleave into
+/// [REQ-1263] two runs writing the same file cannot interleave into
 /// something that is neither. The rename is what gives this: a reader sees
 /// one of the two complete files and never a mixture of both.
 #[test]

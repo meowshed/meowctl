@@ -3,7 +3,7 @@
 //! Three types rather than one, because the restriction is the value the hook
 //! receives rather than a check inside each method: a hook in a read-only
 //! phase gets a `ctx` with no mutating attribute at all, and asking for one
-//! reports attribute-not-found; see [R-CTX-030], [R-CTX-031] and [R-CTX-032].
+//! reports attribute-not-found; see [REQ-2830, REQ-2911], [REQ-2831] and [REQ-2832].
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -28,11 +28,11 @@ use crate::{Capabilities, CtxError, CtxResult, Effects, Surface};
 #[derive(Debug, Clone, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct Ctx(#[allocative(skip)] Arc<Core>);
 
-/// The same `ctx` with no mutating attribute; see [R-CTX-030].
+/// The same `ctx` with no mutating attribute; see [REQ-2830, REQ-2911].
 #[derive(Debug, Clone, ProvidesStaticType, NoSerialize, Allocative)]
 struct ReadOnlyCtx(#[allocative(skip)] Arc<Core>);
 
-/// The eight attributes `shell.star` gets; see [R-CTX-031].
+/// The eight attributes `shell.star` gets; see [REQ-2831].
 #[derive(Debug, Clone, ProvidesStaticType, NoSerialize, Allocative)]
 struct ShellCtx(#[allocative(skip)] Arc<Core>);
 
@@ -60,7 +60,7 @@ impl Ctx {
 /// Allocates the surface a hook should see.
 ///
 /// Which of the three types is allocated is the whole of the restriction; see
-/// [R-CTX-032].
+/// [REQ-2832].
 #[derive(Debug, Clone)]
 pub struct Restricted {
     ctx: Ctx,
@@ -102,7 +102,7 @@ macro_rules! display_as_ctx {
 }
 display_as_ctx!(Ctx, ReadOnlyCtx, ShellCtx);
 
-/// The six data properties, per [R-CTX-001].
+/// The six data properties, per [REQ-2801].
 fn property<'v>(core: &Core, attr: &str, heap: Heap<'v>) -> Option<Value<'v>> {
     let caps = &core.capabilities;
     match attr {
@@ -111,7 +111,7 @@ fn property<'v>(core: &Core, attr: &str, heap: Heap<'v>) -> Option<Value<'v>> {
         "component_dir" => Some(heap.alloc(caps.component_dir.display().to_string())),
         "state_dir" => Some(heap.alloc(caps.state_dir.display().to_string())),
         // `None` outside `shell.star`, which is how a component tests whether
-        // it is being asked to contribute to a shell; see [R-CTX-002].
+        // it is being asked to contribute to a shell; see [REQ-2802, REQ-2900, REQ-2901].
         "shell" => Some(
             caps.shell
                 .as_ref()
@@ -132,7 +132,7 @@ const PROPERTIES: [&str; 6] = [
     "platform",
 ];
 
-/// The three `shell.star` may read; see [R-CTX-031].
+/// The three `shell.star` may read; see [REQ-2831].
 const SHELL_PROPERTIES: [&str; 3] = ["platform", "shell", "state_dir"];
 
 #[starlark_value(type = "ctx")]
@@ -222,7 +222,7 @@ fn core<'v>(this: Value<'v>) -> anyhow::Result<&'v Core> {
 /// Resolves a path argument.
 ///
 /// Expands a leading `~` and refuses anything that is not absolute
-/// afterwards, for every method that takes one; see [R-CTX-012].
+/// afterwards, for every method that takes one; see [REQ-2812, REQ-2902].
 fn path(method: &'static str, core: &Core, raw: &str) -> CtxResult<PathBuf> {
     let env = HomeOnly(&core.capabilities.home);
     paths::resolve(raw, &env).map_err(|source| CtxError::Path { method, source })
@@ -240,7 +240,7 @@ impl paths::Env for HomeOnly<'_> {
     }
 }
 
-/// Reads a `vars` argument as the mapping [R-CTX-027] requires.
+/// Reads a `vars` argument as the mapping [REQ-2827, REQ-2907, REQ-2908, REQ-2909] requires.
 fn variables(
     method: &'static str,
     vars: &SmallMap<String, Value<'_>>,
@@ -262,7 +262,7 @@ fn variables(
 /// Builds the value `ctx.run` returns.
 ///
 /// Three fields under these names, because component code branches on
-/// `exit_code`; see [R-CTX-020].
+/// `exit_code`; see [REQ-2820].
 fn run_result<'v>(heap: Heap<'v>, output: &meowctl_exec::Output) -> Value<'v> {
     let mut fields = SmallMap::new();
     for (name, value) in [
@@ -286,7 +286,7 @@ fn reading_methods(builder: &mut MethodsBuilder) {
     /// Reads a file.
     ///
     /// Fails when it is not there, where `file_exists` answers false. The two
-    /// are how a component tests and then reads; see [R-CTX-042].
+    /// are how a component tests and then reads; see [REQ-2842, REQ-2912].
     fn read_file<'v>(this: Value<'v>, path_arg: String) -> anyhow::Result<String> {
         let core = core(this)?;
         let target = path("read_file", core, &path_arg)?;
@@ -337,7 +337,7 @@ fn reading_methods(builder: &mut MethodsBuilder) {
     ///
     /// A non-zero exit is a result rather than an error: an interrogation hook
     /// asking about a package it does not have gets a 1 and wants to read it;
-    /// see [R-CTX-043].
+    /// see [REQ-2843].
     fn run<'v>(
         this: Value<'v>,
         cmd: String,
@@ -373,7 +373,7 @@ fn reading_methods(builder: &mut MethodsBuilder) {
     /// Writes a line for the calling shell to evaluate.
     ///
     /// Only during `shell` and `login`; anywhere else stdout belongs to the
-    /// command and a stray line corrupts a piped run; see [R-CTX-024].
+    /// command and a stray line corrupts a piped run; see [REQ-2824, REQ-2905].
     fn emit<'v>(this: Value<'v>, line: String) -> anyhow::Result<starlark::values::none::NoneType> {
         let core = core(this)?;
         if core.capabilities.phase.is_runtime_hook() {
@@ -405,7 +405,7 @@ fn general_methods(builder: &mut MethodsBuilder) {
             .unwrap_or_default())
     }
 
-    /// Where a program is, or `None`; see [R-CTX-021].
+    /// Where a program is, or `None`; see [REQ-2821].
     fn which<'v>(this: Value<'v>, name: String, heap: Heap<'v>) -> anyhow::Result<Value<'v>> {
         let found = core(this)?
             .effects
@@ -435,7 +435,7 @@ fn general_methods(builder: &mut MethodsBuilder) {
             .map_err(|e| failed(e.to_string()).into())
     }
 
-    /// Substitutes `{{name}}` into a string; see [R-CTX-027].
+    /// Substitutes `{{name}}` into a string; see [REQ-2827, REQ-2907, REQ-2908, REQ-2909].
     fn render<'v>(
         this: Value<'v>,
         template_str: String,
@@ -451,7 +451,7 @@ fn general_methods(builder: &mut MethodsBuilder) {
     /// Renders a file from the component's own directory and returns it.
     ///
     /// It writes nothing. A component that wants the result on disk passes it
-    /// to `write_file`; see [R-CTX-027].
+    /// to `write_file`; see [REQ-2827, REQ-2907, REQ-2908, REQ-2909].
     fn render_file<'v>(
         this: Value<'v>,
         src: String,
@@ -500,7 +500,7 @@ fn mutating_methods(builder: &mut MethodsBuilder) {
     }
 
     /// Appends a marked block, replacing the caller's own block when it is
-    /// already there; see [R-CTX-028].
+    /// already there; see [REQ-2828, REQ-2910].
     fn append_file<'v>(
         this: Value<'v>,
         dst: String,
@@ -566,7 +566,7 @@ fn mutating_methods(builder: &mut MethodsBuilder) {
         Ok(starlark::values::none::NoneType)
     }
 
-    /// Removes a symlink, and only a symlink; see [R-CTX-044].
+    /// Removes a symlink, and only a symlink; see [REQ-2844].
     fn remove_symlink<'v>(
         this: Value<'v>,
         dst: String,
@@ -623,7 +623,7 @@ fn mutating_methods(builder: &mut MethodsBuilder) {
         Ok(starlark::values::none::NoneType)
     }
 
-    /// Clones a repository by running `git`; see [R-CTX-022].
+    /// Clones a repository by running `git`; see [REQ-2822].
     fn git_clone<'v>(
         this: Value<'v>,
         url: String,
@@ -660,7 +660,7 @@ fn mutating_methods(builder: &mut MethodsBuilder) {
         Ok(starlark::values::none::NoneType)
     }
 
-    /// Fetches a file over HTTPS and journals the write; see [R-CTX-023].
+    /// Fetches a file over HTTPS and journals the write; see [REQ-2823, REQ-2903, REQ-2904].
     fn download<'v>(
         this: Value<'v>,
         url: String,
@@ -679,7 +679,7 @@ fn mutating_methods(builder: &mut MethodsBuilder) {
             .get(&url)
             .map_err(|e| failed(e.to_string()))?;
 
-        // Before anything is written, for the reason [R-MODULE-030] gives:
+        // Before anything is written, for the reason [REQ-2430, REQ-2506] gives:
         // a check after the write has already put the bytes on disk.
         if let Some(expected) = checksum {
             let expected: Integrity = expected
@@ -752,7 +752,7 @@ fn mutating_methods(builder: &mut MethodsBuilder) {
     /// Puts a directory first on the `PATH` every later `run` sees.
     ///
     /// It emits nothing. The name suggests a shell statement and it is not
-    /// one; see [R-CTX-025].
+    /// one; see [REQ-2825, REQ-2906].
     fn add_path<'v>(
         this: Value<'v>,
         dir: String,

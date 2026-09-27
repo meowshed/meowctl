@@ -25,7 +25,7 @@ pub enum ConfigError {
     /// Refused rather than overwritten. `v0.1.0` ignores `schema_version`
     /// entirely, so an older binary rewrites a newer file and drops whatever
     /// it did not understand, which is data loss with no message; see
-    /// [R-CONFIG-041].
+    /// [REQ-1241, REQ-1312].
     #[error(
         "{path} has schema version {found}, and this meowctl understands {understood}; \
          it was written by a newer version and will not be overwritten"

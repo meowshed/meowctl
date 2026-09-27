@@ -7,7 +7,7 @@
 //! computation, which is defects #1 and #2.
 //!
 //! This is the one crate allowed to write to standard output, and it does so
-//! through a sink; see [R-CLI-020].
+//! through a sink; see [REQ-3420, REQ-3510].
 
 mod cli;
 mod error;

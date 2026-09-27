@@ -35,7 +35,7 @@ pub struct InstalledLock {
     /// The version 1 form: names and nothing else.
     ///
     /// Still read, because a user who installed an earlier build has it on
-    /// disk; never written; see [R-CONFIG-031].
+    /// disk; never written; see [REQ-1231].
     #[serde(default)]
     pub components: Vec<String>,
     /// The version 2 form.
@@ -75,7 +75,7 @@ impl InstalledLock {
     /// Each component's recorded module fingerprint.
     ///
     /// Reads both shapes, with a version 1 entry treated as unknown, which is
-    /// what `installedLock.versionMap` does; see [R-CONFIG-031].
+    /// what `installedLock.versionMap` does; see [REQ-1231].
     #[must_use]
     pub fn fingerprints(&self) -> BTreeMap<String, String> {
         if !self.installed.is_empty() {
@@ -103,7 +103,7 @@ impl InstalledLock {
     /// Writes the current shape, sorted by name.
     ///
     /// Sorted so the file does not churn between runs and show a diff every
-    /// time somebody applies; see [R-CONFIG-032].
+    /// time somebody applies; see [REQ-1232].
     ///
     /// # Errors
     ///

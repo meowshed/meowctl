@@ -1,0 +1,53 @@
+# What this repository declares to the harness. Every section is optional: a
+# unit whose section is absent reports what it can't do and does nothing in its
+# place. Each value comes from what the repository already does.
+
+# The mise tasks CLAUDE.md and mise.toml name, which are also what CI and the
+# pre-commit hooks run. Clippy type-checks as it lints, and the repository
+# keeps no separate type-check task for the host target, so `check` is left
+# out.
+[verbs]
+format = "mise run fmt-check"
+lint = "mise run check"
+test = "mise run test"
+build = "mise run build"
+
+# Conventional commits, subject under 72 characters (.claude/skills/scm), and
+# a Signed-off-by trailer on every commit in the history.
+[commits]
+subject_limit = 72
+trailers = ["Signed-off-by"]
+
+# Every type the history uses, plus spec, which the scm skill names. Release
+# impact follows Semantic Versioning, which CHANGELOG.md adopts.
+[commits.types]
+feat = "minor"
+fix = "patch"
+test = "none"
+chore = "none"
+docs = "none"
+refactor = "none"
+revert = "none"
+ci = "none"
+build = "none"
+spec = "none"
+
+# main is the only long-lived branch (CLAUDE.md), and every commit is signed:
+# local commits with SSH, squash merges by GitHub.
+[git]
+trunk = "main"
+require_signatures = true
+
+# Pull requests close GitHub issues, and /plan creates them there.
+[tracker]
+kind = "github"
+
+# The record: vision, specifications, requirements, decisions, epics and
+# tasks. It is the single source of truth for what meowctl must do and why.
+[record]
+root = "project"
+
+# British English, which the prose already uses (`behaviour` 65 times,
+# `behavior` never) and which the meow-prose standard defaults to.
+[prose]
+language = "en-GB"

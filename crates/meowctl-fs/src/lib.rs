@@ -12,7 +12,7 @@
 //! Paths arrive already resolved. Expanding `~` or joining against a working
 //! directory happens in `meowctl_common::paths`, because a filesystem that
 //! resolved its own paths could plan against different files than it writes;
-//! see [R-FS-002].
+//! see [REQ-1402, REQ-1500].
 
 mod dry_run;
 mod error;
@@ -36,7 +36,7 @@ pub enum Entry {
         len: u64,
         /// Whether the file is executable.
         ///
-        /// Always `false` on a platform with no mode bits; see [R-FS-005].
+        /// Always `false` on a platform with no mode bits; see [REQ-1405, REQ-1501].
         executable: bool,
     },
     /// A directory.
@@ -63,7 +63,7 @@ impl Entry {
 }
 
 /// What replacing an existing symlink displaced, so the caller can journal an
-/// inverse that puts it back; see [R-OPS-014] and [R-OPS-015].
+/// inverse that puts it back; see [REQ-2014, REQ-2110] and [REQ-2015, REQ-2111].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Displaced {
     /// Nothing was there.
@@ -83,7 +83,7 @@ pub enum Displaced {
 /// The filesystem effects meowctl performs.
 ///
 /// Implementations are interchangeable behind a trait object, and
-/// `meowctl-cli` picks one from the flags; see [R-FS-014]. Nothing below it
+/// `meowctl-cli` picks one from the flags; see [REQ-1414]. Nothing below it
 /// chooses, which is what makes `--dry-run` a guarantee rather than a
 /// convention.
 pub trait FileSystem: Debug {
@@ -98,7 +98,7 @@ pub trait FileSystem: Debug {
     ///
     /// Atomic: the implementation writes a sibling temporary file and renames
     /// it, so a reader never sees a partial file and a crash leaves the
-    /// previous contents; see [R-FS-003].
+    /// previous contents; see [REQ-1403].
     ///
     /// # Errors
     ///
@@ -118,7 +118,7 @@ pub trait FileSystem: Debug {
     ///
     /// Removing something that is not there succeeds, because the caller
     /// wanted it gone and it is. A directory with anything in it is refused,
-    /// per [R-FS-006]: the caller that meant to discard a subtree says so with
+    /// per [REQ-1406, REQ-1502, REQ-1503]: the caller that meant to discard a subtree says so with
     /// [`FileSystem::remove_dir_all`].
     ///
     /// # Errors
@@ -130,7 +130,7 @@ pub trait FileSystem: Debug {
     ///
     /// Separate from [`FileSystem::remove`] because discarding a subtree is a
     /// different decision from undoing one `mkdir`, and a single method would
-    /// make the dangerous one the default; see [R-FS-006]. Removing something
+    /// make the dangerous one the default; see [REQ-1406, REQ-1502, REQ-1503]. Removing something
     /// that is not there succeeds.
     ///
     /// # Errors
@@ -151,7 +151,7 @@ pub trait FileSystem: Debug {
     ///
     /// A regular file at `link` is refused unless `backup` says where to move
     /// it, because a user's own file must not disappear without a record; see
-    /// [R-FS-020] and [R-FS-021].
+    /// [REQ-1420, REQ-1506] and [REQ-1421, REQ-1507, REQ-1508].
     ///
     /// # Errors
     ///
@@ -172,13 +172,13 @@ pub trait FileSystem: Debug {
     /// # Errors
     ///
     /// [`FsError::NotASymlink`] when the path is a file or a directory, which
-    /// stops a mistyped path from deleting something real; see [R-FS-022].
+    /// stops a mistyped path from deleting something real; see [REQ-1422].
     fn remove_symlink(&self, path: &Path) -> FsResult<()>;
 
     /// Creates a directory and its parents.
     ///
     /// Reports whether it created anything, so the caller can journal an
-    /// inverse that removes only what meowctl made; see [R-OPS-013].
+    /// inverse that removes only what meowctl made; see [REQ-2013, REQ-2109].
     ///
     /// # Errors
     ///
@@ -187,8 +187,8 @@ pub trait FileSystem: Debug {
 
     /// Marks a file executable, or stops it being one.
     ///
-    /// The one exception to [R-FS-004]'s `0o600`, and it exists because a
-    /// module tarball ships scripts meowctl later runs; see [R-MODULE-032].
+    /// The one exception to [REQ-1404]'s `0o600`, and it exists because a
+    /// module tarball ships scripts meowctl later runs; see [REQ-2432].
     /// A no-op on a platform with no mode bits.
     ///
     /// # Errors
@@ -217,7 +217,7 @@ pub trait FileSystem: Debug {
     ///
     /// [`FsError::Io`] when the path cannot be inspected. A path that is not
     /// there is `Ok(None)` rather than an error, because asking is how a
-    /// component tests before it reads; see [R-CTX-042].
+    /// component tests before it reads; see [REQ-2842, REQ-2912].
     fn entry(&self, path: &Path) -> FsResult<Option<Entry>>;
 
     /// Whether anything is at a path.

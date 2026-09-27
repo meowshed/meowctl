@@ -1,13 +1,13 @@
 //! Running a plan.
 //!
 //! Takes a [`Plan`] and the effects and executes exactly it, so a dry run and
-//! a real run cannot disagree about what work there is; see [R-ENGINE-003].
+//! a real run cannot disagree about what work there is; see [REQ-3003, REQ-3101, REQ-3102].
 //!
 //! Nothing here holds a renderer, takes one as a field, or formats output.
 //! `Runner` in `internal/lifecycle/runner.go` has a `Writer tui.Writer` field
 //! and falls back to constructing one, and the cost of that is
 //! `SuspendOutput`: a renderer concern threaded into the Starlark layer as a
-//! callback; see [R-ENGINE-051].
+//! callback; see [REQ-3051, REQ-3117, REQ-3118].
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -29,29 +29,29 @@ pub struct Settings {
     /// `$HOME`.
     pub home: std::path::PathBuf,
     /// Where a component's persistent state goes, one directory per
-    /// component; see [R-CTX-003].
+    /// component; see [REQ-2803].
     pub state_root: std::path::PathBuf,
     /// The machine.
     pub platform: Platform,
     /// The process environment, for `ctx.env`.
     pub environment: BTreeMap<String, String>,
     /// Whether this run writes nothing. A property a hook can read; no method
-    /// branches on it; see [R-CTX-014].
+    /// branches on it; see [REQ-2814].
     pub dry_run: bool,
-    /// Whether a failure undoes what the run did; see [R-ENGINE-032].
+    /// Whether a failure undoes what the run did; see [REQ-3032, REQ-3110].
     pub rollback: bool,
     /// The shell a runtime hook is contributing to, as `ctx.shell` reports
     /// it.
     ///
     /// `None` everywhere else, which is how a component tests whether it is
-    /// being asked to contribute to a shell; see [R-CTX-002].
+    /// being asked to contribute to a shell; see [REQ-2802, REQ-2900, REQ-2901].
     pub shell: Option<String>,
     /// Set when the user has asked the run to stop.
     ///
     /// Read between components and nowhere else. The engine installs no
     /// signal handler: a signal arrives at the process, so whoever owns the
-    /// process sets this and the runner reads it; see [R-ENGINE-062] and
-    /// [R-CLI-014].
+    /// process sets this and the runner reads it; see [REQ-3062, REQ-3121] and
+    /// [REQ-3414].
     pub interrupted: Arc<AtomicBool>,
 }
 
@@ -60,7 +60,7 @@ pub struct Settings {
 pub struct Report {
     /// Components that finished, in the order they did, with how.
     pub finished: Vec<(Phase, ComponentId, Outcome)>,
-    /// The first failure, which is where the run stopped; see [R-ENGINE-030].
+    /// The first failure, which is where the run stopped; see [REQ-3030, REQ-3108].
     pub failure: Option<Failure>,
     /// How the rollback went, when one ran.
     ///
@@ -73,19 +73,19 @@ pub struct Report {
     ///
     /// Reported rather than written, because a lock file is the CLI's to
     /// write: nothing below `meowctl-cli` knows where the configuration
-    /// directory is. `pkgsPins` is the same collection; see [R-CONFIG-025].
+    /// directory is. `pkgsPins` is the same collection; see [REQ-1225, REQ-1309].
     pub packages: BTreeMap<String, Vec<meowctl_starlark::PackageDecl>>,
 }
 
 /// How undoing a failed run went.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RolledBack {
-    /// Every inverse applied, some, or none; see [R-OPS-024].
+    /// Every inverse applied, some, or none; see [REQ-2024].
     pub outcome: meowctl_ops::Outcome,
     /// How many applied.
     pub applied: usize,
     /// What each failed inverse was and why, so a user knows what is left
-    /// behind; see [R-ENGINE-061].
+    /// behind; see [REQ-3061, REQ-3120].
     pub failures: Vec<String>,
 }
 
@@ -102,7 +102,7 @@ pub struct Failure {
 
 impl std::fmt::Display for Failure {
     /// Names the component, the phase, and the underlying error; see
-    /// [R-ENGINE-060].
+    /// [REQ-3060].
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -127,7 +127,7 @@ pub struct Runner<'a> {
     effects: Effects,
     settings: Settings,
     evaluator: Evaluator<'a>,
-    /// What has been done, written as it is done; see [R-ENGINE-041].
+    /// What has been done, written as it is done; see [REQ-3041].
     ///
     /// Absent when the caller is not tracking it, which is what a dry run
     /// and a one-off `verify` do.
@@ -183,7 +183,7 @@ impl<'a> Runner<'a> {
     /// phase, and a phase stops at the first failed component: a component
     /// that fails is usually one that everything after it needs, and fifty
     /// errors about a tool that never installed bury the one that matters;
-    /// see [R-ENGINE-030] and [R-ENGINE-031].
+    /// see [REQ-3030, REQ-3108] and [REQ-3031, REQ-3109].
     pub fn run(&mut self, plan: &Plan) -> Report {
         self.effects.emit(Event::PlanComputed {
             phase_set: plan.phase_set,
@@ -201,7 +201,7 @@ impl<'a> Runner<'a> {
         for phase in plan.phase_set.phases().iter().copied() {
             // Whether a command runs during a dry run depends on whether the
             // phase is read-only, and this is the only place that knows both
-            // the flag and the phase; see [R-ENGINE-034].
+            // the flag and the phase; see [REQ-3034].
             let phase_effects = self.effects_for(phase);
             self.effects.emit(Event::PhaseStarted {
                 phase,
@@ -213,7 +213,7 @@ impl<'a> Runner<'a> {
                 // Between components, which is the whole of what an
                 // interrupt can stop: a hook halfway through `brew install`
                 // is not ours to interrupt, and the terminal has already sent
-                // the subprocess its own; see [R-ENGINE-062].
+                // the subprocess its own; see [REQ-3062, REQ-3121].
                 if self.settings.interrupted.load(Ordering::Relaxed) {
                     report.interrupted = true;
                     break;
@@ -247,7 +247,7 @@ impl<'a> Runner<'a> {
                 // What a component declared, once its install or upgrade has
                 // run. Only those two phases, and only a component that has
                 // declarations, which is what `pkgsPins` records; see
-                // [R-CONFIG-025].
+                // [REQ-1225, REQ-1309].
                 if matches!(phase, Phase::Install | Phase::Upgrade)
                     && !matches!(outcome, Outcome::Failed { .. })
                     && !component.evaluated.declarations.packages.is_empty()
@@ -261,7 +261,7 @@ impl<'a> Runner<'a> {
 
                 // Recorded as soon as it succeeds, so a run interrupted at
                 // the next component resumes here rather than at the start of
-                // the phase; see [R-ENGINE-041].
+                // the phase; see [REQ-3041].
                 if !matches!(outcome, Outcome::Failed { .. })
                     && let Some(progress) = self.progress.as_mut()
                     && let Err(e) = progress.record(
@@ -289,7 +289,7 @@ impl<'a> Runner<'a> {
 
             self.effects.emit(Event::PhaseFinished { phase, failed });
             // A phase set stops at the first failed phase; see
-            // [R-ENGINE-031].
+            // [REQ-3031, REQ-3109].
             if report.failure.is_some() || report.interrupted {
                 break;
             }
@@ -297,7 +297,7 @@ impl<'a> Runner<'a> {
 
         // An interrupted run keeps its journal for the next run to find and
         // report. Undoing work the user stopped is not what stopping asked
-        // for; see [R-ENGINE-064].
+        // for; see [REQ-3064].
         if report.failure.is_some() && !report.interrupted && self.settings.rollback {
             report.rolled_back = self.roll_back();
         }
@@ -311,10 +311,10 @@ impl<'a> Runner<'a> {
     /// every shell spawn, so skipping a component because it ran last time
     /// would mean a shell without its integration. Nothing is recorded,
     /// nothing is journalled, and nothing is rolled back; see
-    /// [R-ENGINE-035].
+    /// [REQ-3035, REQ-3112, REQ-3113, REQ-3114, REQ-3115].
     ///
     /// The only events it emits are the ones a hook produces, so a sink
-    /// writing shell code sees shell code and nothing else; see [R-CLI-061].
+    /// writing shell code sees shell code and nothing else; see [REQ-3461, REQ-3521].
     pub fn run_hook(&mut self, phase: Phase) -> Report {
         let mut report = Report::default();
         let effects = self.effects.clone();
@@ -341,7 +341,7 @@ impl<'a> Runner<'a> {
     ///
     /// Reported rather than returned as an error: a rollback that partially
     /// succeeded still leaves the original failure as the thing that went
-    /// wrong, and the user needs to know both; see [R-ENGINE-061].
+    /// wrong, and the user needs to know both; see [REQ-3061, REQ-3120].
     fn roll_back(&mut self) -> Option<RolledBack> {
         let journal = self.effects.journal.clone()?;
         let journal = journal.lock().ok()?;
@@ -377,7 +377,7 @@ impl<'a> Runner<'a> {
     /// The effects a phase runs against.
     ///
     /// The same effects, with an executor built for this phase when the run
-    /// writes nothing; see [R-ENGINE-034].
+    /// writes nothing; see [REQ-3034].
     fn effects_for(&self, phase: Phase) -> Effects {
         if !self.settings.dry_run {
             return self.effects.clone();
@@ -396,7 +396,7 @@ impl<'a> Runner<'a> {
         let hook = phase.as_str();
         // `query_pm` inside this hook runs a handler with this component's
         // `ctx`, so the registry it reaches is installed per component rather
-        // than once for the run; see [R-PM-020].
+        // than once for the run; see [REQ-2620].
         self.evaluator
             .set_package_managers(std::sync::Arc::new(Interrogator {
                 handlers: self.handler_sources(),
@@ -424,7 +424,7 @@ impl<'a> Runner<'a> {
 
         // Declaration order within a component, and the graph's order between
         // them, which is the order the caller is iterating in; see
-        // [R-PM-015].
+        // [REQ-2615, REQ-2703].
         for declaration in &evaluated.declarations.packages {
             if let Err(e) = self.dispatch(effects, component, phase, declaration) {
                 return Outcome::Failed {
@@ -452,7 +452,7 @@ impl<'a> Runner<'a> {
 
         // An absent hook is a success with nothing to do, not a skip:
         // absence means the component has nothing to do in this phase; see
-        // [R-ENGINE-033] and [R-STAR-031].
+        // [REQ-3033, REQ-3111] and [REQ-2231].
         if called {
             Outcome::Succeeded
         } else {
@@ -492,7 +492,7 @@ impl<'a> Runner<'a> {
     ///
     /// The handler's file is evaluated and its function called with the `ctx`
     /// of the component that asked for the package, not of the handler: the
-    /// handler's effects belong to whoever wanted them; see [R-PM-014].
+    /// handler's effects belong to whoever wanted them; see [REQ-2614].
     fn call_handler(
         &self,
         effects: &Effects,
@@ -569,7 +569,7 @@ impl<'a> Runner<'a> {
             state_dir: self.settings.state_root.join(component.logical_name()),
             // Set only in a runtime hook phase, which is how a component
             // tests whether it is being asked to contribute to a shell; see
-            // [R-CTX-002].
+            // [REQ-2802, REQ-2900, REQ-2901].
             shell: phase
                 .is_runtime_hook()
                 .then(|| self.settings.shell.clone())
@@ -587,7 +587,7 @@ impl<'a> Runner<'a> {
 /// It carries the asking component's capabilities, because `v0.1.0` passes
 /// the caller's `ctx` to `interrogate` and a handler that reads
 /// `ctx.component_dir` would otherwise see the handler's own; see
-/// [R-PM-020].
+/// [REQ-2620].
 ///
 /// A `query_pm` inside an `interrogate` refuses rather than recursing: an
 /// interrogation that interrogates is a loop, and the evaluation it would need
@@ -631,7 +631,7 @@ impl meowctl_starlark::PackageManagers for Interrogator {
 
         // A handler returning something that is not a list of strings is a
         // defect in the handler rather than in the configuration that used
-        // it, and coercing it would hide which; see [R-PM-032].
+        // it, and coercing it would hide which; see [REQ-2632].
         evaluated.returned.ok_or_else(|| {
             refused(format!(
                 "{name}'s interrogate returned something that is not a list of strings"
@@ -678,7 +678,7 @@ impl meowctl_starlark::HookArgument for HandlerCall {
 /// Puts a flattened keyword argument back on a heap.
 ///
 /// The accumulator copies a value out of the evaluation that made it, because
-/// a Starlark value cannot leave its heap; see [R-STAR-011]. A handler runs in
+/// a Starlark value cannot leave its heap; see [REQ-2211]. A handler runs in
 /// a different evaluation, so it has to be copied back in.
 fn allocate_argument<'v>(
     argument: &Argument,

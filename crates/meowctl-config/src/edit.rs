@@ -4,12 +4,12 @@
 //! that belong to the user: their comments, their grouping, their blank lines.
 //! A round trip through a parsed model and a printer would lose all of it, so
 //! the edit is made to the *text*, at the position the parse reports; see
-//! [R-CONFIG-050].
+//! [REQ-1250].
 //!
 //! `v0.1.0` uses regular expressions, and documents what that costs: a
 //! `dep()` written `version` before `name` is not matched, so
 //! `meowctl dep upgrade` reports "not found" for a declaration that is plainly
-//! there. Parsing has no such condition; see [R-CONFIG-051].
+//! there. Parsing has no such condition; see [REQ-1251, REQ-1314].
 //!
 //! Parsing is not evaluating. This module reads the syntax to find a
 //! statement; what a declaration *means* is [`meowctl_starlark`]'s, and the
@@ -163,7 +163,7 @@ pub fn has_component(file: &str, source: &str, name: &str) -> Result<bool, Confi
 ///
 /// [`ConfigError::Malformed`] when the file does not parse, or
 /// [`ConfigError::Missing`] when there is no such declaration — reported
-/// rather than written as a no-op; see [R-CONFIG-052].
+/// rather than written as a no-op; see [REQ-1252].
 pub fn remove_component(file: &str, source: &str, name: &str) -> Result<String, ConfigError> {
     let target = calls(file, source)?
         .into_iter()

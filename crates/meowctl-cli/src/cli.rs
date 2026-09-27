@@ -2,7 +2,7 @@
 //!
 //! Exactly what `newRootCmd` registers, with the flag names and shorthands
 //! `internal/cli/` uses: a component written against one binary's command
-//! line has to work against the other's; see [R-CLI-001].
+//! line has to work against the other's; see [REQ-3401].
 
 use std::path::PathBuf;
 
@@ -21,7 +21,7 @@ pub struct Cli {
     pub global: Global,
 }
 
-/// The flags every command carries; see [R-CLI-004] and [R-CLI-006].
+/// The flags every command carries; see [REQ-3404, REQ-3501] and [REQ-3406, REQ-3503, REQ-3504].
 #[derive(Debug, Args, Clone, Default)]
 pub struct Global {
     /// Config directory (default: ~/.config/meowctl)
@@ -44,7 +44,7 @@ pub enum Format {
     Auto,
     /// One line per event, no cursor movement.
     Plain,
-    /// One JSON object per event; see [R-TUI-032].
+    /// One JSON object per event; see [REQ-3232].
     Json,
 }
 
@@ -232,7 +232,7 @@ pub enum Command {
     },
 }
 
-/// The `dep` group; see [R-CLI-002].
+/// The `dep` group; see [REQ-3402].
 #[derive(Debug, Subcommand)]
 pub enum DepCommand {
     /// List declared dependencies
@@ -291,7 +291,7 @@ impl Command {
     ///
     /// Read here rather than threaded down as a boolean: it chooses which
     /// `FileSystem` and `Executor` get constructed, and nothing below this
-    /// crate sees the flag; see [R-CLI-011].
+    /// crate sees the flag; see [REQ-3411, REQ-3505, REQ-3506].
     #[must_use]
     pub const fn dry_run(&self) -> bool {
         match self {
@@ -310,7 +310,7 @@ impl Command {
     /// Whether this command's stdout is read by another program.
     ///
     /// `shell` emits code the shell evaluates, and `hook` emits what a
-    /// component contributed to it; see [R-CLI-021].
+    /// component contributed to it; see [REQ-3421, REQ-3511].
     #[must_use]
     pub const fn stdout_is_an_interface(&self) -> bool {
         matches!(self, Command::Shell { .. } | Command::Hook { .. })
@@ -319,7 +319,7 @@ impl Command {
     /// Whether the command asked for JSON through its own older flag.
     ///
     /// `doctor` and `status` had `--json` before `--format json` existed, and
-    /// it stays accepted; see [R-CLI-006].
+    /// it stays accepted; see [REQ-3406, REQ-3503, REQ-3504].
     #[must_use]
     pub const fn wants_json(&self) -> bool {
         match self {

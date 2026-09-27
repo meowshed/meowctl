@@ -1,6 +1,6 @@
 ---
 name: scm
-description: Branch, commit, pull request, and merge conventions for this repository. Covers the single long-lived branch and its path-filtered CI, feature branches, squash merges, how to judge a red check, commit message format, what a pull request body must contain, and the ban on AI attribution in any git or GitHub text. Load before creating a branch, writing a commit, opening a pull request, or merging.
+description: Branch, commit, pull request, and merge conventions for this repository. Covers the single long-lived branch and its CI, feature branches, squash merges, how to judge a red check, commit message format, what a pull request body must contain, and the ban on AI attribution in any git or GitHub text. Load before creating a branch, writing a commit, opening a pull request, or merging.
 ---
 
 # Source control
@@ -37,24 +37,22 @@ git log -1 --format=%B |
 ```
 
 Match the attribution patterns, not the bare word. A path such as
-`.claude/commands/` is a fact about the system, and a check that trips on it
+`.claude/skills/` is a fact about the system, and a check that trips on it
 gets ignored within a week.
 
 ## Branches
 
 `main` is the only long-lived branch, and you never commit to it directly. It
-carries both trees: the Go implementation released as `v0.1.0`, and the
-`v0.2.0` Rust workspace under `crates/`. They share a branch so that every
-change is reviewed against the same base and watched by the same automation,
-and the Go tree goes at M9 when the Rust tree replaces it.
+carries the Rust workspace under `crates/`; the Go implementation released as
+`v0.1.0` lives only at that tag.
 
 Branch off `main` and open the pull request against `main`. Never commit to it
 directly, including for a one-line fix, because a change that skipped review is
 invisible to everyone who reads the pull request log to learn what happened.
 
-Which checks run depends on what you touched. `ci.yml` covers the Go tree and
-`rust.yml` covers the Rust one, each filtered by path, so a change to `crates/`
-does not compile Go and a change to `internal/` does not compile Rust.
+`ci.yml` builds and tests the workspace on every change, with no path filter.
+`docs.yml` lints the Markdown, and runs only when a Markdown file or its lint
+configuration changes.
 
 Name the branch `<type>/<short-slug>`, using the same types as commit subjects:
 
@@ -84,7 +82,7 @@ spec(config): specify the deps.lock schema and its migration
 
 The body explains why, not what. A reader can see the diff; they cannot see the
 constraint that ruled out the shorter fix. Write it in the voice the
-`technical-english` skill describes, in prose, and wrap at 72 columns.
+`meow-prose:writing` skill describes, in prose, and wrap at 72 columns.
 
 Link the issue the commit closes with `Closes #123` on its own line at the end.
 
@@ -98,12 +96,11 @@ The body has four parts, in this order:
 
 1. **What changed and why.** Two to five sentences of prose, not a bullet list
    of the diff.
-2. **Requirement IDs.** Every `R-*` this closes, and the spec file they live
-   in. If the change closes none, say why not: a refactor, a build fix, a
-   documentation pass.
+2. **Requirement IDs.** Every `REQ-*` this closes, and the task under
+   `project/tasks/` it belongs to. If the change closes none, say why not: a
+   refactor, a build fix, a documentation pass.
 3. **How it was verified.** The commands you ran and what they reported. "Tests
-   pass" is not verification; `mise run test` with the failure count is. Once
-   the compat corpus exists, a change to behaviour reports its result too.
+   pass" is not verification; `mise run test` with the failure count is.
 4. **What is not covered.** Known gaps, deferred work, and anything the
    reviewer should look at with more care than usual.
 
@@ -149,9 +146,5 @@ as invisible is how a red base becomes permanent.
 Tags are annotated and named `vMAJOR.MINOR.PATCH`. The annotation says what the
 release is, in two or three sentences, with no attribution and no changelog
 dump; the changelog lives in `CHANGELOG.md`.
-
-`v0.2.0` is tagged at M9, when the compat corpus passes and the Go tree is
-deleted. Nothing between `v0.1.0` and that point is tagged: the Rust tree
-carries `0.2.0-alpha.0` in `Cargo.toml` and ships nothing.
 
 Confirm with the repository owner before pushing a tag or publishing a release.

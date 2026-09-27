@@ -8,7 +8,7 @@ pub type CtxResult<T> = Result<T, CtxError>;
 /// Why a `ctx` method failed.
 ///
 /// Every variant names the method, because a hook that calls eight of them and
-/// fails has to say which; see [R-CTX-040].
+/// fails has to say which; see [REQ-2840].
 #[derive(Debug, Error)]
 pub enum CtxError {
     /// An argument was the wrong shape.

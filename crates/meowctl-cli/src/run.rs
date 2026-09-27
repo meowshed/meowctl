@@ -30,7 +30,7 @@ pub fn main() -> ExitCode {
         Ok(parsed) => parsed,
         Err(error) => {
             // clap already renders usage for a usage error, and a help
-            // request is a success; see [R-CLI-032] and [R-CLI-052].
+            // request is a success; see [REQ-3432, REQ-3513] and [REQ-3452, REQ-3518].
             let _ = error.print();
             return if error.use_stderr() {
                 ExitCode::from(Severity::Usage.exit_code())
@@ -48,11 +48,11 @@ pub fn main() -> ExitCode {
 #[must_use]
 pub fn run(cli: Cli) -> ExitCode {
     // Before anything is drawn, so an interrupt during the first frame still
-    // puts the cursor back; see [R-CLI-014].
+    // puts the cursor back; see [REQ-3414].
     let interrupted = crate::signals::watch_for_interruption();
 
     // Read before the sink is built, because the sink is chosen once and does
-    // not change mid-run; see [R-TUI-011] and [R-TUI-056].
+    // not change mid-run; see [REQ-3211, REQ-3301] and [REQ-3256, REQ-3316, REQ-3317, REQ-3318].
     let (palette, complaint) = read_palette(&cli);
     let mut sink = build_sink(&cli, palette);
     if let Some(complaint) = complaint {
@@ -77,7 +77,7 @@ pub fn run(cli: Cli) -> ExitCode {
 ///
 /// To standard error so it cannot corrupt a piped standard output, and
 /// without usage, because a wall of flags on top of a real error buries it;
-/// see [R-CLI-032] and [R-CLI-033].
+/// see [REQ-3432, REQ-3513] and [REQ-3433, REQ-3514].
 fn report(error: &CliError) {
     let mut stderr = std::io::stderr();
     match error.span() {
@@ -95,13 +95,13 @@ fn report(error: &CliError) {
 
 /// Chooses the sink, once, from the flags and what the terminal can take.
 ///
-/// Once per command and never changed mid-run; see [R-TUI-011].
+/// Once per command and never changed mid-run; see [REQ-3211, REQ-3301].
 /// The palette to render with, and what to say about how it was reached.
 ///
 /// Absence is silent: almost nobody has this file, and a warning on every
 /// command for one the user never wrote is noise. Unreadable and malformed
 /// both warn and fall back, because a user who wrote a theme and is not
-/// seeing it needs to hear why; see [R-TUI-052] and [R-TUI-056].
+/// seeing it needs to hear why; see [REQ-3252] and [REQ-3256, REQ-3316, REQ-3317, REQ-3318].
 fn read_palette(cli: &Cli) -> (Palette, Option<String>) {
     let Some(path) = theme_path(cli) else {
         return (meowctl_tui::theme::CATPPUCCIN, None);
@@ -147,13 +147,13 @@ fn build_sink(cli: &Cli, palette: Palette) -> Box<dyn Sink> {
     // `hook` writes shell code that a shell evaluates, so its sink writes
     // what the hooks emitted and nothing else. `--format json` above still
     // wins, because a program reading events is not a shell evaluating them;
-    // see [R-TUI-013].
+    // see [REQ-3213, REQ-3304].
     if matches!(cli.command, Command::Hook { .. }) {
         return Box::new(ShellSink::new(Box::new(std::io::stdout())));
     }
 
     // A command whose standard output another program reads gets a sink that
-    // writes nothing of its own there; see [R-CLI-021].
+    // writes nothing of its own there; see [REQ-3421, REQ-3511].
     let destination: Box<dyn std::io::Write> = if cli.command.stdout_is_an_interface() {
         Box::new(std::io::stderr())
     } else {
@@ -209,7 +209,7 @@ pub struct Session<'a> {
     pub verbose: bool,
     /// The sink, for a command that renders something itself.
     pub sink: &'a mut dyn Sink,
-    /// Set when the user has asked the run to stop; see [R-CLI-051].
+    /// Set when the user has asked the run to stop; see [REQ-3451, REQ-3517].
     pub interrupted: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -226,7 +226,7 @@ impl std::fmt::Debug for Session<'_> {
 ///
 /// This is the only place a `FileSystem` or an `Executor` is constructed, and
 /// `--dry-run` chooses which, rather than being passed down as a boolean; see
-/// [R-CLI-010] and [R-CLI-011].
+/// [REQ-3410] and [REQ-3411, REQ-3505, REQ-3506].
 fn dispatch(
     cli: &Cli,
     sink: &mut dyn Sink,
@@ -250,7 +250,7 @@ fn dispatch(
     };
 
     // Events reach the sink through a closure, so nothing below this crate
-    // holds a renderer; see [R-ENGINE-051].
+    // holds a renderer; see [REQ-3051, REQ-3117, REQ-3118].
     let collected: Arc<Mutex<Vec<Event>>> = Arc::new(Mutex::new(Vec::new()));
     let recorder = Arc::clone(&collected);
     let verbose = cli.global.verbose;

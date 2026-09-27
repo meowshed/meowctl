@@ -114,7 +114,7 @@ pub(super) fn add(
 ) -> CliResult<()> {
     edit_local(session, components, true)?;
     // Scoped to what was added, and to what those depend on; see
-    // [R-ENGINE-016].
+    // [REQ-3016, REQ-3106].
     apply(session, PhaseSet::Install, components, force, rollback)
 }
 
@@ -183,7 +183,7 @@ pub(super) fn dep_add(
     local: bool,
 ) -> CliResult<()> {
     // Exactly one of the two, never both and never neither, which is what a
-    // `dep()` may carry; see [R-CONFIG-012].
+    // `dep()` may carry; see [REQ-1212, REQ-1303].
     let dep = match (version, source) {
         (Some(version), None) => Dep {
             name: name.to_owned(),
@@ -256,7 +256,7 @@ fn read_modfile(session: &Session<'_>, path: &std::path::Path) -> CliResult<Modf
 /// Bootstraps a configuration from a public dotfiles repository.
 ///
 /// Over HTTPS with no `git` subprocess, because a machine being set up may
-/// not have `git` yet -- which is exactly when this runs; see [R-CLI-003].
+/// not have `git` yet -- which is exactly when this runs; see [REQ-3403, REQ-3500].
 pub(super) fn bootstrap(session: &mut Session<'_>, repo_url: &str, force: bool) -> CliResult<()> {
     let entry = session.layout.entry();
     if session.fs.exists(&entry)? && !force {
@@ -278,7 +278,7 @@ pub(super) fn bootstrap(session: &mut Session<'_>, repo_url: &str, force: bool) 
 
     // The same extraction a module gets, with the same containment check: a
     // downloaded tarball is remote input whoever published it; see
-    // [R-MODULE-033] and [R-MODULE-034].
+    // [REQ-2433] and [REQ-2434, REQ-2509].
     let files = meowctl_module::archive::strip_single_root(meowctl_module::archive::read(
         repo_url, &archive,
     )?);

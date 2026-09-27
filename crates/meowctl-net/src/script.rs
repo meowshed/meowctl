@@ -8,7 +8,7 @@ use crate::{Http, NetError, NetResult};
 /// Answers from a table, and records what it was asked.
 ///
 /// A URL the table does not hold fails rather than returning empty bytes, per
-/// [R-NET-013]: a test that silently gets nothing back passes for the wrong
+/// [REQ-1813, REQ-1903, REQ-1904]: a test that silently gets nothing back passes for the wrong
 /// reason, and an empty tarball extracts to an empty module.
 #[derive(Debug, Default)]
 pub struct ScriptedHttp {
@@ -77,7 +77,7 @@ impl Http for ScriptedHttp {
 mod tests {
     use super::*;
 
-    /// [R-NET-001] one method, answering with bytes: a caller that wanted a
+    /// [REQ-1801] one method, answering with bytes: a caller that wanted a
     /// document decodes them itself.
     #[test]
     fn a_scripted_url_answers_and_is_recorded() {
@@ -87,7 +87,7 @@ mod tests {
         assert_eq!(http.asked(), vec!["https://h/a", "https://h/a"]);
     }
 
-    /// [R-NET-013] an unscripted URL is a test that did not mean what it said.
+    /// [REQ-1813, REQ-1903, REQ-1904] an unscripted URL is a test that did not mean what it said.
     #[test]
     fn an_unscripted_url_fails_rather_than_returning_nothing() {
         let http = ScriptedHttp::new();
@@ -99,7 +99,7 @@ mod tests {
         assert_eq!(http.asked(), vec!["https://h/missing"]);
     }
 
-    /// [R-NET-010] and [R-NET-011]: the four cases a request can reach are
+    /// [REQ-1810] and [REQ-1811]: the four cases a request can reach are
     /// distinguishable, and each carries the URL it is about. A resolution
     /// fetches an index, a tarball and a commit, and "404" with no URL says
     /// which of the three only by accident.

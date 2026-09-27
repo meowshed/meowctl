@@ -9,7 +9,7 @@ pub enum StarlarkError {
     ///
     /// M0 found that `starlark-rust` already carries a span and renders a
     /// caret under the offending source, which `v0.1.0` does not: its errors
-    /// name a file and nothing more; see [R-STAR-040].
+    /// name a file and nothing more; see [REQ-2240].
     #[error("{message}")]
     Evaluation {
         /// What went wrong, as the evaluator put it.
@@ -19,7 +19,7 @@ pub enum StarlarkError {
         /// The files that were loading when it happened, outermost first.
         ///
         /// A failure in a shared standard-library helper is useless without
-        /// the component that loaded it; see [R-STAR-041].
+        /// the component that loaded it; see [REQ-2241].
         load_chain: Vec<String>,
     },
 
@@ -27,7 +27,7 @@ pub enum StarlarkError {
     ///
     /// Classified as a module failure rather than a configuration one, because
     /// a script branching on the exit code needs to tell a broken network from
-    /// a broken configuration; see [R-STAR-053].
+    /// a broken configuration; see [REQ-2253].
     #[error("loading {module}: {reason}")]
     Load {
         /// What was asked for.

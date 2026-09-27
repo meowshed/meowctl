@@ -2,7 +2,7 @@
 //!
 //! Four things, resolved independently, because a CI job with a pty, a UTF-8
 //! pipe, and a 16-colour terminal each need a different answer; see
-//! [R-TUI-040].
+//! [REQ-3240].
 
 use std::io::IsTerminal as _;
 
@@ -38,7 +38,7 @@ impl Mode {
     ///
     /// An unrecognised value falls back to detection rather than failing: a
     /// typo in an environment variable should not stop an apply halfway
-    /// through, which is what `ParseMode` does too; see [R-TUI-044].
+    /// through, which is what `ParseMode` does too; see [REQ-3244, REQ-3310].
     #[must_use]
     pub fn parse(value: &str) -> Mode {
         match value.trim().to_ascii_lowercase().as_str() {
@@ -66,7 +66,7 @@ pub struct Caps {
     /// Its height in rows, when that is known.
     ///
     /// Only the live region uses it, to cap itself to the viewport; see
-    /// [R-TUI-020].
+    /// [REQ-3220, REQ-3305].
     pub height: Option<u16>,
 }
 
@@ -118,7 +118,7 @@ impl Caps {
         let term = env.var("TERM").unwrap_or_default();
         let dumb = term.is_empty() || term == "dumb";
         // Most providers capture stdout into a log, so motion is off even
-        // when they hand out a pty; see [R-TUI-041].
+        // when they hand out a pty; see [REQ-3241].
         let ci = env.var("CI").is_some();
 
         let motion = match mode {
@@ -138,7 +138,7 @@ impl Caps {
     }
 
     /// The width now, so a resize is picked up without a signal handler; see
-    /// [R-TUI-025].
+    /// [REQ-3225].
     #[must_use]
     pub fn current_width(self) -> Option<u16> {
         if !self.tty {
@@ -151,7 +151,7 @@ impl Caps {
 
     /// The height now, for capping the live region to the viewport.
     ///
-    /// Re-read per frame, like the width; see [R-TUI-025].
+    /// Re-read per frame, like the width; see [REQ-3225].
     #[must_use]
     pub fn current_height(self) -> Option<u16> {
         if !self.tty {
@@ -167,7 +167,7 @@ impl Caps {
 ///
 /// The same three variables `supportsUnicode` reads, in the same order, and
 /// the same fallback: a machine with no locale set is assumed modern on Unix
-/// and assumed a code page on Windows; see [R-TUI-043].
+/// and assumed a code page on Windows; see [REQ-3243, REQ-3309].
 fn supports_unicode(env: &impl Env) -> bool {
     for key in ["LC_ALL", "LC_CTYPE", "LANG"] {
         let Some(value) = env.var(key) else {
@@ -183,7 +183,7 @@ fn supports_unicode(env: &impl Env) -> bool {
 ///
 /// `NO_COLOR` wins over everything, because that is what the convention is
 /// for; `CLICOLOR_FORCE` turns it back on for a pipe, which is how a caller
-/// says it is rendering the output itself; see [R-TUI-042].
+/// says it is rendering the output itself; see [REQ-3242, REQ-3308].
 fn colour_depth(env: &impl Env, tty: bool, dumb: bool) -> ColourDepth {
     if env.var("NO_COLOR").is_some() || dumb {
         return ColourDepth::None;
@@ -230,7 +230,7 @@ mod tests {
         }
     }
 
-    /// [R-TUI-041] cursor movement written into a CI transcript is
+    /// [REQ-3241] cursor movement written into a CI transcript is
     /// unreadable, so motion is off there even with a pty.
     #[test]
     fn motion_is_off_in_ci_even_on_a_terminal() {
@@ -238,7 +238,7 @@ mod tests {
         assert!(!Caps::resolve(Mode::Auto, &env, true, Some(80)).motion);
     }
 
-    /// [R-TUI-041] and off for a pipe, and off for a terminal that says it is
+    /// [REQ-3241] and off for a pipe, and off for a terminal that says it is
     /// dumb.
     #[test]
     fn motion_is_off_for_a_pipe_and_for_a_dumb_terminal() {
@@ -253,7 +253,7 @@ mod tests {
         assert!(!Caps::resolve(Mode::Auto, &unset, true, Some(80)).motion);
     }
 
-    /// [R-TUI-042] the convention exists so a user can turn it off.
+    /// [REQ-3242, REQ-3308] the convention exists so a user can turn it off.
     #[test]
     fn no_color_wins_over_everything() {
         let env = FakeEnv::new(&[
@@ -267,7 +267,7 @@ mod tests {
         );
     }
 
-    /// [R-TUI-042] and [R-TUI-045]: the depth is what the terminal reports
+    /// [REQ-3242, REQ-3308] and [REQ-3245, REQ-3311]: the depth is what the terminal reports
     /// rather than what we hope, because truecolor on a 16-colour terminal is
     /// garbage.
     #[test]
@@ -279,7 +279,7 @@ mod tests {
         );
 
         // The other spelling terminals use, and the reason the check is a
-        // substring rather than an equality; see [R-TUI-045].
+        // substring rather than an equality; see [REQ-3245, REQ-3311].
         let bits = FakeEnv::new(&[("TERM", "xterm-256color"), ("COLORTERM", "24bit")]);
         assert_eq!(
             Caps::resolve(Mode::Auto, &bits, true, Some(80)).colour,
@@ -299,7 +299,7 @@ mod tests {
         );
     }
 
-    /// [R-TUI-046] a pipe takes no colour, unless the caller says it is
+    /// [REQ-3246, REQ-3312] a pipe takes no colour, unless the caller says it is
     /// rendering the output itself.
     #[test]
     fn a_pipe_takes_no_colour_unless_it_is_forced() {
@@ -316,7 +316,7 @@ mod tests {
         );
     }
 
-    /// [R-TUI-046] `0` is the one value that means no, which is the
+    /// [REQ-3246, REQ-3312] `0` is the one value that means no, which is the
     /// convention: everything else, including the empty string, forces.
     #[test]
     fn clicolor_force_of_zero_forces_nothing() {
@@ -327,7 +327,7 @@ mod tests {
         );
     }
 
-    /// [R-TUI-046] and a user who turned colour off outranks a caller that
+    /// [REQ-3246, REQ-3312] and a user who turned colour off outranks a caller that
     /// says this pipe can take it.
     #[test]
     fn no_color_outranks_clicolor_force() {
@@ -342,7 +342,7 @@ mod tests {
         );
     }
 
-    /// [R-TUI-043] replacement characters where the status glyph should be is
+    /// [REQ-3243, REQ-3309] replacement characters where the status glyph should be is
     /// the failure this prevents.
     #[test]
     fn unicode_follows_the_locale() {
@@ -359,7 +359,7 @@ mod tests {
         assert!(!supports_unicode(&env));
     }
 
-    /// [R-TUI-044] a typo in an environment variable should not stop an apply
+    /// [REQ-3244, REQ-3310] a typo in an environment variable should not stop an apply
     /// halfway through.
     #[test]
     fn an_unrecognised_output_mode_falls_back_to_detection() {

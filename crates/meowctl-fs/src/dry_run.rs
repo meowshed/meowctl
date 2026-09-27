@@ -8,9 +8,9 @@
 //! Two things make the prediction worth trusting. A read of a path this run
 //! recorded a write for answers with what was written, so a hook that writes a
 //! file and reads it back takes the same branch it will take for real; see
-//! [R-FS-012]. And a write whose directory does not exist fails here too,
+//! [REQ-1412]. And a write whose directory does not exist fails here too,
 //! because a dry run that succeeds where the real run fails is worse than
-//! none; see [R-FS-033].
+//! none; see [REQ-1433].
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -25,7 +25,7 @@ pub enum Intent {
     Wrote {
         /// What would have been written.
         contents: Vec<u8>,
-        /// Whether the file would end up executable; see [R-FS-005].
+        /// Whether the file would end up executable; see [REQ-1405, REQ-1501].
         executable: bool,
     },
     /// An existing file's executable bit would be changed, and nothing else.
@@ -268,7 +268,7 @@ impl FileSystem for DryRunFs {
         let contents = self.read(from)?;
         self.require_parent(to)?;
         // Not the source's bit: a copy creates a file, and `RealFs` sets the
-        // mode of what it created; see [R-FS-004].
+        // mode of what it created; see [REQ-1404].
         self.record(
             to,
             Intent::Wrote {
@@ -348,7 +348,7 @@ impl FileSystem for DryRunFs {
     }
 
     fn set_executable(&self, path: &Path, executable: bool) -> FsResult<()> {
-        // [R-FS-033]: `RealFs` fails on a path that is not a file, so the
+        // [REQ-1433]: `RealFs` fails on a path that is not a file, so the
         // prediction has to fail there too.
         if !matches!(self.entry(path)?, Some(Entry::File { .. })) {
             return Err(FsError::NotFound {
@@ -356,7 +356,7 @@ impl FileSystem for DryRunFs {
             });
         }
         // A platform with no mode bits cannot carry one, and a plan that said
-        // otherwise would not predict the run; see [R-FS-005].
+        // otherwise would not predict the run; see [REQ-1405, REQ-1501].
         let executable = executable && cfg!(unix);
         // A file this run would write keeps one intent, with the bit folded
         // in: two intents for one path would need an order, and the map has

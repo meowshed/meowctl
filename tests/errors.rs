@@ -33,7 +33,7 @@ fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
-/// [R-CLI-030] and [R-COMMON-031]: each kind of failure reaches the shell as
+/// [REQ-3430] and [REQ-1031, REQ-1107, REQ-1108]: each kind of failure reaches the shell as
 /// its own code, because a script that cannot tell a typo from a broken
 /// network retries the wrong one.
 #[test]
@@ -48,7 +48,7 @@ fn each_kind_of_failure_has_its_own_exit_code() {
     assert_eq!(run(&root, &["apply"]).status.code(), Some(3));
 }
 
-/// [R-CLI-032] a usage error prints usage; a failure in the work does not,
+/// [REQ-3432, REQ-3513] a usage error prints usage; a failure in the work does not,
 /// because a wall of flags on top of a real error buries it.
 #[test]
 fn usage_appears_for_a_usage_error_and_not_for_a_failure() {
@@ -62,7 +62,7 @@ fn usage_appears_for_a_usage_error_and_not_for_a_failure() {
     assert!(!stderr(&failure).contains("Usage"), "{}", stderr(&failure));
 }
 
-/// [R-CLI-033] an error goes to stderr, so `meowctl dep list | ...` carries
+/// [REQ-3433, REQ-3514] an error goes to stderr, so `meowctl dep list | ...` carries
 /// the list and nothing else.
 #[test]
 fn an_error_does_not_reach_a_piped_stdout() {
@@ -74,7 +74,7 @@ fn an_error_does_not_reach_a_piped_stdout() {
     assert!(!stderr(&failure).is_empty(), "nothing reached stderr");
 }
 
-/// [R-CLI-031] and [R-COMMON-032]: a Starlark error is rendered as a
+/// [REQ-3431] and [REQ-1032]: a Starlark error is rendered as a
 /// diagnostic naming the file, the line and the line itself, because the
 /// alternative is a message about a file the user then has to search.
 #[test]
@@ -94,7 +94,7 @@ fn a_starlark_error_names_the_file_the_line_and_the_line() {
     );
 }
 
-/// [R-CLI-020] and [R-CLI-022]: a dry run renders the plan through the sink,
+/// [REQ-3420, REQ-3510] and [REQ-3422, REQ-3512]: a dry run renders the plan through the sink,
 /// with a reason beside each component it will not touch.
 #[test]
 fn a_dry_run_renders_the_plan_with_its_reasons() {
@@ -127,7 +127,7 @@ fn a_dry_run_renders_the_plan_with_its_reasons() {
     );
 }
 
-/// [R-CLI-071] a release publishing no checksums is refused, because a
+/// [REQ-3471, REQ-3529] a release publishing no checksums is refused, because a
 /// release nothing can be verified against is not one that needs no
 /// verification.
 #[test]
@@ -150,12 +150,12 @@ fn self_update_refuses_a_release_with_no_checksums() {
         .expect("the binary runs");
 
     // `file://` is not https, so the fetch is refused before anything else --
-    // which is itself the point: [R-NET-003] reaches self-update too.
+    // which is itself the point: [REQ-1803, REQ-1900] reaches self-update too.
     assert!(!output.status.success(), "{output:?}");
     assert_eq!(output.status.code(), Some(4), "a module error");
 }
 
-/// [R-CLI-072] and [R-CLI-076]: the release is asked for where the variable
+/// [REQ-3472, REQ-3530, REQ-3531] and [REQ-3476]: the release is asked for where the variable
 /// says, and a plaintext URL is refused there as everywhere.
 #[test]
 fn self_update_will_not_fetch_a_release_over_plaintext() {

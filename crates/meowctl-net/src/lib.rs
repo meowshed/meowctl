@@ -25,7 +25,7 @@ pub use script::ScriptedHttp;
 
 /// Fetching bytes from a URL.
 ///
-/// One method, per [R-NET-001]. A caller that wants a document parses the
+/// One method, per [REQ-1801]. A caller that wants a document parses the
 /// bytes itself, because a trait that decoded JSON would need a second method
 /// for TOML and a third for a tarball, and each one would need answering in
 /// every implementation.
@@ -35,7 +35,7 @@ pub trait Http: Debug {
     /// # Errors
     ///
     /// [`NetError`], which distinguishes a refusal, an unreachable host, a
-    /// status, and a body that could not be read; see [R-NET-010].
+    /// status, and a body that could not be read; see [REQ-1810].
     fn get(&self, url: &str) -> NetResult<Vec<u8>>;
 }
 

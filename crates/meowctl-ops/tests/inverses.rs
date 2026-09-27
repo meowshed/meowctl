@@ -3,7 +3,7 @@
 //! The property test is the one that matters. A per-variant suite checks the
 //! variants somebody thought of; the failure this crate exists to prevent is a
 //! variant added later whose inverse is subtly wrong, and only a test over the
-//! whole set catches that; see [R-OPS-004].
+//! whole set catches that; see [REQ-2004, REQ-2103, REQ-2104].
 
 // `clippy.toml` exempts tests from `expect_used`, but only a function carrying
 // `#[test]`. A helper in a test binary is test code by construction.
@@ -116,15 +116,15 @@ fn filesystem_ops() -> impl Strategy<Value = Op> {
 }
 
 proptest! {
-    /// [R-OPS-004] every filesystem variant, applied and undone.
+    /// [REQ-2004, REQ-2103, REQ-2104] every filesystem variant, applied and undone.
     ///
     /// This is where most of the per-variant inverses are held, because the
     /// obligation each one carries is the same obligation: the tree comes
-    /// back. [R-OPS-012]'s `CopyFile` destination is gone afterwards and
-    /// [R-OPS-016]'s `Download` is in the strategy in both its cases, the
+    /// back. [REQ-2012]'s `CopyFile` destination is gone afterwards and
+    /// [REQ-2016, REQ-2112]'s `Download` is in the strategy in both its cases, the
     /// file that existed and the one that did not.
     ///
-    /// It also holds [R-OPS-002]: every variant reaches the tree through a
+    /// It also holds [REQ-2002, REQ-2102]: every variant reaches the tree through a
     /// `MemFs`, which is only possible because `apply` goes through the
     /// trait.
     #[test]
@@ -135,7 +135,7 @@ proptest! {
     }
 }
 
-/// [R-OPS-010] undoing a write to a file that existed restores it. Always
+/// [REQ-2010, REQ-2105] undoing a write to a file that existed restores it. Always
 /// deleting would destroy the user's original.
 #[test]
 fn undoing_a_write_restores_prior_content() {
@@ -161,7 +161,7 @@ fn undoing_a_write_restores_prior_content() {
     );
 }
 
-/// [R-OPS-010] and undoing a write to a file that did not exist removes it.
+/// [REQ-2010, REQ-2105] and undoing a write to a file that did not exist removes it.
 #[test]
 fn undoing_a_write_to_a_new_file_removes_it() {
     let fs = seeded();
@@ -179,7 +179,7 @@ fn undoing_a_write_to_a_new_file_removes_it() {
     assert!(!fs.exists(Path::new("/home/u/new")).expect("exists"));
 }
 
-/// [R-OPS-011] a file edited between apply and undo keeps the edit, which is
+/// [REQ-2011, REQ-2106, REQ-2107, REQ-2108] a file edited between apply and undo keeps the edit, which is
 /// why the inverse removes a marked block rather than truncating.
 #[test]
 fn undoing_an_append_keeps_an_edit_made_since() {
@@ -215,7 +215,7 @@ fn undoing_an_append_keeps_an_edit_made_since() {
     assert!(!after.contains("MEOWCTL"), "the block survived: {after:?}");
 }
 
-/// [R-OPS-011] a component re-running with the same marker replaces its own
+/// [REQ-2011, REQ-2106, REQ-2107, REQ-2108] a component re-running with the same marker replaces its own
 /// block rather than appending a second copy.
 #[test]
 fn appending_twice_with_one_marker_leaves_one_block() {
@@ -236,7 +236,7 @@ fn appending_twice_with_one_marker_leaves_one_block() {
     assert_eq!(after.matches("BEGIN meowctl same").count(), 1, "{after:?}");
 }
 
-/// [R-OPS-013] removing a directory meowctl did not create would delete
+/// [REQ-2013, REQ-2109] removing a directory meowctl did not create would delete
 /// `~/.config` because a component put a file in it.
 #[test]
 fn undoing_a_mkdir_leaves_a_directory_that_already_existed() {
@@ -255,7 +255,7 @@ fn undoing_a_mkdir_leaves_a_directory_that_already_existed() {
     assert!(fs.exists(Path::new("/home/u")).expect("exists"));
 }
 
-/// [R-OPS-014] a component that re-points an existing symlink must leave the
+/// [REQ-2014, REQ-2110] a component that re-points an existing symlink must leave the
 /// previous one behind, not nothing.
 #[test]
 fn undoing_a_symlink_restores_the_previous_target() {
@@ -284,7 +284,7 @@ fn undoing_a_symlink_restores_the_previous_target() {
     );
 }
 
-/// [R-OPS-015] the backup is the user's original file, and not restoring it is
+/// [REQ-2015, REQ-2111] the backup is the user's original file, and not restoring it is
 /// data loss.
 #[test]
 fn undoing_a_link_restores_the_file_it_moved_aside() {
@@ -307,7 +307,7 @@ fn undoing_a_link_restores_the_file_it_moved_aside() {
     );
 }
 
-/// [R-OPS-031] the user who deleted the file already achieved what the inverse
+/// [REQ-2031] the user who deleted the file already achieved what the inverse
 /// wanted.
 #[test]
 fn an_inverse_whose_target_is_gone_succeeds() {
@@ -322,7 +322,7 @@ fn an_inverse_whose_target_is_gone_succeeds() {
     .expect("remove");
 }
 
-/// [R-OPS-017] a failed run must not leave system preferences changed with no
+/// [REQ-2017, REQ-2113, REQ-2114, REQ-2115] a failed run must not leave system preferences changed with no
 /// record of what they were, which is what `v0.1.0` does by not journaling
 /// these at all.
 #[test]
@@ -351,7 +351,7 @@ fn a_macos_default_records_its_prior_value() {
     );
 }
 
-/// [R-OPS-017] with no prior value the inverse deletes the key rather than
+/// [REQ-2017, REQ-2113, REQ-2114, REQ-2115] with no prior value the inverse deletes the key rather than
 /// writing an empty one, which would leave the machine in a state it was never
 /// in.
 #[test]
@@ -376,7 +376,7 @@ fn a_macos_default_with_no_prior_value_is_undone_by_deleting_it() {
     }
 }
 
-/// [R-OPS-005] the case the property strategy cannot reach, because it seeds
+/// [REQ-2005] the case the property strategy cannot reach, because it seeds
 /// a tree and the operation has to have already happened.
 ///
 /// A component that re-links a symlink already pointing where it wants is the
@@ -412,7 +412,7 @@ fn undoing_a_symlink_that_was_already_correct_restores_it() {
     );
 }
 
-/// [R-OPS-005] the same for `LinkFile`, which is what a component uses when
+/// [REQ-2005] the same for `LinkFile`, which is what a component uses when
 /// the user already had a file there.
 #[test]
 fn undoing_a_link_file_that_was_already_correct_restores_it() {
@@ -439,7 +439,7 @@ fn undoing_a_link_file_that_was_already_correct_restores_it() {
     );
 }
 
-/// [R-OPS-005] and for a write whose content is already what the component
+/// [REQ-2005] and for a write whose content is already what the component
 /// wants: the inverse restores the same bytes rather than removing the file.
 #[test]
 fn undoing_a_write_of_content_already_there_keeps_the_file() {
@@ -459,11 +459,11 @@ fn undoing_a_write_of_content_already_there_keeps_the_file() {
     assert_eq!(fs.snapshot(), before);
 }
 
-/// [R-OPS-001] the nine a journal carries, and the four that only ever
+/// [REQ-2001, REQ-2100, REQ-2101] the nine a journal carries, and the four that only ever
 /// express an inverse.
 ///
 /// The line matters because a journal written by one binary has to replay
-/// under the other, and `v0.1.0` knows only the nine; see [R-OPS-020].
+/// under the other, and `v0.1.0` knows only the nine; see [REQ-2020, REQ-2116].
 #[test]
 fn only_the_nine_v0_1_0_knows_are_journalled() {
     use meowctl_ops::OpKind;
@@ -495,7 +495,7 @@ fn only_the_nine_v0_1_0_knows_are_journalled() {
     }
 }
 
-/// [R-OPS-013] `RemoveDir` stops at the boundary it was given.
+/// [REQ-2013, REQ-2109] `RemoveDir` stops at the boundary it was given.
 ///
 /// Undoing `mkdir -p ~/.config/nvim/lua` removes the three directories it
 /// created and stops. Walking past `until` would climb into the user's home
@@ -536,7 +536,7 @@ fn removing_a_directory_chain_stops_at_the_boundary() {
     );
 }
 
-/// [R-OPS-013] and it stops at a directory that is not empty, because
+/// [REQ-2013, REQ-2109] and it stops at a directory that is not empty, because
 /// something else put a file there.
 #[test]
 fn removing_a_directory_chain_stops_at_what_is_not_empty() {
@@ -564,7 +564,7 @@ fn removing_a_directory_chain_stops_at_what_is_not_empty() {
     );
 }
 
-/// [R-OPS-017] with no prior value the inverse runs `defaults delete`, not
+/// [REQ-2017, REQ-2113, REQ-2114, REQ-2115] with no prior value the inverse runs `defaults delete`, not
 /// `defaults write` with an empty string, which would leave the machine in a
 /// state it was never in.
 ///
@@ -589,7 +589,7 @@ fn deleting_a_default_runs_delete_rather_than_writing_nothing() {
     .expect("the scripted command is the one that ran");
 }
 
-/// [R-OPS-004] an applied operation announces itself, and `Nothing` does not.
+/// [REQ-2004, REQ-2103, REQ-2104] an applied operation announces itself, and `Nothing` does not.
 ///
 /// A renderer counting `OpApplied` would otherwise report work for a
 /// component whose inverse had nothing to undo.
@@ -623,7 +623,7 @@ fn nothing_announces_nothing_and_everything_else_announces_itself() {
     );
 }
 
-/// [R-OPS-004] a command that died without an exit code is reported as `-1`
+/// [REQ-2004, REQ-2103, REQ-2104] a command that died without an exit code is reported as `-1`
 /// rather than as a success.
 ///
 /// A process killed by a signal has no code. Reporting `1` would be a

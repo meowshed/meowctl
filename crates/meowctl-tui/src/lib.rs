@@ -3,7 +3,7 @@
 //! This crate consumes the [`Event`] stream and knows nothing about the engine
 //! that produces it, which is what lets the sinks be tested against a fixture
 //! stream with no terminal, no subprocess, and no filesystem; see
-//! [R-TUI-080].
+//! [REQ-3280].
 //!
 //! Terminal output is the one deliberate carve-out from the parity
 //! constraint. The vocabulary carries over from `v0.1.0` unchanged — see

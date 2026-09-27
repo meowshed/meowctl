@@ -3,7 +3,7 @@
 //! Exactly what `makePredeclared` provides in
 //! `internal/starlark/builtins.go`, under the same names and with the same
 //! signatures. Adding one is surface `v0.1.0` cannot evaluate, so a component
-//! using it would stop working on the old binary; see [R-STAR-001].
+//! using it would stop working on the old binary; see [REQ-2201, REQ-2300].
 
 use std::collections::BTreeMap;
 
@@ -26,14 +26,14 @@ use crate::platform::{Platform, PlatformValue};
 ///
 /// Reached through `Evaluator::extra`, which M0 established as the equivalent
 /// of the thread-local `v0.1.0` uses, and which is per evaluation rather than
-/// global; see [R-STAR-010].
+/// global; see [REQ-2210].
 #[derive(Debug, starlark::values::ProvidesStaticType)]
 pub(crate) struct Context {
     /// Where declarations go.
     pub(crate) accumulator: Accumulator,
     /// The machine, for `platform()` and `select()`.
     pub(crate) platform: Platform,
-    /// Where `query_pm` sends its question; see [R-STAR-005].
+    /// Where `query_pm` sends its question; see [REQ-2205].
     pub(crate) package_managers: std::sync::Arc<dyn crate::PackageManagers>,
 }
 
@@ -48,7 +48,7 @@ fn context<'a>(eval: &'a Evaluator<'_, '_, '_>) -> anyhow::Result<&'a Context> {
 /// Flattens a keyword argument into something that outlives the evaluation.
 ///
 /// A Starlark value cannot leave the heap it was allocated on, so anything
-/// kept has to be copied out here; see [R-STAR-011].
+/// kept has to be copied out here; see [REQ-2211].
 fn flatten(value: Value<'_>) -> Option<Argument> {
     if let Some(s) = value.unpack_str() {
         return Some(Argument::String(s.to_owned()));
@@ -192,8 +192,8 @@ pub(crate) fn meowctl_globals(builder: &mut GlobalsBuilder) {
     /// The one builtin that runs another component's code during evaluation.
     /// It goes out through a trait rather than calling the evaluator from
     /// inside itself, because the handler lives in a different file and
-    /// evaluating that file is the caller's job; see [R-STAR-005] and
-    /// [R-PM-020].
+    /// evaluating that file is the caller's job; see [REQ-2205] and
+    /// [REQ-2620].
     fn query_pm<'v>(
         manager: String,
         eval: &mut Evaluator<'v, '_, '_>,
@@ -230,7 +230,7 @@ pub(crate) fn meowctl_globals(builder: &mut GlobalsBuilder) {
     /// carries `compat` and the other two would reject it.
     ///
     /// This accepts the union, which is what lets one evaluator read all
-    /// three; see [R-STAR-006].
+    /// three; see [REQ-2206, REQ-2303].
     fn module<'v>(
         name: String,
         version: Option<String>,

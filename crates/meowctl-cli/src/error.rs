@@ -1,7 +1,7 @@
 //! Turning a failure into an exit code.
 //!
 //! Here and nowhere else: a crate that knows its exit code knows about a
-//! process; see [R-COMMON-031] and [R-CLI-030].
+//! process; see [REQ-1031, REQ-1107, REQ-1108] and [REQ-3430].
 
 use meowctl_common::{Severity, Span};
 use thiserror::Error;
@@ -16,7 +16,7 @@ pub enum CliError {
     /// There is no configuration here.
     ///
     /// Said as itself rather than as a missing file, because the fix is a
-    /// command rather than a path; see [R-CLI-050].
+    /// command rather than a path; see [REQ-3450, REQ-3515, REQ-3516].
     #[error("no meowctl configuration in {directory}; run `meowctl init` to make one")]
     NotConfigured {
         /// Where it looked.
@@ -28,7 +28,7 @@ pub enum CliError {
     Configuration {
         /// What went wrong.
         message: String,
-        /// Where, when the crate that raised it knew; see [R-CLI-031].
+        /// Where, when the crate that raised it knew; see [REQ-3431].
         span: Option<Span>,
     },
 

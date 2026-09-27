@@ -4,7 +4,7 @@
 //! relative path. Parsing them is separate from serving them because a
 //! diagnostic wants to say "no module named `stdlib`" before anything reaches
 //! the network, and because the rules for where `init.star` is implied are
-//! worth stating once; see [R-STAR-020] and [R-STAR-021].
+//! worth stating once; see [REQ-2220] and [REQ-2221, REQ-2304].
 
 use std::fmt;
 
@@ -142,7 +142,7 @@ fn parse_registry(raw: &str, rest: &str) -> Result<ModuleUrl, ModuleError> {
         reason: reason.to_owned(),
     };
     let Some((module, path)) = rest.split_once("//") else {
-        // `@name` alone is the module's root `init.star`; see [R-STAR-021].
+        // `@name` alone is the module's root `init.star`; see [REQ-2221, REQ-2304].
         if rest.is_empty() {
             return Err(invalid("there is no module name after `@`"));
         }
@@ -198,7 +198,7 @@ fn parse_github(raw: &str, rest: &str) -> Result<ModuleUrl, ModuleError> {
 ///
 /// So `@stdlib//components/apt` is `components/apt/init.star`, which is how
 /// every stdlib component is laid out, and `@stdlib//components/apt.star` is
-/// that file. They are not the same file; see [R-STAR-021].
+/// that file. They are not the same file; see [REQ-2221, REQ-2304].
 fn imply_init(path: &str) -> String {
     let last = path.rsplit('/').next().unwrap_or(path);
     if last.contains('.') {

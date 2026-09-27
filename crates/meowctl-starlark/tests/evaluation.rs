@@ -23,7 +23,7 @@ fn evaluate(source: &str) -> StarlarkResult<meowctl_starlark::Evaluated> {
     Evaluator::new(macos(), &loader).evaluate("init.star", source)
 }
 
-/// [R-STAR-002] the shape a configuration's entry point has.
+/// [REQ-2202] the shape a configuration's entry point has.
 #[test]
 fn components_are_collected_in_declaration_order() {
     let result = evaluate(
@@ -51,7 +51,7 @@ component("@stdlib//components/zsh")
     );
 }
 
-/// [R-STAR-012] order is the graph's tie-break, so sorting would change which
+/// [REQ-2212] order is the graph's tie-break, so sorting would change which
 /// component runs first.
 #[test]
 fn declaration_order_is_not_sorted() {
@@ -65,7 +65,7 @@ fn declaration_order_is_not_sorted() {
     assert_eq!(names, ["z", "a"]);
 }
 
-/// [R-STAR-003] the three package builtins differ only in what they ask for,
+/// [REQ-2203, REQ-2301, REQ-2302] the three package builtins differ only in what they ask for,
 /// and their positional order is `manager` then `name` — which is not the
 /// order a reader expects, and is what `parsePkgArgs` accepts.
 #[test]
@@ -100,7 +100,7 @@ uppkg("brew", "jq")
     assert_eq!(result.declarations.packages[2].manager, "brew");
 }
 
-/// [R-STAR-006] `deps.mod` is Starlark, and evaluating it rather than parsing
+/// [REQ-2206, REQ-2303] `deps.mod` is Starlark, and evaluating it rather than parsing
 /// it with a second grammar is what keeps the two from disagreeing.
 #[test]
 fn a_modfile_evaluates_through_the_same_builtins() {
@@ -124,7 +124,7 @@ replace(name = "stdlib", path = "/local/checkout")
     assert_eq!(result.declarations.replaces[0].path, "/local/checkout");
 }
 
-/// [R-STAR-007] components write `platform().os`, so it is a struct rather
+/// [REQ-2207] components write `platform().os`, so it is a struct rather
 /// than a dictionary.
 #[test]
 fn platform_exposes_the_machine_by_attribute() {
@@ -133,7 +133,7 @@ fn platform_exposes_the_machine_by_attribute() {
     assert!(result.globals.contains(&"WSL".to_owned()));
 }
 
-/// [R-STAR-008] the branch a configuration takes on this machine.
+/// [REQ-2208] the branch a configuration takes on this machine.
 #[test]
 fn select_chooses_by_platform() {
     let result = evaluate(
@@ -173,7 +173,7 @@ fn select_with_no_match_and_no_default_fails() {
     assert!(err.to_string().contains("no condition matched"), "{err}");
 }
 
-/// [R-STAR-032] a typo that shadows a hook name would otherwise skip it
+/// [REQ-2232] a typo that shadows a hook name would otherwise skip it
 /// silently.
 #[test]
 fn a_hook_name_taken_by_a_non_function_is_reported() {
@@ -194,7 +194,7 @@ fn a_hook_name_taken_by_a_non_function_is_reported() {
     assert!(err.to_string().contains("install"), "{err}");
 }
 
-/// [R-STAR-031] most components define three of the thirteen phases, so an
+/// [REQ-2231] most components define three of the thirteen phases, so an
 /// absent hook is a success with nothing to do.
 #[test]
 fn an_absent_hook_is_not_an_error() {
@@ -243,7 +243,7 @@ fn a_hook_runs_and_its_declarations_are_collected() {
     assert!(called);
 }
 
-/// [R-STAR-040] M0 found the library already carries a span, which `v0.1.0`
+/// [REQ-2240] M0 found the library already carries a span, which `v0.1.0`
 /// does not: its errors name a file and nothing more.
 #[test]
 fn an_error_carries_the_line_it_happened_on() {
@@ -254,7 +254,7 @@ fn an_error_carries_the_line_it_happened_on() {
     assert_eq!(span.source_line.as_deref(), Some("component()"));
 }
 
-/// [R-STAR-050] half a configuration applied is worse than none.
+/// [REQ-2250, REQ-2306] half a configuration applied is worse than none.
 #[test]
 fn a_syntax_error_reports_its_position() {
     let err = evaluate("component(\n").expect_err("should fail");
@@ -263,7 +263,7 @@ fn a_syntax_error_reports_its_position() {
 
 /// A loader that refuses is a module error rather than a configuration one, so
 /// a script can tell a broken network from a broken configuration; see
-/// [R-STAR-053].
+/// [REQ-2253].
 #[test]
 fn a_load_that_cannot_be_resolved_is_a_module_error() {
     let err = evaluate("load(\"@nope//x.star\", \"Y\")\n").expect_err("should fail");
@@ -298,7 +298,7 @@ impl Loader for MapLoader {
     }
 }
 
-/// [R-STAR-020] `load()` goes through the caller's loader, which is what lets
+/// [REQ-2220] `load()` goes through the caller's loader, which is what lets
 /// one composite loader serve the filesystem, the registry, and GitHub.
 #[test]
 fn load_resolves_through_the_loader() {
@@ -319,7 +319,7 @@ fn load_resolves_through_the_loader() {
     assert_eq!(result.declarations.components[0].name, "from-stdlib");
 }
 
-/// [R-STAR-023] a graph that loads one helper from twenty components should
+/// [REQ-2223] a graph that loads one helper from twenty components should
 /// pay for it once.
 #[test]
 fn a_module_loaded_twice_is_evaluated_once() {
@@ -342,7 +342,7 @@ fn a_module_loaded_twice_is_evaluated_once() {
     assert_eq!(loader.loads.borrow()["@stdlib//helper.star"], 1);
 }
 
-/// [R-STAR-010] two evaluations in one process must not see each other's
+/// [REQ-2210] two evaluations in one process must not see each other's
 /// declarations.
 #[test]
 fn each_evaluation_gets_its_own_accumulator() {
@@ -361,7 +361,7 @@ fn each_evaluation_gets_its_own_accumulator() {
     assert_eq!(second.declarations.components[0].name, "b");
 }
 
-/// [R-STAR-003] a manager is required, because a package declaration with
+/// [REQ-2203, REQ-2301, REQ-2302] a manager is required, because a package declaration with
 /// nowhere to send it is a configuration mistake rather than a default.
 #[test]
 fn a_package_without_a_manager_is_refused() {
@@ -369,7 +369,7 @@ fn a_package_without_a_manager_is_refused() {
     assert!(err.to_string().contains("name"), "{err}");
 }
 
-/// [R-STAR-002] `component(name = ...)` is how a generated configuration
+/// [REQ-2202] `component(name = ...)` is how a generated configuration
 /// writes it, so the name is positional or named.
 #[test]
 fn a_component_name_may_be_given_by_keyword() {
@@ -377,7 +377,7 @@ fn a_component_name_may_be_given_by_keyword() {
     assert_eq!(result.declarations.components[0].name, "neovim");
 }
 
-/// [R-STAR-001] a builtin `v0.1.0` does not provide would let a component stop
+/// [REQ-2201, REQ-2300] a builtin `v0.1.0` does not provide would let a component stop
 /// working on the old binary.
 #[test]
 fn the_extended_builtins_are_not_available() {
@@ -387,7 +387,7 @@ fn the_extended_builtins_are_not_available() {
     assert!(err.to_string().contains("print"), "{err}");
 }
 
-/// [R-STAR-001] the standard library's package-manager components call
+/// [REQ-2201, REQ-2300] the standard library's package-manager components call
 /// `json.decode(result.stdout)` to read what a manager reported, so the module
 /// is part of the surface rather than decoration.
 #[test]
@@ -438,7 +438,7 @@ impl meowctl_starlark::PackageManagers for OneManager {
     }
 }
 
-/// [R-STAR-005] the one builtin that runs another component's code during
+/// [REQ-2205] the one builtin that runs another component's code during
 /// evaluation. A configuration that asks what is installed and declares
 /// components accordingly is why it exists.
 #[test]
@@ -465,7 +465,7 @@ fn query_pm_returns_what_the_manager_reports() {
     assert_eq!(names, ["git", "jq"]);
 }
 
-/// [R-PM-030] a typo in a manager name is the common cause, and the failure
+/// [REQ-2630] a typo in a manager name is the common cause, and the failure
 /// has to reach the configuration that made it.
 #[test]
 fn query_pm_fails_when_nothing_handles_the_manager() {
@@ -481,7 +481,7 @@ fn query_pm_fails_when_nothing_handles_the_manager() {
     assert!(err.to_string().contains("bwer"), "{err}");
 }
 
-/// [R-STAR-005] an evaluation with no registry refuses rather than answering
+/// [REQ-2205] an evaluation with no registry refuses rather than answering
 /// with an empty list, which would silently drop every component the
 /// configuration meant to declare.
 #[test]
@@ -490,7 +490,7 @@ fn query_pm_without_a_registry_refuses() {
     assert!(err.to_string().contains("query_pm"), "{err}");
 }
 
-/// [R-STAR-033] `pm_name` is what decides whether a component handles a
+/// [REQ-2233] `pm_name` is what decides whether a component handles a
 /// package manager, and it is read from the evaluation rather than by
 /// re-parsing the file.
 #[test]
@@ -508,7 +508,7 @@ fn the_value_of_every_top_level_string_is_reported() {
     );
 }
 
-/// [R-STAR-034] `platforms` and `distros` are top-level lists in a component's
+/// [REQ-2234] `platforms` and `distros` are top-level lists in a component's
 /// own file, and they decide whether it runs on this machine.
 #[test]
 fn the_value_of_every_top_level_string_list_is_reported() {
@@ -529,7 +529,7 @@ fn the_value_of_every_top_level_string_list_is_reported() {
     assert!(!result.lists.contains_key("notalist"));
 }
 
-/// [R-STAR-004] `repo()` records a repository against a named manager, which
+/// [REQ-2204] `repo()` records a repository against a named manager, which
 /// is how a component adds a tap or a PPA before its packages resolve.
 #[test]
 fn a_repo_declaration_names_its_manager() {
@@ -551,7 +551,7 @@ fn a_repo_declaration_names_its_manager() {
     );
 }
 
-/// [R-STAR-011] the accumulator holds owned data, so what a declaration
+/// [REQ-2211] the accumulator holds owned data, so what a declaration
 /// carries outlives the evaluation that produced it.
 ///
 /// `go.starlark.net` did not impose this and `starlark-rust` does: a value
@@ -570,7 +570,7 @@ fn what_an_evaluation_declared_outlives_it() {
     assert_eq!(declarations.packages[0].name, "git");
 }
 
-/// [R-STAR-042] `fail()` is how a component refuses, and refusing is a
+/// [REQ-2242, REQ-2305] `fail()` is how a component refuses, and refusing is a
 /// configuration error rather than a crash.
 #[test]
 fn a_fail_becomes_a_configuration_error() {
@@ -583,7 +583,7 @@ fn a_fail_becomes_a_configuration_error() {
     assert_eq!(err.severity(), meowctl_common::Severity::Config, "{err}");
 }
 
-/// [R-STAR-051] a builtin called wrongly names the builtin and the argument,
+/// [REQ-2251] a builtin called wrongly names the builtin and the argument,
 /// because "invalid arguments" sends the author reading the source of a
 /// binary they do not have.
 #[test]
@@ -597,7 +597,7 @@ fn a_builtin_called_wrongly_names_itself_and_the_argument() {
     );
 }
 
-/// [R-STAR-030] `ctx` first, then whatever the caller supplies, positionally
+/// [REQ-2230] `ctx` first, then whatever the caller supplies, positionally
 /// and by keyword.
 ///
 /// A lifecycle hook takes `ctx` alone; a package-manager handler takes
@@ -646,7 +646,7 @@ fn a_hook_takes_ctx_first_and_then_what_the_caller_supplies() {
     assert!(called, "the hook was not called at all");
 }
 
-/// [R-STAR-041] an error inside a loaded module names the chain that reached
+/// [REQ-2241] an error inside a loaded module names the chain that reached
 /// it, because the innermost file alone does not say which component pulled
 /// it in.
 #[test]
@@ -669,7 +669,7 @@ fn an_error_inside_a_loaded_module_names_the_chain() {
     );
 }
 
-/// [R-STAR-007] components write `platform().os`, so every field the struct
+/// [REQ-2207] components write `platform().os`, so every field the struct
 /// carries is reachable by name and `dir()` lists them.
 #[test]
 fn every_field_of_the_platform_struct_is_reachable() {
@@ -700,7 +700,7 @@ fn every_field_of_the_platform_struct_is_reachable() {
         .expect("every field is reachable");
 }
 
-/// [R-STAR-008] `select()` takes the branch this machine names, and a machine
+/// [REQ-2208] `select()` takes the branch this machine names, and a machine
 /// that matches nothing takes the default.
 #[test]
 fn select_takes_the_branch_this_machine_names() {

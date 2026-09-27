@@ -26,7 +26,7 @@ fn seeded() -> MemFs {
     fs
 }
 
-/// [R-OPS-020] a record written here is a record `v0.1.0` can read, so the
+/// [REQ-2020, REQ-2116] a record written here is a record `v0.1.0` can read, so the
 /// keys are the ones its `inverse*` structs declare.
 #[test]
 fn a_record_uses_the_field_names_v0_1_0_declares() {
@@ -104,7 +104,7 @@ fn a_v0_1_0_journal_replays() {
     ));
 }
 
-/// [R-OPS-022] undoing a mkdir before the writes inside it would fail, so the
+/// [REQ-2022] undoing a mkdir before the writes inside it would fail, so the
 /// order is the reverse of the order things happened.
 #[test]
 fn a_replay_runs_backwards() {
@@ -138,7 +138,7 @@ fn a_replay_runs_backwards() {
     assert_eq!(fs.snapshot(), before, "the replay did not restore the tree");
 }
 
-/// [R-OPS-030] one corrupt line must not strand every earlier operation.
+/// [REQ-2030, REQ-2120] one corrupt line must not strand every earlier operation.
 #[test]
 fn a_corrupt_line_is_reported_and_the_rest_still_replay() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -166,8 +166,8 @@ fn a_corrupt_line_is_reported_and_the_rest_still_replay() {
     );
 }
 
-/// [R-OPS-024] `partial` is the outcome a user most needs to see, and
-/// [R-OPS-023]: the inverse that failed did not strand the one after it. The
+/// [REQ-2024] `partial` is the outcome a user most needs to see, and
+/// [REQ-2023, REQ-2117]: the inverse that failed did not strand the one after it. The
 /// failing record is the later one, and replay runs backwards, so the run
 /// reached the good one only by continuing past the bad.
 #[test]
@@ -196,7 +196,7 @@ fn a_replay_that_half_works_reports_partial() {
     assert_eq!(outcome.failures.len(), 1);
 }
 
-/// [R-OPS-025] every run would otherwise replay the last one's operations.
+/// [REQ-2025, REQ-2118] every run would otherwise replay the last one's operations.
 #[test]
 fn truncating_empties_the_journal() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -243,7 +243,7 @@ fn an_inverse_only_operation_is_not_journaled() {
     assert!(journal.is_empty());
 }
 
-/// [R-OPS-021] and [R-OPS-003]: a crash between the record and the effect
+/// [REQ-2021] and [REQ-2003]: a crash between the record and the effect
 /// must leave a journal
 /// that replays a no-op, so the record is on disk before the effect runs.
 #[test]
@@ -283,7 +283,7 @@ fn record_for(forward: &Op, inverse: &Op) -> serde_json::Value {
     serde_json::from_str(text.trim()).expect("parse")
 }
 
-/// [R-OPS-020] every journalled variant, not just the first one.
+/// [REQ-2020, REQ-2116] every journalled variant, not just the first one.
 ///
 /// The record is what a *different binary* replays, so each variant's payload
 /// is an interface. Mutation testing is what found this: the arms that carry
@@ -392,7 +392,7 @@ fn every_journalled_variant_writes_the_payload_v0_1_0_reads() {
     assert_eq!(plist["inverse"]["value"], "false");
 }
 
-/// [R-OPS-024] nothing applied is `failed`, not `partial`.
+/// [REQ-2024] nothing applied is `failed`, not `partial`.
 ///
 /// The two are what a user reads to decide whether to finish by hand, and
 /// `partial` where nothing was undone sends them looking for work that was
@@ -422,7 +422,7 @@ fn a_replay_where_nothing_applied_reports_failed() {
     assert_eq!(outcome.failures.len(), 1);
 }
 
-/// [R-OPS-025] truncating a journal that is not there succeeds and resets the
+/// [REQ-2025, REQ-2118] truncating a journal that is not there succeeds and resets the
 /// sequence, because a first run has no journal and still has to be able to
 /// finish.
 #[test]
@@ -435,7 +435,7 @@ fn truncating_a_journal_that_was_never_written_succeeds() {
     assert!(journal.is_empty());
 }
 
-/// [R-OPS-030] the sequence number in an unreadable-record error is the line
+/// [REQ-2030, REQ-2120] the sequence number in an unreadable-record error is the line
 /// it was on, because that is what the reader opens the file to find.
 #[test]
 fn an_unreadable_record_is_numbered_by_its_line() {
@@ -459,7 +459,7 @@ fn an_unreadable_record_is_numbered_by_its_line() {
     assert!(broken[1].to_string().contains('3'), "{}", broken[1]);
 }
 
-/// [R-OPS-025] a journal holds something once something is appended, which is
+/// [REQ-2025, REQ-2118] a journal holds something once something is appended, which is
 /// what `interrupted_run` reads to report a run that stopped partway.
 #[test]
 fn a_journal_holds_something_once_something_is_appended() {
@@ -486,7 +486,7 @@ fn a_journal_holds_something_once_something_is_appended() {
     assert!(journal.is_empty(), "truncating did not reset the sequence");
 }
 
-/// [R-OPS-025] a journal file that was never written reads as empty rather
+/// [REQ-2025, REQ-2118] a journal file that was never written reads as empty rather
 /// than failing, because a first run has none and still has to start.
 #[test]
 fn a_journal_that_is_not_there_reads_as_empty() {
@@ -498,7 +498,7 @@ fn a_journal_that_is_not_there_reads_as_empty() {
     assert!(broken.is_empty(), "{broken:?}");
 }
 
-/// [R-OPS-020] the kind strings are what a `v0.1.0` journal carries, so a
+/// [REQ-2020, REQ-2116] the kind strings are what a `v0.1.0` journal carries, so a
 /// record written here replays there and one written there replays here.
 #[test]
 fn the_kind_strings_are_the_ones_v0_1_0_writes() {
@@ -521,7 +521,7 @@ fn the_kind_strings_are_the_ones_v0_1_0_writes() {
     }
 }
 
-/// [R-OPS-024] and [R-CONFIG-044]: the outcome strings are what `state.toml`
+/// [REQ-2024] and [REQ-1244]: the outcome strings are what `state.toml`
 /// records, so a user reading the file and a user reading the screen see the
 /// same word.
 #[test]

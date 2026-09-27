@@ -2,7 +2,7 @@
 //!
 //! It exists so a test of the engine, the operations, or a hook needs no
 //! temporary directory to create and clean up, and so two tests can run in
-//! parallel without sharing a tree; see [R-FS-013].
+//! parallel without sharing a tree; see [REQ-1413].
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -17,7 +17,7 @@ enum Node {
         bytes: Vec<u8>,
         /// Tracked so an extraction that sets the bit can be asserted on, and
         /// so a snapshot notices when an undo does not put it back; see
-        /// [R-FS-005].
+        /// [REQ-1405, REQ-1501].
         executable: bool,
     },
     Directory,
@@ -27,7 +27,7 @@ enum Node {
 /// A filesystem in memory.
 ///
 /// Paths are stored as given. Callers hand it absolute paths, because
-/// resolution happens before the filesystem sees anything; see [R-FS-002].
+/// resolution happens before the filesystem sees anything; see [REQ-1402, REQ-1500].
 #[derive(Debug, Default)]
 pub struct MemFs {
     nodes: Mutex<BTreeMap<PathBuf, Node>>,
@@ -79,7 +79,7 @@ impl MemFs {
     }
 
     /// A snapshot that can be compared with another, for a test that applies
-    /// an operation and then undoes it; see [R-OPS-004].
+    /// an operation and then undoes it; see [REQ-2004, REQ-2103, REQ-2104].
     ///
     /// # Panics
     ///
@@ -211,7 +211,7 @@ impl FileSystem for MemFs {
             });
         };
         Self::require_parent(&nodes, to)?;
-        // A copy creates a file, and [R-FS-004] gives a created file `0o600`:
+        // A copy creates a file, and [REQ-1404] gives a created file `0o600`:
         // `RealFs` sets the mode after `fs::copy`, so the bit does not travel.
         // A rename moves the file and does carry it.
         nodes.insert(
@@ -314,7 +314,7 @@ impl FileSystem for MemFs {
         Self::require_parent(&nodes, to)?;
         // A directory takes everything under it, which is what `fs::rename`
         // does and what the module cache depends on when it moves a staged
-        // extraction into place; see [R-MODULE-063].
+        // extraction into place; see [REQ-2463].
         let moved: Vec<PathBuf> = nodes
             .keys()
             .filter(|held| held.starts_with(from))
@@ -338,7 +338,7 @@ impl FileSystem for MemFs {
                 // A platform with no mode bits cannot carry one, and an
                 // in-memory filesystem that carried it anyway would let a test
                 // pass on Windows for behaviour `RealFs` does not have there;
-                // see [R-FS-005].
+                // see [REQ-1405, REQ-1501].
                 *bit = executable && cfg!(unix);
                 Ok(())
             }

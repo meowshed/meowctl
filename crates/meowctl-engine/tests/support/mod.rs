@@ -112,7 +112,7 @@ pub fn graph_of(config: &Config, platform: &Platform) -> EngineResult<Graph> {
 
 /// An absolute home directory for the platform the test runs on.
 ///
-/// `/home/u` is not absolute on Windows, and [R-CTX-012] refuses a path that
+/// `/home/u` is not absolute on Windows, and [REQ-2812, REQ-2902] refuses a path that
 /// is not absolute once `~` expands, so a test that hard-coded a Unix path
 /// would fail there for a reason that has nothing to do with the engine.
 #[cfg(unix)]

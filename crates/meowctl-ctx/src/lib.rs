@@ -8,7 +8,7 @@
 //! why every one of them repeated a dry-run check.
 //!
 //! Nothing here asks whether this is a dry run. The [`FileSystem`] and
-//! [`Executor`] it was given decide that; see [R-CTX-014].
+//! [`Executor`] it was given decide that; see [REQ-2814].
 //!
 //! [`Op`]: meowctl_ops::Op
 //! [`Executor`]: meowctl_exec::Executor

@@ -2,7 +2,7 @@
 //!
 //! A phase name is not an implementation detail. It is the name of the hook a
 //! component author writes in a `.star` file, and it appears in `state.toml`,
-//! so the thirteen names here are fixed by [R-COMMON-010].
+//! so the thirteen names here are fixed by [REQ-1010, REQ-1103].
 
 use std::fmt;
 use std::str::FromStr;
@@ -87,7 +87,7 @@ impl Phase {
     ///
     /// A read-only phase gets a restricted `ctx` and a read-only executor, so
     /// this answer decides what a hook can do. The set matches
-    /// `validCheckPhases` in `internal/ctx/methods.go`; see [R-COMMON-012].
+    /// `validCheckPhases` in `internal/ctx/methods.go`; see [REQ-1012].
     #[must_use]
     pub const fn is_read_only(self) -> bool {
         matches!(
@@ -97,7 +97,7 @@ impl Phase {
     }
 
     /// Whether the phase runs as a shell hook, where `ctx.emit` writes to
-    /// stdout for the shell to evaluate; see [R-COMMON-013].
+    /// stdout for the shell to evaluate; see [REQ-1013].
     #[must_use]
     pub const fn is_runtime_hook(self) -> bool {
         matches!(self, Phase::Shell | Phase::Login)
@@ -115,7 +115,7 @@ impl FromStr for Phase {
 
     /// A name that is not a phase fails rather than defaulting, because a
     /// `state.toml` written by a newer build can contain one; see
-    /// [R-COMMON-051].
+    /// [REQ-1051].
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Phase::ALL
             .into_iter()
@@ -142,7 +142,7 @@ pub enum PhaseSet {
 
 impl PhaseSet {
     /// The phases this set runs, in the order `internal/lifecycle/runner.go`
-    /// gives; see [R-COMMON-011].
+    /// gives; see [REQ-1011].
     #[must_use]
     pub const fn phases(self) -> &'static [Phase] {
         match self {
@@ -181,7 +181,7 @@ impl fmt::Display for PhaseSet {
 mod tests {
     use super::*;
 
-    /// [R-COMMON-010] the thirteen names are what components export as hooks,
+    /// [REQ-1010, REQ-1103] the thirteen names are what components export as hooks,
     /// so a rename breaks every `.star` file that defines one.
     #[test]
     fn the_thirteen_phase_names_are_fixed() {
@@ -206,7 +206,7 @@ mod tests {
         );
     }
 
-    /// [R-COMMON-010] every name round-trips, so a phase read from
+    /// [REQ-1010, REQ-1103] every name round-trips, so a phase read from
     /// `state.toml` is the phase that wrote it.
     #[test]
     fn every_phase_round_trips_through_its_name() {
@@ -215,7 +215,7 @@ mod tests {
         }
     }
 
-    /// [R-COMMON-051] a `state.toml` from a newer build can name a phase this
+    /// [REQ-1051] a `state.toml` from a newer build can name a phase this
     /// one does not know, and guessing would misread it.
     #[test]
     fn an_unknown_phase_name_fails() {
@@ -223,7 +223,7 @@ mod tests {
         assert!(err.to_string().contains("install_everything"), "{err}");
     }
 
-    /// [R-COMMON-012] the read-only set decides what a hook may do, so it has
+    /// [REQ-1012] the read-only set decides what a hook may do, so it has
     /// to be exactly the four `validCheckPhases` names.
     #[test]
     fn exactly_four_phases_are_read_only() {
@@ -243,7 +243,7 @@ mod tests {
         );
     }
 
-    /// [R-COMMON-013] `ctx.emit` writes to stdout only here; anywhere else it
+    /// [REQ-1013] `ctx.emit` writes to stdout only here; anywhere else it
     /// would corrupt a piped run.
     #[test]
     fn exactly_two_phases_are_runtime_hooks() {
@@ -255,7 +255,7 @@ mod tests {
         assert_eq!(hooks, ["shell", "login"]);
     }
 
-    /// [R-COMMON-011] the composition of each set, which decides what `apply`
+    /// [REQ-1011] the composition of each set, which decides what `apply`
     /// and the rest actually run.
     #[test]
     fn the_phase_sets_compose_as_v0_1_0_does() {
@@ -299,7 +299,7 @@ mod tests {
         }
     }
 
-    /// [R-COMMON-011] and [R-CONFIG-042]: the phase set's name is what
+    /// [REQ-1011] and [REQ-1242]: the phase set's name is what
     /// `state.toml` records as `last_run.phase_set`, so it is a format field
     /// rather than a label.
     #[test]
@@ -316,7 +316,7 @@ mod tests {
         }
     }
 
-    /// [R-COMMON-010] and a phase renders as the hook name a component
+    /// [REQ-1010, REQ-1103] and a phase renders as the hook name a component
     /// defines, because that is what a message about it has to say.
     #[test]
     fn a_phase_renders_as_the_hook_it_names() {

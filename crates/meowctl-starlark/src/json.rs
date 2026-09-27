@@ -8,7 +8,7 @@
 //! It is not decoration: the standard library's package-manager components
 //! call `json.decode(result.stdout)` to read what a manager reported, and a
 //! configuration that cannot do that cannot interrogate anything; see
-//! [R-STAR-001].
+//! [REQ-2201, REQ-2300].
 
 use std::fmt;
 
