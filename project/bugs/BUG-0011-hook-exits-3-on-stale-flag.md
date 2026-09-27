@@ -16,18 +16,19 @@ After a successful hook run, `hook` propagates a failure to remove
 
 ## Reproduction
 
-The research ran the debug binary `target/debug/meowctl`, built from revision
-`7e8cabe`, on macOS in a scratch directory, with `HOME`, `XDG_CACHE_HOME` and
-`--config` pointed there. The research left a stale `.hook-error` in the
-configuration directory, set the directory to mode 555, and ran `meowctl hook
-shell`.
+The research ran the debug binary `target/debug/meowctl`, built from `main`
+as #97 left it, on macOS in a scratch directory, with `HOME`, `XDG_CACHE_HOME`
+and `--config` pointed there. The research left a stale `.hook-error` in the
+configuration directory, set the directory to mode 555, and ran
+`meowctl hook shell`.
 
 ## What the system does
 
-It printed `echo hi`, then `meowctl: removing .../.hook-error: Permission denied
-(os error 13)`, and exited 3. `HookError::clear(...)?` propagates the removal
-failure (`crates/meowctl-cli/src/run/commands.rs:541-543`). Every shell spawn
-repeats it.
+It printed `echo hi`, then
+`meowctl: removing .../.hook-error: Permission denied (os error 13)`, and exited
+3. `HookError::clear(...)?` propagates the removal failure
+(`crates/meowctl-cli/src/run/commands.rs:541-543`). Every shell spawn repeats
+it.
 
 ## What it should do, and why
 

@@ -16,11 +16,11 @@ write failure partway, or an archive with no `init.star`, leaves a partial tree.
 
 ## Reproduction
 
-The onboarding research inferred this from the code at revision `7e8cabe` and
+The onboarding research inferred this from the code at `main` as #97 left it and
 didn't run it. The research's probe covered only the fetch failure, which wrote
-nothing. At revision `7e8cabe`, run `meowctl --config <empty dir> init
-https://github.com/<owner>/<repo>` against a repository whose default branch
-`main` has no `init.star` at its root.
+nothing. At `main` as #97 left it, run
+`meowctl --config <empty dir> init https://github.com/<owner>/<repo>` against a
+repository whose default branch `main` has no `init.star` at its root.
 
 ## What the system does
 

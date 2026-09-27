@@ -15,8 +15,8 @@ area specifications under `docs/spec/`, a trade-off row for each of them, the
 argued decisions and the execution plan under `docs/design/`. Onboarding
 migrated all of it into `project/`, which `.meowpaw/profile.toml` now declares
 as the record's root, and removed the old documents, so `project/` is the single
-source of truth. The removed files stay readable at revision `7e8cabe`, which is
-where every `(from docs/...)` citation in the record points.
+source of truth. The removed files stay readable at `main` as #97 left it, which
+is where every `(from docs/...)` citation in the record points.
 
 The record now holds a vision, 13 specifications, 556 requirements (554 approved
 and 2 withdrawn), 50 decisions, one epic with 38 tasks that records the 0.2.0

@@ -17,9 +17,9 @@ first reversible effect.
 
 ## Reproduction
 
-The onboarding research inferred this from the code at revision `7e8cabe` and
+The onboarding research inferred this from the code at `main` as #97 left it and
 didn't run it. It agrees with the `.hook-error` probe in BUG-0012, where a
-directory at mode 555 refused writes. At revision `7e8cabe`, set the
+directory at mode 555 refused writes. At `main` as #97 left it, set the
 configuration directory to mode 555 and run `meowctl apply` with a component
 whose `install` hook calls `ctx.run` and then writes a file.
 

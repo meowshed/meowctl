@@ -16,16 +16,16 @@ whose message doesn't tell the author where the call does work.
 
 ## Reproduction
 
-The research ran the debug binary `target/debug/meowctl`, built from revision
-`7e8cabe`, on macOS in a scratch directory, with `HOME`, `XDG_CACHE_HOME` and
-`--config` pointed there. The research put `query_pm("brew")` at the top level
-of a component and ran `meowctl apply`.
+The research ran the debug binary `target/debug/meowctl`, built from `main`
+as #97 left it, on macOS in a scratch directory, with `HOME`, `XDG_CACHE_HOME`
+and `--config` pointed there. The research put `query_pm("brew")` at the top
+level of a component and ran `meowctl apply`.
 
 ## What the system does
 
-It failed with `query_pm("brew") needs a package-manager registry and this
-evaluation has none` and exited 3
-(`crates/meowctl-starlark/src/evaluator.rs:62-75`).
+It failed with
+`query_pm("brew") needs a package-manager registry and this evaluation has none`
+and exited 3 (`crates/meowctl-starlark/src/evaluator.rs:62-75`).
 
 ## What it should do, and why
 

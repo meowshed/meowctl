@@ -15,9 +15,9 @@ text already carries it.
 
 ## Reproduction
 
-The research ran the debug binary `target/debug/meowctl`, built from revision
-`7e8cabe`, on macOS in a scratch directory, with `HOME`, `XDG_CACHE_HOME` and
-`--config` pointed there. The research ran:
+The research ran the debug binary `target/debug/meowctl`, built from `main`
+as #97 left it, on macOS in a scratch directory, with `HOME`, `XDG_CACHE_HOME`
+and `--config` pointed there. The research ran:
 
 ```bash
 MEOWCTL_RELEASES=https://127.0.0.1:1/latest meowctl self-update
@@ -25,10 +25,14 @@ MEOWCTL_RELEASES=https://127.0.0.1:1/latest meowctl self-update
 
 ## What the system does
 
-It printed `i checking for a newer release` and `meowctl:
-https://127.0.0.1:1/latest: could not reach https://127.0.0.1:1/latest: io:
-Connection refused (os error 61)`, and exited 4. The prefix is added at
-`crates/meowctl-cli/src/update.rs:44`, `update.rs:68` and `update.rs:75`.
+It printed `i checking for a newer release` and then:
+
+```text
+meowctl: https://127.0.0.1:1/latest: could not reach https://127.0.0.1:1/latest: io: Connection refused (os error 61)
+```
+
+It exited 4. The prefix is added at `crates/meowctl-cli/src/update.rs:44`,
+`update.rs:68` and `update.rs:75`.
 
 ## What it should do, and why
 

@@ -16,8 +16,8 @@ carries one.
 
 ## Reproduction
 
-The onboarding research inferred this from the code at revision `7e8cabe` and
-didn't run it. At revision `7e8cabe`, read
+The onboarding research inferred this from the code at `main` as #97 left it and
+didn't run it. At `main` as #97 left it, read
 `crates/meowctl-starlark/src/platform.rs:111-128`, or evaluate a component that
 reads the architecture from `platform()`.
 

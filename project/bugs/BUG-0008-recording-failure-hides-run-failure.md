@@ -16,8 +16,8 @@ changes the exit code from 1 to 3.
 
 ## Reproduction
 
-The onboarding research inferred this from the code at revision `7e8cabe` and
-didn't run it. At revision `7e8cabe`, make a hook fail and make `pkgs.lock`
+The onboarding research inferred this from the code at `main` as #97 left it and
+didn't run it. At `main` as #97 left it, make a hook fail and make `pkgs.lock`
 unwritable, then run `meowctl apply`.
 
 ## What the system does

@@ -16,8 +16,8 @@ record onto that line, so replay skips both.
 
 ## Reproduction
 
-The onboarding research inferred this from the code at revision `7e8cabe` and
-didn't run it. At revision `7e8cabe`, truncate the last byte of a record in
+The onboarding research inferred this from the code at `main` as #97 left it and
+didn't run it. At `main` as #97 left it, truncate the last byte of a record in
 `rollback.jsonl`, run a component that makes one reversible effect and fails,
 and read the rollback output.
 

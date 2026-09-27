@@ -17,9 +17,9 @@ holds a configuration.
 
 ## Reproduction
 
-The onboarding research inferred this from the code at revision `7e8cabe` and
-didn't run it. At revision `7e8cabe`, put `meowctl.star` and no `init.star` in
-the configuration directory and run `meowctl apply`.
+The onboarding research inferred this from the code at `main` as #97 left it and
+didn't run it. At `main` as #97 left it, put `meowctl.star` and no `init.star`
+in the configuration directory and run `meowctl apply`.
 
 ## What the system does
 

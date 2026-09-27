@@ -16,11 +16,11 @@ nobody learns that a hook failed.
 
 ## Reproduction
 
-The research ran the debug binary `target/debug/meowctl`, built from revision
-`7e8cabe`, on macOS in a scratch directory, with `HOME`, `XDG_CACHE_HOME` and
-`--config` pointed there. The research set the configuration directory to mode
-555, declared a component whose `shell` hook fails, and ran `meowctl hook
-shell`.
+The research ran the debug binary `target/debug/meowctl`, built from `main`
+as #97 left it, on macOS in a scratch directory, with `HOME`, `XDG_CACHE_HOME`
+and `--config` pointed there. The research set the configuration directory to
+mode 555, declared a component whose `shell` hook fails, and ran
+`meowctl hook shell`.
 
 ## What the system does
 

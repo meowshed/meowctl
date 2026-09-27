@@ -17,8 +17,8 @@ frame redraws over the wrong lines.
 
 ## Reproduction
 
-The onboarding research inferred this from the code at revision `7e8cabe` and
-didn't run it. At revision `7e8cabe`, resize a terminal to 10 columns and run
+The onboarding research inferred this from the code at `main` as #97 left it and
+didn't run it. At `main` as #97 left it, resize a terminal to 10 columns and run
 `meowctl apply` with the live sink.
 
 ## What the system does

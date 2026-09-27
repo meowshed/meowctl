@@ -16,10 +16,10 @@ a prompt writes its question to `/dev/null` and then blocks on stdin.
 
 ## Reproduction
 
-The onboarding research inferred this from the code at revision `7e8cabe` and
+The onboarding research inferred this from the code at `main` as #97 left it and
 didn't run it. It rests on Rust standard library behaviour on Unix, which
-reopens descriptors 0 to 2 on `/dev/null` at startup. At revision `7e8cabe`, run
-`meowctl apply 2>&-` in a terminal with a component whose hook calls
+reopens descriptors 0 to 2 on `/dev/null` at startup. At `main` as #97 left it,
+run `meowctl apply 2>&-` in a terminal with a component whose hook calls
 `ctx.prompt`.
 
 ## What the system does

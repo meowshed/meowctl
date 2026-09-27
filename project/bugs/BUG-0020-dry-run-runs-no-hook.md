@@ -18,8 +18,8 @@ crates/meowctl-cli/src/run/commands.rs:449-455, :481 and :598, high).
 
 ## Reproduction
 
-Seen at revision `7e8cabe`. The research read the code and didn't run the binary
-against a configuration with an `install_check` hook:
+Seen at `main` as #97 left it. The research read the code and didn't run the
+binary against a configuration with an `install_check` hook:
 
 1. `rg -n 'dry_run' crates/meowctl-cli/src` shows `apply` returning after it
    emits `PlanComputed` when `session.dry_run` is set, and both `Settings`

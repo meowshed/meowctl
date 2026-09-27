@@ -12,21 +12,21 @@ issue: 159
 # `meowctl-cli` writes to stdout and stderr directly at three sites
 
 `meowctl-cli` writes through `std::io::stdout()` or `std::io::stderr()` outside
-`meowctl-tui`, which [REQ-3510] forbids, and the workspace lints miss it
-because `print_stdout` and `print_stderr` catch only the `print!` family.
+`meowctl-tui`, which [REQ-3510] forbids, and the workspace lints miss it because
+`print_stdout` and `print_stderr` catch only the `print!` family.
 
 ## Reproduction
 
-At revision `7e8cabe`, from the repository root, run:
+At `main` as #97 left it, from the repository root, run:
 
 ```bash
-git grep -n 'std::io::stdout()\|std::io::stderr()' 7e8cabe -- \
+git grep -n 'std::io::stdout()\|std::io::stderr()' -- \
   crates/meowctl-cli/src/run/commands.rs crates/meowctl-cli/src/signals.rs \
   crates/meowctl-cli/src/run.rs
 ```
 
-The onboarding research found the sites by reading the code and ran no
-program that shows a corrupted live region; the search above is the probe.
+The onboarding research found the sites by reading the code and ran no program
+that shows a corrupted live region; the search above is the probe.
 
 ## What the system does
 
@@ -52,10 +52,10 @@ names them as allowed exceptions and a clippy `disallowed-methods` entry for
 ## Triage
 
 A requirement in force covers it, so the fix enters at implement, unless the
-owner prefers to amend [REQ-3510] to allow the three sites. It is minor
-because each site has a stated reason and the research observed no corrupted
-output; it becomes major if one of the writes is shown to land while the live
-region is drawing.
+owner prefers to amend [REQ-3510] to allow the three sites. It is minor because
+each site has a stated reason and the research observed no corrupted output; it
+becomes major if one of the writes is shown to land while the live region is
+drawing.
 
 ## Closed by
 

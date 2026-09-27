@@ -39,7 +39,7 @@ Before you write code that no requirement covers, write the requirement first.
 When the code contradicts a requirement, stop and write a draft that
 supersedes it, because rewording a record after the code shipped hides a
 decision nobody took. Cite each requirement a test holds as `[REQ-NNNN]` in
-the test's doc comment. The `meow-method:method` skill has the steps.
+the test's doc comment. The `meow-flow:method` skill has the steps.
 </principle>
 
 <principle name="parity_is_the_contract">

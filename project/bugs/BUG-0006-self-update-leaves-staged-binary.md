@@ -16,9 +16,9 @@ removing it when `set_executable` fails.
 
 ## Reproduction
 
-The onboarding research inferred this from the code at revision `7e8cabe` and
-didn't run it. At revision `7e8cabe`, make `set_executable` fail on the staged
-file `.<name>-<pid>.new`, for example on a filesystem that refuses a mode
+The onboarding research inferred this from the code at `main` as #97 left it and
+didn't run it. At `main` as #97 left it, make `set_executable` fail on the
+staged file `.<name>-<pid>.new`, for example on a filesystem that refuses a mode
 change, and run `meowctl self-update`.
 
 ## What the system does

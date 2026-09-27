@@ -17,9 +17,9 @@ is `False`.
 
 ## Reproduction
 
-The onboarding research inferred this from the code at revision `7e8cabe` and
+The onboarding research inferred this from the code at `main` as #97 left it and
 didn't run it. The probe machine runs macOS, so the research couldn't run it on
-Linux. At revision `7e8cabe`, from the repository root:
+Linux. At `main` as #97 left it, from the repository root:
 
 ```bash
 grep -rn "os-release\|WSL" crates src
@@ -29,8 +29,8 @@ The search finds no reader. `Platform::current()` fills only `os` and says "the
 distribution fields are filled by the caller"
 (`crates/meowctl-starlark/src/platform.rs:28-44`). Its only callers,
 `crates/meowctl-cli/src/run.rs:273` and `crates/meowctl-module/src/sync.rs:359`,
-don't fill them. On a Linux machine, a component declaring `distros =
-["debian"]` then reproduces it: `meowctl apply` drops the component.
+don't fill them. On a Linux machine, a component declaring
+`distros = ["debian"]` then reproduces it: `meowctl apply` drops the component.
 
 ## What the system does
 

@@ -4,10 +4,10 @@
 
 # The mise tasks CLAUDE.md and mise.toml name, which are also what CI and the
 # pre-commit hooks run. Clippy type-checks as it lints, and the repository
-# keeps no separate type-check task for the host target, so typecheck is left
+# keeps no separate type-check task for the host target, so `check` is left
 # out.
 [verbs]
-fmt = "mise run fmt-check"
+format = "mise run fmt-check"
 lint = "mise run check"
 test = "mise run test"
 build = "mise run build"

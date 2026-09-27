@@ -16,14 +16,14 @@ give each rule its reason in the same sentence, and show the failing case. -->
 
 ## Reproduction
 
-Found by reading the code at revision `7e8cabe`, not by running it: the binary
-builds one `RealHttp::new()` for the session and hands it to every caller (from
-crates/meowctl-cli/src/run.rs:262, high), and `RealHttp::new` sets a 30-second
-global timeout on the `ureq` agent (from crates/meowctl-net/src/real.rs:33-45,
-high). To see it, call `ctx.download` on a file that takes more than 30 seconds
-to arrive, or run `meowctl self-update` over a link slower than about 2.5
-Mbit/s, since a release binary is 8 to 9 MB (from `gh release view v0.1.0`,
-high).
+Found by reading the code at `main` as #97 left it, not by running it: the
+binary builds one `RealHttp::new()` for the session and hands it to every caller
+(from crates/meowctl-cli/src/run.rs:262, high), and `RealHttp::new` sets a
+30-second global timeout on the `ureq` agent (from
+crates/meowctl-net/src/real.rs:33-45, high). To see it, call `ctx.download` on a
+file that takes more than 30 seconds to arrive, or run `meowctl self-update`
+over a link slower than about 2.5 Mbit/s, since a release binary is 8 to 9 MB
+(from `gh release view v0.1.0`, high).
 
 ## What the system does
 

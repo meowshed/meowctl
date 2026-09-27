@@ -23,10 +23,9 @@ project/adrs/ADR-0023-dry-run-predicts-failure.md and
 project/requirements/REQ-1611-dry-run-runs-read-only-commands.md, high). The
 changelog stated the same intent before onboarding corrected it to the shipped
 behaviour: "A dry run is a `FileSystem` and an `Executor` that cannot write, so
-it predicts exactly what a real run would do" (from
-`git show 7e8cabe:CHANGELOG.md`, high). REQ-3422 only requires the plan to be
-rendered, so the two hold together (from
-project/requirements/REQ-3422-dry-run-renders-plan.md, high).
+it predicts exactly what a real run would do" (from `CHANGELOG.md` as #97 left
+it, high). REQ-3422 only requires the plan to be rendered, so the two hold
+together (from project/requirements/REQ-3422-dry-run-renders-plan.md, high).
 
 `v0.1.0` split the commands: `apply`, `add`, `remove` and `update` printed the
 plan and stopped, while `upgrade` and `verify` ran every hook with a dry-run

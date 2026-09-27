@@ -17,17 +17,18 @@ exits with the configuration code.
 
 ## Reproduction
 
-The research ran the debug binary `target/debug/meowctl`, built from revision
-`7e8cabe`, on macOS in a scratch directory, with `HOME`, `XDG_CACHE_HOME` and
-`--config` pointed there. The research put this line in a component and ran
+The research ran the debug binary `target/debug/meowctl`, built from `main`
+as #97 left it, on macOS in a scratch directory, with `HOME`, `XDG_CACHE_HOME`
+and `--config` pointed there. The research put this line in a component and ran
 `meowctl apply`:
 
 ```python
 load("@nope//x.star", "Y")
 ```
 
-It printed `meowctl: a: error: loading @nope//x.star: the registry has no module
-named nope` and exited 3. A `load()` of
+It printed
+`meowctl: a: error: loading @nope//x.star: the registry has no module named nope`
+and exited 3. A `load()` of
 `github://meowshed/meowctl@no-such-ref-xyz//init.star` also exited 3 (see
 BUG-0013).
 
@@ -39,11 +40,12 @@ become `CliError::Configuration`, which exits 3, and `From<FsError>` becomes
 `ModuleLoader::load` returns `StarlarkError::Load`
 (`crates/meowctl-module/src/loader.rs:212-217`), which `declarations()` and
 `ConfigSources::source` turn into a configuration error
-(`crates/meowctl-cli/src/run/commands.rs:213-219`, `commands.rs:272-277`). `grep
--rn "\.severity()" crates/*/src` finds only `crates/meowctl-cli/src/run.rs:71`,
-so `StarlarkError::severity()` and `EngineError::severity()` are never called.
-Only `dep sync` and `dep upgrade` exit 4 for a network failure. A `fail()` in a
-hook exits 1 through `commands.rs:497`, where [REQ-2305] states 3.
+(`crates/meowctl-cli/src/run/commands.rs:213-219`, `commands.rs:272-277`).
+`grep -rn "\.severity()" crates/*/src` finds only
+`crates/meowctl-cli/src/run.rs:71`, so `StarlarkError::severity()` and
+`EngineError::severity()` are never called. Only `dep sync` and `dep upgrade`
+exit 4 for a network failure. A `fail()` in a hook exits 1 through
+`commands.rs:497`, where [REQ-2305] states 3.
 
 The test at `crates/meowctl-starlark/tests/evaluation.rs:268` asserts only the
 message, so it passes.

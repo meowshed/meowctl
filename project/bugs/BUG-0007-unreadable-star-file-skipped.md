@@ -16,8 +16,8 @@ the machine's local components when `local.star` can't be read.
 
 ## Reproduction
 
-The onboarding research inferred this from the code at revision `7e8cabe` and
-didn't run it. At revision `7e8cabe`, run `chmod 000 local.star` in a
+The onboarding research inferred this from the code at `main` as #97 left it and
+didn't run it. At `main` as #97 left it, run `chmod 000 local.star` in a
 configuration and run `meowctl apply --dry-run`.
 
 ## What the system does
