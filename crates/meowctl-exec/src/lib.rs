@@ -8,7 +8,7 @@
 //! `v0.1.0` that is `SuspendOutput func() (resume func())`, a callback threaded
 //! from the renderer into `ctx.Capabilities` so a Starlark builtin can reach
 //! back and stand the renderer down. Here it is two events, and nothing in this
-//! crate knows a renderer exists; see [R-EXEC-022].
+//! crate knows a renderer exists; see [REQ-1622, REQ-1702, REQ-1703, REQ-1704].
 //!
 //! [`meowctl_fs::FileSystem`]: https://docs.rs/meowctl-fs
 
@@ -32,7 +32,7 @@ pub use script::{ScriptedExecutor, ScriptedRun};
 ///
 /// Built from a program and an argument list, never from a shell string, so a
 /// component's arguments cannot be reinterpreted by a shell its author did not
-/// know was there; see [R-EXEC-002]. A component that wants shell syntax
+/// know was there; see [REQ-1602]. A component that wants shell syntax
 /// invokes a shell explicitly, which is visible in the command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Command {
@@ -49,7 +49,7 @@ pub struct Command {
     /// An interactive command takes the terminal for its duration, which the
     /// sink is told about through [`Event::TerminalRequested`]. A command that
     /// is not interactive has its output captured and rendered under its
-    /// component; see [R-EXEC-023].
+    /// component; see [REQ-1623].
     pub interactive: bool,
 }
 
@@ -102,7 +102,7 @@ impl Command {
 /// What a command produced.
 ///
 /// The three fields are what `ctx.run` returns in `v0.1.0`, under these names,
-/// and component code branches on `exit_code`; see [R-EXEC-003].
+/// and component code branches on `exit_code`; see [REQ-1603].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output {
     /// Everything the command wrote to standard output.
@@ -118,7 +118,7 @@ impl Output {
     ///
     /// A non-zero exit is a result, not an error: an interrogation hook asking
     /// `brew list` about a package it does not have gets a 1 and wants to read
-    /// it; see [R-EXEC-004].
+    /// it; see [REQ-1604].
     #[must_use]
     pub fn succeeded(&self) -> bool {
         self.exit_code == Some(0)
@@ -141,7 +141,7 @@ pub trait Executor: Debug {
     /// [`Event::TerminalRequested`] and [`Event::TerminalReleased`], and the
     /// release is emitted even when the command fails, because a renderer that
     /// never reclaims the terminal leaves the user without a cursor; see
-    /// [R-EXEC-031].
+    /// [REQ-1631].
     ///
     /// # Errors
     ///
@@ -152,7 +152,7 @@ pub trait Executor: Debug {
     /// Resolves a program name on `PATH`.
     ///
     /// Returns `Ok(None)` when nothing matches, because asking whether a tool
-    /// is installed is a question rather than an assertion; see [R-EXEC-032].
+    /// is installed is a question rather than an assertion; see [REQ-1632].
     ///
     /// # Errors
     ///
@@ -211,7 +211,7 @@ fn executable_in(dir: &Path, program: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-/// What Windows uses when `PATHEXT` is unset; see [R-EXEC-006].
+/// What Windows uses when `PATHEXT` is unset; see [REQ-1606].
 #[cfg_attr(
     not(windows),
     allow(dead_code, reason = "the rule is Windows's; the test for it is not")
@@ -223,7 +223,7 @@ pub(crate) const DEFAULT_PATHEXT: &str = ".COM;.EXE;.BAT;.CMD";
 /// The bare name first, because a file with no extension is still a file, and
 /// then each extension `PATHEXT` names in its own order: a user who put
 /// `.PS1` ahead of `.EXE` meant it. Pure, so the order is testable without a
-/// Windows machine or a mutated environment; see [R-EXEC-006].
+/// Windows machine or a mutated environment; see [REQ-1606].
 #[cfg_attr(
     not(windows),
     allow(dead_code, reason = "the rule is Windows's; the test for it is not")
@@ -244,7 +244,7 @@ pub(crate) fn candidates(program: &str, pathext: &str) -> Vec<String> {
 mod tests {
     use super::*;
 
-    /// [R-EXEC-006] the bare name first, then each extension in the order
+    /// [REQ-1606] the bare name first, then each extension in the order
     /// `PATHEXT` names it. A user who put `.PS1` ahead of `.EXE` meant it.
     #[test]
     fn the_extensions_are_tried_in_the_order_pathext_gives() {
@@ -254,7 +254,7 @@ mod tests {
         );
     }
 
-    /// [R-EXEC-006] an empty entry is skipped rather than producing the bare
+    /// [REQ-1606] an empty entry is skipped rather than producing the bare
     /// name twice. `PATHEXT` with a trailing `;` is ordinary.
     #[test]
     fn an_empty_entry_is_skipped() {
@@ -262,7 +262,7 @@ mod tests {
         assert_eq!(candidates("git", ""), ["git"]);
     }
 
-    /// [R-EXEC-006] and space around an entry is not part of the extension.
+    /// [REQ-1606] and space around an entry is not part of the extension.
     #[test]
     fn an_entry_is_trimmed() {
         assert_eq!(
@@ -271,7 +271,7 @@ mod tests {
         );
     }
 
-    /// [R-EXEC-006] the fallback is what Windows itself uses, so a machine
+    /// [REQ-1606] the fallback is what Windows itself uses, so a machine
     /// with no `PATHEXT` still finds `git.exe`.
     #[test]
     fn the_default_covers_what_windows_ships() {

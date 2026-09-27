@@ -2,7 +2,7 @@
 //!
 //! Every crate returns its own `thiserror` enum. What they share is this
 //! classification, because a script branches on the exit code and the five
-//! `v0.1.0` defines are the ones it already branches on; see [R-COMMON-030].
+//! `v0.1.0` defines are the ones it already branches on; see [REQ-1030].
 
 use std::fmt;
 
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 /// What kind of failure an error is, which decides the process exit code.
 ///
 /// Only `meowctl-cli` turns this into a code. A crate below it classifies its
-/// errors and names no number; see [R-COMMON-031].
+/// errors and names no number; see [REQ-1031, REQ-1107, REQ-1108].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
@@ -42,7 +42,7 @@ impl Severity {
 /// Where in a source file an error happened.
 ///
 /// Carried so `meowctl-cli` can render a diagnostic that points at the line.
-/// `v0.1.0` reports a file name and nothing more; see [R-COMMON-032].
+/// `v0.1.0` reports a file name and nothing more; see [REQ-1032].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Span {
     /// The file the error came from.
@@ -129,7 +129,7 @@ impl Error {
 mod tests {
     use super::*;
 
-    /// [R-COMMON-030] scripts branch on these, so the numbers are fixed by
+    /// [REQ-1030] scripts branch on these, so the numbers are fixed by
     /// what `v0.1.0` already returns.
     #[test]
     fn the_exit_codes_match_v0_1_0() {
@@ -139,7 +139,7 @@ mod tests {
         assert_eq!(Severity::Module.exit_code(), 4);
     }
 
-    /// [R-COMMON-030] a malformed configuration exits 3, which is how a
+    /// [REQ-1030] a malformed configuration exits 3, which is how a
     /// script tells a broken config from a broken network.
     #[test]
     fn a_parse_failure_classifies_as_a_config_error() {

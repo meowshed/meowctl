@@ -6,7 +6,7 @@
 //!
 //! The alternative was a solver, which finds a better answer nobody can
 //! predict. MVS finds an answer a user can work out by reading their
-//! manifests, which is what makes a lock file reviewable; see [R-MODULE-001].
+//! manifests, which is what makes a lock file reviewable; see [REQ-2401].
 
 use std::collections::{BTreeMap, HashSet, VecDeque};
 
@@ -75,7 +75,7 @@ pub enum MvsError {
 /// Returns the root first, then every other module sorted by name. `v0.1.0`
 /// builds the tail by iterating a Go map, so its order varies between runs and
 /// its doc comment tells callers not to depend on it. Sorting is a superset of
-/// that promise and makes the result reproducible; see [R-MODULE-004].
+/// that promise and makes the result reproducible; see [REQ-2404, REQ-2500].
 ///
 /// # Errors
 ///
@@ -91,7 +91,7 @@ pub fn build_list(
 
     let mut queue: VecDeque<Requirement> = VecDeque::from([root.clone()]);
     // A module is expanded once per version it is selected at. Without this a
-    // cycle in somebody else's manifest hangs the tool; see [R-MODULE-005].
+    // cycle in somebody else's manifest hangs the tool; see [REQ-2405].
     let mut visited: HashSet<Requirement> = HashSet::from([root.clone()]);
 
     while let Some(module) = queue.pop_front() {
@@ -196,7 +196,7 @@ mod tests {
             .collect()
     }
 
-    /// [R-MODULE-001] the maximum any path requires, which is the whole of the
+    /// [REQ-2401] the maximum any path requires, which is the whole of the
     /// algorithm.
     #[test]
     fn the_selected_version_is_the_maximum_any_path_requires() {
@@ -217,7 +217,7 @@ mod tests {
         );
     }
 
-    /// [R-MODULE-001] and the newer requirement wins regardless of which path
+    /// [REQ-2401] and the newer requirement wins regardless of which path
     /// reaches it first.
     #[test]
     fn the_order_paths_are_visited_in_does_not_change_the_answer() {
@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(versions(&one), versions(&two));
     }
 
-    /// [R-MODULE-004] `v0.1.0` builds the tail from a Go map, so its order
+    /// [REQ-2404, REQ-2500] `v0.1.0` builds the tail from a Go map, so its order
     /// varies between runs; sorting makes a lock file reproducible.
     #[test]
     fn the_result_is_root_first_then_sorted() {
@@ -257,7 +257,7 @@ mod tests {
         );
     }
 
-    /// [R-MODULE-005] a cycle in somebody else's manifest must not hang the
+    /// [REQ-2405] a cycle in somebody else's manifest must not hang the
     /// tool.
     #[test]
     fn a_cycle_terminates() {
@@ -304,7 +304,7 @@ mod tests {
         assert_eq!(versions(&list), [("root", "1.0.0"), ("a", "1.0.0")]);
     }
 
-    /// [R-MODULE-003] a typo silently dropping a dependency is the failure
+    /// [REQ-2403] a typo silently dropping a dependency is the failure
     /// this prevents, and the message names who declared it.
     #[test]
     fn an_unparseable_version_names_the_module_that_declared_it() {
@@ -317,7 +317,7 @@ mod tests {
         assert!(message.contains("latest"), "{message}");
     }
 
-    /// [R-MODULE-060] a manifest that cannot be read stops resolution rather
+    /// [REQ-2460, REQ-2514] a manifest that cannot be read stops resolution rather
     /// than producing a list missing whatever it declared.
     #[test]
     fn an_unreadable_manifest_stops_resolution() {

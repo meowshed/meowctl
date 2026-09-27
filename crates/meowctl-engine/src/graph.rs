@@ -3,7 +3,7 @@
 //! A topological sort of the `after` edges, with declaration order as the
 //! tie-break between components that have no edge between them. Two runs of
 //! the same configuration produce the same order, which is what makes a plan
-//! worth reading; see [R-ENGINE-013].
+//! worth reading; see [REQ-3013].
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -24,13 +24,13 @@ impl Graph {
     /// # Errors
     ///
     /// [`EngineError::Cycle`], naming the components that could not be
-    /// ordered; see [R-ENGINE-015].
+    /// ordered; see [REQ-3015, REQ-3105].
     pub fn build(discovered: &Discovered) -> EngineResult<Graph> {
         let components = &discovered.components;
 
         // Declaration order is the tie-break, so it is the priority: a
         // component declared earlier goes first among those that are ready at
-        // the same time; see [R-ENGINE-013].
+        // the same time; see [REQ-3013].
         let priority: BTreeMap<&str, usize> = components
             .iter()
             .enumerate()
@@ -118,7 +118,7 @@ impl Graph {
     /// The same graph restricted to these components and what they need.
     ///
     /// A name matching nothing is an error rather than an empty run, because
-    /// an empty run reports success; see [R-ENGINE-016].
+    /// an empty run reports success; see [REQ-3016, REQ-3106].
     ///
     /// # Errors
     ///
@@ -143,7 +143,7 @@ impl Graph {
         }
 
         // Naming a component brings in what it depends on, or the run fails
-        // on a tool that was never installed; see [R-ENGINE-016].
+        // on a tool that was never installed; see [REQ-3016, REQ-3106].
         while let Some(name) = pending.pop_front() {
             if !wanted.insert(name) {
                 continue;

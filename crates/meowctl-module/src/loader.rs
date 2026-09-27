@@ -4,7 +4,7 @@
 //! cache, and a GitHub repository. `internal/starlark/loader/composite.go` is
 //! the same dispatch; what is different is that a registry file is checked
 //! against what was extracted before it is handed back, so nothing evaluates
-//! a file that changed in the cache; see [R-STAR-022].
+//! a file that changed in the cache; see [REQ-2222].
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -39,14 +39,14 @@ pub struct ModuleLoader<'a> {
     roots: Roots,
     index_url: String,
     endpoints: github::GitHubEndpoints,
-    /// Module name to the local directory serving it; see [R-MODULE-020].
+    /// Module name to the local directory serving it; see [REQ-2420, REQ-2504].
     replacements: BTreeMap<String, PathBuf>,
     /// Module name to the key it is cached under: a version, or a commit.
     ///
     /// Filled from the lock before evaluation starts. A module absent from it
     /// is a module nothing resolved, which is a failure here rather than a
     /// silent fetch of whatever the registry published today; see
-    /// [R-MODULE-050].
+    /// [REQ-2450].
     resolved: BTreeMap<String, String>,
 }
 
@@ -146,7 +146,7 @@ impl<'a> ModuleLoader<'a> {
         if let Some(local) = self.replacements.get(module) {
             // A replacement is a checkout somebody is editing. Hashing it
             // would mean re-locking on every save, so it is served as it is;
-            // see [R-MODULE-020].
+            // see [REQ-2420, REQ-2504].
             if !self.fs.exists(local)? {
                 return Err(ModuleError::NoSuchReplacement {
                     module: module.to_owned(),

@@ -29,7 +29,7 @@ pub enum ModuleError {
 
     /// The registry index could not be fetched.
     ///
-    /// [R-MODULE-060] requires saying which failure it was, which is why the
+    /// [REQ-2460, REQ-2514] requires saying which failure it was, which is why the
     /// network error is carried rather than flattened to a string.
     #[error("the registry index at {url} could not be fetched: {source}")]
     IndexUnavailable {
@@ -49,14 +49,14 @@ pub enum ModuleError {
         reason: String,
     },
 
-    /// The index does not list this module; see [R-MODULE-061].
+    /// The index does not list this module; see [REQ-2461].
     #[error("the registry has no module named {module}")]
     NoSuchModule {
         /// The name that was looked up.
         module: String,
     },
 
-    /// The index lists the module and not this version; see [R-MODULE-061].
+    /// The index lists the module and not this version; see [REQ-2461].
     #[error("the registry has {module}, and no version {version} of it")]
     NoSuchVersion {
         /// The module.
@@ -88,7 +88,7 @@ pub enum ModuleError {
 
     /// What was fetched does not hash to what was expected.
     ///
-    /// [R-MODULE-031] wants all three of these in the message, because a
+    /// [REQ-2431, REQ-2507, REQ-2508] wants all three of these in the message, because a
     /// mismatch is either corruption or tampering and the reader has to be
     /// able to tell which hash they are looking at.
     #[error("{what} for {module} hashes to {actual}, and {expected} was expected")]
@@ -112,7 +112,7 @@ pub enum ModuleError {
         reason: String,
     },
 
-    /// A `replace` points at a directory that is not there; see [R-MODULE-064].
+    /// A `replace` points at a directory that is not there; see [REQ-2464].
     #[error("{module} is replaced by {path}, and there is nothing there")]
     NoSuchReplacement {
         /// The module.

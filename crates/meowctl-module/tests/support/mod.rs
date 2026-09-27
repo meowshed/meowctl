@@ -90,7 +90,7 @@ pub fn github_tarball(root: &str, entries: &[Entry]) -> Vec<u8> {
 /// is not what a hostile archive does, so the name field of a valid header is
 /// overwritten afterwards and its checksum recomputed. Everything meowctl
 /// fetches is remote input, and this is the archive that check exists for; see
-/// [R-MODULE-033].
+/// [REQ-2433].
 ///
 /// # Panics
 ///
@@ -101,7 +101,7 @@ pub fn github_tarball(root: &str, entries: &[Entry]) -> Vec<u8> {
 ///
 /// The names this is used with are the ones a hostile archive carries, and
 /// the writer refuses them for the same reason the reader must; see
-/// [R-MODULE-033].
+/// [REQ-2433].
 pub fn tarball_named(name: &str) -> Vec<u8> {
     let mut builder = tar::Builder::new(Vec::new());
     let payload = b"pwned";

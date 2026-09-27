@@ -71,7 +71,7 @@ pub(super) fn run(cli: &Cli, session: &mut Session<'_>) -> CliResult<()> {
         // `verify` forces, because a check that skipped what it checked last
         // time is not a check. It never rolls back whatever `--no-rollback`
         // says: its one phase is read-only, so there is nothing journalled to
-        // undo; see [R-COMMON-012].
+        // undo; see [REQ-1012].
         Command::Verify { components, .. } => {
             apply(session, PhaseSet::Verify, components, true, false)
         }
@@ -122,7 +122,7 @@ pub(super) fn run(cli: &Cli, session: &mut Session<'_>) -> CliResult<()> {
         } => super::writing::update(session, *yes, !*no_rollback),
 
         // The one command that changes the tool rather than the machine, so
-        // it runs alone; see [R-CLI-075].
+        // it runs alone; see [REQ-3475].
         Command::SelfUpdate => crate::update::self_update(session),
     }
 }
@@ -130,7 +130,7 @@ pub(super) fn run(cli: &Cli, session: &mut Session<'_>) -> CliResult<()> {
 impl Session<'_> {
     /// Says something through the sink.
     ///
-    /// The only route to standard output there is; see [R-CLI-020].
+    /// The only route to standard output there is; see [REQ-3420, REQ-3510].
     pub(crate) fn say(&mut self, text: &str) {
         self.sink.handle(&Event::Message {
             level: Level::Info,
@@ -224,7 +224,7 @@ impl Sources for ConfigSources<'_> {
         }
 
         // A bare name is a file in the configuration's own tree, in either of
-        // the two layouts in use; see [R-ENGINE-017].
+        // the two layouts in use; see [REQ-3017, REQ-3107].
         let name = id.logical_name();
         let candidates = [
             format!("components/{name}.star"),
@@ -294,7 +294,7 @@ fn declarations(session: &Session<'_>, loader: &dyn Loader) -> CliResult<Vec<Dec
 /// The first pass, shared by every command that needs a graph. It evaluates
 /// each component file once and registers the package managers, so a hook in
 /// the first component can declare a package the last one handles; see
-/// [R-ENGINE-020].
+/// [REQ-3020].
 fn resolve(session: &Session<'_>, loader: &ModuleLoader<'_>) -> CliResult<Discovered> {
     let declared = declarations(session, loader)?;
     let components = session.layout.components();
@@ -323,7 +323,7 @@ fn resolve(session: &Session<'_>, loader: &ModuleLoader<'_>) -> CliResult<Discov
 ///
 /// Which file a component was declared in decides which of the two package
 /// locks its packages land in, and nothing else needs to know; see
-/// [R-CONFIG-025].
+/// [REQ-1225, REQ-1309].
 fn local_declarations(session: &Session<'_>, loader: &dyn Loader) -> CliResult<BTreeSet<String>> {
     let Ok(bytes) = session.fs.read(&session.layout.local_entry()) else {
         return Ok(BTreeSet::new());
@@ -353,7 +353,7 @@ fn local_declarations(session: &Session<'_>, loader: &dyn Loader) -> CliResult<B
 /// nothing new is left alone, which is what `appendPkgsLock` does. `v0.1.0`
 /// records the constraint as both the requested and the installed version,
 /// because nothing interrogates the manager for what it actually put down;
-/// see [R-CONFIG-025].
+/// see [REQ-1225, REQ-1309].
 fn record_packages(
     session: &mut Session<'_>,
     packages: &BTreeMap<String, Vec<meowctl_starlark::PackageDecl>>,
@@ -410,7 +410,7 @@ pub(super) fn apply(
     session.require_configured()?;
 
     // A journal left behind means the last run stopped partway, and that is
-    // worth saying before anything else happens; see [R-ENGINE-042].
+    // worth saying before anything else happens; see [REQ-3042].
     if let Some(records) = interrupted_run(&session.layout.journal()) {
         session.say(&format!(
             "a previous run stopped partway and left {records} operation(s) to undo"
@@ -424,7 +424,7 @@ pub(super) fn apply(
     let graph = graph.restricted_to(filter)?;
 
     // A module whose fingerprint moved invalidates every component that came
-    // from it, transitive ones included; see [R-ENGINE-043].
+    // from it, transitive ones included; see [REQ-3043, REQ-3116].
     let installed = InstalledLock::read(session.fs.as_ref(), &session.layout.installed())?;
     let ids: Vec<ComponentId> = graph.components().iter().map(|c| c.id.clone()).collect();
     let stale = stale_components(&ids, &installed.fingerprints(), &fingerprints(&ids, &lock));
@@ -445,7 +445,7 @@ pub(super) fn apply(
     );
 
     // A dry run renders the plan and executes nothing, which is what makes
-    // the two agree about what work there is; see [R-CLI-022].
+    // the two agree about what work there is; see [REQ-3422, REQ-3512].
     if session.dry_run {
         session.sink.handle(&Event::PlanComputed {
             phase_set: plan.phase_set,
@@ -498,7 +498,7 @@ pub(super) fn apply(
     }
     // Not a success: the command did not do what was asked, and a script that
     // read an interrupted apply as a finished one would go on to the next
-    // step; see [R-CLI-054].
+    // step; see [REQ-3454, REQ-3519].
     if report.interrupted {
         return Err(CliError::General(
             "stopped: the run was interrupted, and what it had done is recorded".to_owned(),
@@ -523,10 +523,10 @@ fn current_shell(environment: &std::collections::BTreeMap<String, String>) -> Op
 /// The command a shell runs on every spawn. Nothing it does reaches the exit
 /// code: a shell that cannot start is worse than a shell that starts without
 /// its integration, so a failure is recorded in `.hook-error` and the command
-/// still succeeds; see [R-CLI-062].
+/// still succeeds; see [REQ-3462, REQ-3522].
 fn hook(session: &mut Session<'_>, phase: &str) -> CliResult<()> {
     // Not every phase name, only the two a shell spawn runs. The rest belong
-    // to a phase set and are reached through `apply`; see [R-CLI-060].
+    // to a phase set and are reached through `apply`; see [REQ-3460, REQ-3520].
     let phase: Phase = match phase.parse() {
         Ok(phase @ (Phase::Shell | Phase::Login)) => phase,
         _ => {
@@ -574,7 +574,7 @@ fn run_hook(session: &mut Session<'_>, phase: Phase) -> Result<(), String> {
 
     // No journal: a `shell` hook that writes is misusing the phase, and a
     // rollback on a shell spawn would undo the previous one; see
-    // [R-CLI-065].
+    // [REQ-3465, REQ-3526].
     let effects = meowctl_ctx::Effects {
         fs: Arc::clone(&session.fs),
         exec: Arc::clone(&session.exec),
@@ -612,7 +612,7 @@ fn run_hook(session: &mut Session<'_>, phase: Phase) -> Result<(), String> {
 ///
 /// A directory with no configuration gets an empty list rather than a
 /// refusal: "nothing is declared" is an answer to the question; see
-/// [R-CLI-050].
+/// [REQ-3450, REQ-3515, REQ-3516].
 fn dep_list(session: &mut Session<'_>) -> CliResult<()> {
     let lock = session.lock()?;
     for (name, entry) in &lock.modules {
@@ -652,7 +652,7 @@ pub(super) fn parse_components(
 /// Reads a manifest by evaluating it.
 ///
 /// One evaluator reads every manifest meowctl encounters, so `deps.mod` and a
-/// module's `MODULE.meow` cannot drift apart; see [R-STAR-006].
+/// module's `MODULE.meow` cannot drift apart; see [REQ-2206, REQ-2303].
 pub(super) fn parse_modfile(
     session: &Session<'_>,
     name: &str,
@@ -697,7 +697,7 @@ pub(super) fn parse_modfile(
             .collect(),
     };
     // A manifest naming both of an entry's two fields leaves the resolver
-    // choosing between two answers; see [R-CONFIG-012].
+    // choosing between two answers; see [REQ-1212, REQ-1303].
     modfile.check(std::path::Path::new(name))?;
     Ok(modfile)
 }
@@ -706,14 +706,14 @@ pub(super) fn parse_modfile(
 ///
 /// Each manifest gets its own lock, and a module in both resolves in each:
 /// a machine-local override must not land in the committed lock; see
-/// [R-MODULE-052].
+/// [REQ-2452, REQ-2513].
 pub(super) fn dep_sync(session: &mut Session<'_>, upgrade: &Upgrade) -> CliResult<()> {
     session.require_configured()?;
 
     let shared_replaces = manifest_of(session, &session.layout.modfile())?.replaces;
     let local_replaces = manifest_of(session, &session.layout.local_modfile())?.replaces;
     // A machine-local override wins wherever both name a module, which is
-    // what the local file is for; see [R-MODULE-022].
+    // what the local file is for; see [REQ-2422].
     let replaces = meowctl_module::overlay_replaces(&shared_replaces, &local_replaces);
 
     let syncer = meowctl_module::Syncer::new(
@@ -771,7 +771,7 @@ fn manifest_of(
 /// The time a lock records as its own.
 ///
 /// Read once here rather than inside the resolver, because a component that
-/// asks the clock cannot be tested; see [R-CONFIG-022].
+/// asks the clock cannot be tested; see [REQ-1222].
 fn now() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -816,11 +816,11 @@ fn rfc3339(seconds: u64) -> String {
 /// Reports what the last run did.
 ///
 /// A directory with no configuration gets "no runs recorded" rather than a
-/// refusal, for the reason [R-CLI-050] gives.
+/// refusal, for the reason [REQ-3450, REQ-3515, REQ-3516] gives.
 fn status(session: &mut Session<'_>, all: bool) -> CliResult<()> {
     // A shell whose integration is missing is what the user came to ask
     // about, so it is said before the run metadata rather than after it; see
-    // [R-CLI-064].
+    // [REQ-3464, REQ-3523, REQ-3524, REQ-3525].
     if HookError::present(session.fs.as_ref(), &session.layout.hook_error()) {
         session.warn("the last runtime hook failed -- run 'meowctl doctor' for the reason");
     }
@@ -896,7 +896,7 @@ fn doctor(session: &mut Session<'_>) -> CliResult<()> {
     session.say(&format!("platform: {}", session.platform.os));
 
     // `doctor` is where the reason lives, because `status` is piped and a
-    // traceback would bury what it reports; see [R-CLI-064].
+    // traceback would bury what it reports; see [REQ-3464, REQ-3523, REQ-3524, REQ-3525].
     if let Some(flag) = HookError::read(session.fs.as_ref(), &session.layout.hook_error()) {
         session.warn(&format!(
             "runtime hook failed at {}: {}",
@@ -986,7 +986,7 @@ fn check(session: &mut Session<'_>, dir: &std::path::Path) -> CliResult<()> {
 /// Writes to standard output directly.
 ///
 /// The one command whose standard output another program reads, so the text
-/// is written verbatim rather than rendered; see [R-CLI-021].
+/// is written verbatim rather than rendered; see [REQ-3421, REQ-3511].
 fn print_to_stdout(text: &str) {
     use std::io::Write as _;
     let mut out = std::io::stdout();
@@ -998,7 +998,7 @@ fn print_to_stdout(text: &str) {
 mod tests {
     use super::*;
 
-    /// [R-CONFIG-022] the timestamp a lock and a sentinel record.
+    /// [REQ-1222] the timestamp a lock and a sentinel record.
     ///
     /// Twenty lines of arithmetic written out rather than a date dependency,
     /// which means the arithmetic is ours to hold. Every case is a known
@@ -1042,7 +1042,7 @@ mod tests {
         }
     }
 
-    /// [R-CONFIG-022] every month has the length it has, checked by walking a
+    /// [REQ-1222] every month has the length it has, checked by walking a
     /// whole non-leap year one day at a time.
     ///
     /// A single wrong length shifts every date after it, and a test naming
@@ -1067,7 +1067,7 @@ mod tests {
         assert_eq!(rfc3339(seconds), "1972-01-01T00:00:00Z");
     }
 
-    /// [R-CONFIG-022] and the clock that reads it produces one of those, so a
+    /// [REQ-1222] and the clock that reads it produces one of those, so a
     /// lock written now round-trips as a TOML datetime.
     #[test]
     fn the_clock_produces_a_timestamp_of_that_shape() {

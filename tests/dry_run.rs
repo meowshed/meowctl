@@ -1,6 +1,6 @@
 //! What a dry run leaves behind, which is nothing.
 //!
-//! Driven through the binary because what [R-OPS-026] constrains is the whole
+//! Driven through the binary because what [REQ-2026, REQ-2119] constrains is the whole
 //! run: the journal is never opened, so there is nothing inside `meowctl-ops`
 //! to ask. A journal of things that did not happen would replay into damage.
 
@@ -26,7 +26,7 @@ fn sandbox() -> PathBuf {
     root
 }
 
-/// [R-OPS-026] no journal, and no journal file.
+/// [REQ-2026, REQ-2119] no journal, and no journal file.
 #[test]
 fn a_dry_run_opens_no_journal() {
     let root = sandbox();
@@ -48,7 +48,7 @@ fn a_dry_run_opens_no_journal() {
     );
 }
 
-/// [R-CLI-010], [R-CLI-011] and [R-FS-012]: the effects are constructed once
+/// [REQ-3410], [REQ-3411, REQ-3505, REQ-3506] and [REQ-1412]: the effects are constructed once
 /// from the flags, and a dry run records nothing, so the next real run does
 /// the work rather than skipping it as already done.
 ///

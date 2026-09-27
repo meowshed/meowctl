@@ -22,16 +22,16 @@ use crate::{CtxError, CtxResult};
 ///
 /// The restriction is the value the hook receives rather than a check inside
 /// each method, which is what makes a hook that tries to write in a read-only
-/// phase get attribute-not-found; see [R-CTX-030] and [R-CTX-032].
+/// phase get attribute-not-found; see [REQ-2830, REQ-2911] and [REQ-2832].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Surface {
     /// Everything: the twenty-four methods and the six properties.
     Full,
     /// Everything that does not mutate, for a read-only phase; see
-    /// [R-CTX-030].
+    /// [REQ-2830, REQ-2911].
     ReadOnly,
     /// The eight attributes `ShellCtxAllowList` names, for a runtime hook
-    /// phase; see [R-CTX-031].
+    /// phase; see [REQ-2831].
     Shell,
 }
 
@@ -56,8 +56,8 @@ pub struct Capabilities {
     pub home: PathBuf,
     /// Whether this run writes nothing.
     ///
-    /// A property a hook can read, per [R-CTX-001]. No method branches on it;
-    /// see [R-CTX-014].
+    /// A property a hook can read, per [REQ-2801]. No method branches on it;
+    /// see [REQ-2814].
     pub dry_run: bool,
     /// The component's own source directory.
     pub component_dir: PathBuf,
@@ -87,9 +87,9 @@ pub struct Effects {
     pub exec: Arc<dyn Executor + Send + Sync>,
     /// Where `download` fetches from.
     pub http: Arc<dyn Http + Send + Sync>,
-    /// Where `prompt` asks; see [R-CTX-026].
+    /// Where `prompt` asks; see [REQ-2826].
     pub interaction: Arc<Mutex<dyn Interaction + Send>>,
-    /// The write-ahead journal, absent during a dry run; see [R-OPS-026].
+    /// The write-ahead journal, absent during a dry run; see [REQ-2026, REQ-2119].
     pub journal: Option<Arc<Mutex<Journal>>>,
     /// Where events go on their way to a sink.
     pub events: Arc<Mutex<dyn FnMut(Event) + Send>>,
@@ -132,13 +132,13 @@ impl Core {
     ///
     /// In that order, and never the other way round: a crash between the two
     /// leaves a journal that replays a no-op, which is safe, where the reverse
-    /// leaves an effect with no undo; see [R-OPS-021].
+    /// leaves an effect with no undo; see [REQ-2021].
     ///
     /// # Errors
     ///
     /// [`CtxError::Effect`] when the journal or the operation fails. A failed
     /// journal fails the operation, because an effect with no record of how to
-    /// undo it is the state the journal exists to prevent; see [R-OPS-032].
+    /// undo it is the state the journal exists to prevent; see [REQ-2032].
     pub fn apply(&self, method: &'static str, op: &Op) -> CtxResult<()> {
         let failed = |reason: String| CtxError::Effect { method, reason };
         let fs = self.effects.fs.as_ref();

@@ -13,14 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   evaluator is `starlark-rust`, effects sit behind `FileSystem`, `Executor`
   and `Http` traits constructed once at the binary, every reversible effect is
   an `Op` with an inverse, and the engine emits an event stream that four
-  sinks render. `docs/design/0.2.0-rust-rewrite.md` says why each of those is
-  a rewrite rather than a refactor.
+  sinks render. The decision records under `project/adrs/`, starting with
+  ADR-0001, say why each of those is a rewrite rather than a refactor.
 - Terminal output redesigned. A live region renders what is running, the
   finished work is committed above it, and `--format json` emits the same
   event stream on every command rather than only on `doctor`.
-- `--dry-run` no longer claims work the runner skips. A dry run is a
-  `FileSystem` and an `Executor` that cannot write, so it predicts exactly
-  what a real run would do.
+- `--dry-run` no longer claims work the runner skips. `apply --dry-run`
+  prints the plan a real run would execute and touches nothing; it runs no
+  hook, so a hook that would fail still shows as planned.
 - An interrupt stops the run rather than killing the process. The first one
   asks it to stop before the next component and leaves the journal for the
   next run to find; the second stops the process at once.
@@ -31,12 +31,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   refused when it is read, not only when `meowctl dep add` writes it.
 - A lock file naming an integrity hash that is not a W3C SRI one fails to
   parse, rather than failing later as a hash mismatch.
+- Two components that export the same `pm_name` stop discovery with an error
+  naming both, where `v0.1.0` kept whichever evaluated last.
+- A filter that matches no component is an error, a read-only phase gets a
+  `ctx` that can't write, and a relative path where an absolute one is
+  expected is refused.
 
 The Starlark API, the command surface, and every config and lock format are
-unchanged. A configuration that `v0.1.0` applied applies here.
+unchanged. A configuration that `v0.1.0` applied applies here unless it hits
+one of the refusals above.
 
 ### Added
 
+- `$MEOWCTL_CONFIG` names the configuration directory, ahead of
+  `$XDG_CONFIG_HOME/meowctl`, so the flagless `meowctl hook shell` in a shell's
+  startup file can point at a non-default configuration.
 - `theme.toml` in the configuration directory: a table per role over the
   built-in palette. A role it leaves out keeps its default; a malformed file
   warns and falls back rather than stopping the command.

@@ -3,8 +3,8 @@
 //! One pass over every component file, before any hook runs. It collects the
 //! declarations, follows `after` to whatever they reach, reads the guards, and
 //! registers the package-manager handlers, so a hook in the first component
-//! can declare a package the last one handles; see [R-ENGINE-020] and
-//! [R-PM-003].
+//! can declare a package the last one handles; see [REQ-3020] and
+//! [REQ-2603].
 
 use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
@@ -32,10 +32,10 @@ pub struct Component {
     /// Components it must run after, as written.
     pub after: Vec<String>,
     /// The file's source, kept so the second pass calls a hook without
-    /// fetching it again; see [R-ENGINE-021].
+    /// fetching it again; see [REQ-3021].
     pub source: String,
     /// The directory the file came from, which is what `ctx.component_dir`
-    /// reports and what `render_file` reads against; see [R-CTX-003].
+    /// reports and what `render_file` reads against; see [REQ-2803].
     pub directory: PathBuf,
     /// What the first pass found in it.
     pub evaluated: Evaluated,
@@ -43,12 +43,12 @@ pub struct Component {
     /// through an `after` list.
     ///
     /// A `meowctl remove` of one tool must not run the uninstall hook of the
-    /// package manager it was reached through; see [R-ENGINE-011].
+    /// package manager it was reached through; see [REQ-3011, REQ-3103].
     pub declared: bool,
 }
 
 impl Component {
-    /// The name an `after` list refers to it by; see [R-COMMON-006].
+    /// The name an `after` list refers to it by; see [REQ-1006].
     #[must_use]
     pub fn logical_name(&self) -> &str {
         self.id.logical_name()
@@ -59,7 +59,7 @@ impl Component {
     /// The guards are top-level globals in the component's own file. A
     /// component declaring neither runs everywhere, and a value that is not a
     /// list of strings is ignored rather than refused, which is what
-    /// `platformMatches` and `distroMatches` do; see [R-ENGINE-012].
+    /// `platformMatches` and `distroMatches` do; see [REQ-3012].
     #[must_use]
     pub fn runs_on(&self, platform: &Platform) -> bool {
         let platforms = self.evaluated.lists.get(PLATFORMS);
@@ -67,7 +67,7 @@ impl Component {
 
         let platform_ok = platforms.is_none_or(|names| names.iter().any(|n| n == &platform.os));
         // By equality against either the distribution or its `ID_LIKE`, and
-        // not by the substring match `select()` uses; see [R-ENGINE-012].
+        // not by the substring match `select()` uses; see [REQ-3012].
         let distro_ok = distros.is_none_or(|names| {
             names
                 .iter()
@@ -99,7 +99,7 @@ pub struct Discovered {
     /// Which component a guard dropped, and which guard.
     ///
     /// Kept so the plan can say why rather than leaving a component missing;
-    /// see [R-ENGINE-052].
+    /// see [REQ-3052].
     pub excluded: Vec<(ComponentId, String)>,
     /// The package-manager handlers the components registered.
     pub registry: Registry,
@@ -111,7 +111,7 @@ pub struct Discovered {
 /// with a map and this crate does not depend on the one that fetches.
 pub trait Sources {
     /// The `component()` declarations, in declaration order, `init.star`
-    /// first and then `local.star`; see [R-ENGINE-010].
+    /// first and then `local.star`; see [REQ-3010].
     ///
     /// # Errors
     ///
@@ -167,7 +167,7 @@ impl Declaration {
 /// A module's components refer to each other by name: `@dotmeow`'s root
 /// component says `after = ["fish-config"]`, meaning the one beside it.
 /// Resolving that against the configuration looks for a file the user never
-/// wrote. `resolveBareDep` is the same rule; see [R-ENGINE-018].
+/// wrote. `resolveBareDep` is the same rule; see [REQ-3018].
 #[must_use]
 pub fn resolve_bare(declarer: &ComponentId, name: &str) -> String {
     if name.starts_with('@') || name.contains("//") {
@@ -195,7 +195,7 @@ fn module_prefix(url: &str) -> Option<String> {
 /// [`EngineError::UnusableName`] when a declaration names something that is
 /// not a component, [`EngineError::Configuration`] when a component file does
 /// not evaluate, and [`EngineError::PackageManager`] when two components claim
-/// one manager; see [R-PM-004].
+/// one manager; see [REQ-2604].
 pub fn discover(
     sources: &dyn Sources,
     loader: &dyn Loader,
@@ -207,7 +207,7 @@ pub fn discover(
     let mut excluded = Vec::new();
     let mut registry = Registry::new();
     // Keyed by logical name, because a component declared in both
-    // `init.star` and `local.star` counts once; see [R-ENGINE-010].
+    // `init.star` and `local.star` counts once; see [REQ-3010].
     let mut seen: BTreeMap<String, ()> = BTreeMap::new();
 
     let mut pending: VecDeque<(Declaration, bool)> = sources
@@ -237,13 +237,13 @@ pub fn discover(
             })?;
 
         // Registration happens in this pass, so a hook in the first component
-        // can declare a package the last one handles; see [R-PM-003].
+        // can declare a package the last one handles; see [REQ-2603].
         if let Registration::Handler(handler) = scan(id.logical_name(), &evaluated) {
             registry.register(handler)?;
         }
 
         // Both halves: what the `component()` call said, and what the file
-        // says about itself; see [R-ENGINE-014].
+        // says about itself; see [REQ-3014, REQ-3104].
         let mut after = declaration.after;
         if let Some(own) = evaluated.lists.get(AFTER) {
             for name in own {
@@ -263,9 +263,9 @@ pub fn discover(
         };
 
         // A name the configuration does not declare is pulled in rather than
-        // ignored; see [R-ENGINE-014]. A bare name inside a module's
+        // ignored; see [REQ-3014, REQ-3104]. A bare name inside a module's
         // component means the one beside it, not one in the configuration;
-        // see [R-ENGINE-018].
+        // see [REQ-3018].
         for name in &after {
             let resolved = resolve_bare(&id, name);
             let logical = ComponentId::logical_of(&resolved);

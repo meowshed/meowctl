@@ -1,6 +1,6 @@
 //! The theme file, read by the binary before it draws anything.
 //!
-//! Driven through the binary because what [R-TUI-056] promises is about when
+//! Driven through the binary because what [REQ-3256, REQ-3316, REQ-3317, REQ-3318] promises is about when
 //! the file is read and what happens when it cannot be: the sink is chosen
 //! once, so a fallback has to happen before the first line.
 
@@ -38,7 +38,7 @@ fn said(output: &Output) -> String {
     )
 }
 
-/// [R-TUI-056] no file is the ordinary case and says nothing. A warning on
+/// [REQ-3256, REQ-3316, REQ-3317, REQ-3318] no file is the ordinary case and says nothing. A warning on
 /// every command for a file the user never wrote is noise.
 #[test]
 fn no_theme_file_is_silent() {
@@ -49,7 +49,7 @@ fn no_theme_file_is_silent() {
     assert!(!said(&output).contains("theme"), "{}", said(&output));
 }
 
-/// [R-TUI-050] a theme the user wrote reaches what is drawn.
+/// [REQ-3250, REQ-3313] a theme the user wrote reaches what is drawn.
 #[test]
 fn a_theme_file_changes_what_is_drawn() {
     let root = sandbox("applied");
@@ -68,7 +68,7 @@ fn a_theme_file_changes_what_is_drawn() {
     );
 }
 
-/// [R-TUI-052] a malformed theme warns and falls back. Nobody's apply stops
+/// [REQ-3252] a malformed theme warns and falls back. Nobody's apply stops
 /// because their colours are wrong.
 #[test]
 fn a_malformed_theme_warns_and_the_command_still_runs() {
@@ -86,7 +86,7 @@ fn a_malformed_theme_warns_and_the_command_still_runs() {
     assert!(text.contains("default"), "{text}");
 }
 
-/// [R-TUI-052] and a misspelled role is the same kind of mistake, because a
+/// [REQ-3252] and a misspelled role is the same kind of mistake, because a
 /// table that silently does nothing is worse than one that complains.
 #[test]
 fn a_misspelled_role_warns_rather_than_being_ignored() {

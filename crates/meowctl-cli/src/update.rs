@@ -1,7 +1,7 @@
 //! Replacing the running binary with the one a release published.
 //!
 //! The one command that changes the tool rather than the machine, which is
-//! why it runs alone and why nothing else calls it; see [R-CLI-075].
+//! why it runs alone and why nothing else calls it; see [REQ-3475].
 //!
 //! The policy -- which asset, which hash, whether these bytes are it -- is in
 //! `meowctl-release` and takes no effects. What is here is the fetching and
@@ -22,7 +22,7 @@ const LATEST: &str = "https://api.github.com/repos/meowshed/meowctl/releases/lat
 ///
 /// For a fork that publishes its own releases, and for the tests, which
 /// cannot ask GitHub for a release that does not exist yet; see
-/// [R-CLI-076].
+/// [REQ-3476].
 const RELEASES: &str = "MEOWCTL_RELEASES";
 
 /// Updates the running binary, or says why it did not.
@@ -45,7 +45,7 @@ pub(super) fn self_update(session: &mut Session<'_>) -> CliResult<()> {
     let release = Release::parse(&document).map_err(|e| CliError::Module(e.to_string()))?;
 
     // Nothing to do is the ordinary outcome, and saying so beats a command
-    // that appears to have done something; see [R-CLI-072].
+    // that appears to have done something; see [REQ-3472, REQ-3530, REQ-3531].
     if release.is(crate::version::NUMBER) {
         session.say(&format!("already at {}", release.tag));
         return Ok(());
@@ -91,7 +91,7 @@ pub(super) fn self_update(session: &mut Session<'_>) -> CliResult<()> {
 ///
 /// Beside it, made executable, then renamed over: a partial write over the
 /// binary leaves a machine with no working `meowctl` and no way to fetch one;
-/// see [R-CLI-074].
+/// see [REQ-3474].
 fn replace(session: &Session<'_>, running: &Path, bytes: &[u8]) -> CliResult<()> {
     put_in_place(session.fs.as_ref(), running, bytes)
 }
@@ -99,7 +99,7 @@ fn replace(session: &Session<'_>, running: &Path, bytes: &[u8]) -> CliResult<()>
 /// The same, against a filesystem of the caller's choosing.
 ///
 /// Separate so the three steps can be checked without a real binary to
-/// overwrite; see [R-CLI-074].
+/// overwrite; see [REQ-3474].
 fn put_in_place(fs: &dyn meowctl_fs::FileSystem, running: &Path, bytes: &[u8]) -> CliResult<()> {
     let staged = staged_beside(running);
 
@@ -135,7 +135,7 @@ mod tests {
 
     use super::*;
 
-    /// [R-CLI-074] written beside, made executable, then renamed over. A
+    /// [REQ-3474] written beside, made executable, then renamed over. A
     /// partial write over the binary leaves a machine with no working
     /// `meowctl` and no way to fetch one.
     #[test]
@@ -161,7 +161,7 @@ mod tests {
         );
     }
 
-    /// [R-CLI-074] and nothing is left beside it, whichever way it went.
+    /// [REQ-3474] and nothing is left beside it, whichever way it went.
     #[test]
     fn the_staged_file_does_not_survive() {
         let fs = MemFs::new();
@@ -181,7 +181,7 @@ mod tests {
         assert!(left.is_empty(), "left behind: {left:?}");
     }
 
-    /// [R-CLI-074] the staged name is beside the binary, so the rename that
+    /// [REQ-3474] the staged name is beside the binary, so the rename that
     /// follows stays on one filesystem. A temporary directory elsewhere
     /// turns the rename into a copy that can fail halfway.
     #[test]

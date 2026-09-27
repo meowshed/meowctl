@@ -1,6 +1,6 @@
 //! Stopping a run with a signal.
 //!
-//! Driven through the binary because what [R-CLI-051] promises is that a
+//! Driven through the binary because what [REQ-3451, REQ-3517] promises is that a
 //! signal arriving at the process reaches the engine, and there is no signal
 //! without a process. Unix only: the watcher is `signal-hook`, and Windows
 //! has no `SIGINT` to send from another process.
@@ -39,12 +39,12 @@ fn sandbox() -> PathBuf {
     root
 }
 
-/// [R-CLI-051], [R-CLI-053], [R-CLI-054] and [R-ENGINE-062]: the run stops
+/// [REQ-3451, REQ-3517], [REQ-3453], [REQ-3454, REQ-3519] and [REQ-3062, REQ-3121]: the run stops
 /// rather than the process dying where it stood, the component that had not
 /// started does not start, and the exit code says the command did not do what
 /// was asked.
 ///
-/// [R-CLI-014] is here too: the handler is installed by the binary, and a
+/// [REQ-3414] is here too: the handler is installed by the binary, and a
 /// machine where it could not be would kill the process on the first signal
 /// instead of reaching any of this.
 #[test]

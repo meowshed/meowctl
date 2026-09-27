@@ -2,7 +2,7 @@
 //!
 //! Driven through the binary because the lookup is `ConfigSources` in
 //! `meowctl-cli`: the engine asks for a component by name and the CLI decides
-//! which of the two spellings on disk answers; see [R-ENGINE-017].
+//! which of the two spellings on disk answers; see [REQ-3017, REQ-3107].
 
 // `clippy.toml` exempts a function carrying `#[test]`; a helper in a test
 // binary is test code by construction.
@@ -31,7 +31,7 @@ fn apply(root: &Path) -> std::process::Output {
         .expect("the binary runs")
 }
 
-/// [R-ENGINE-017] a hand-written configuration keeps its components as files.
+/// [REQ-3017, REQ-3107] a hand-written configuration keeps its components as files.
 #[test]
 fn a_bare_name_resolves_to_a_file_beside_the_others() {
     let root = sandbox("flat");
@@ -46,7 +46,7 @@ fn a_bare_name_resolves_to_a_file_beside_the_others() {
     assert!(output.status.success(), "{output:?}");
 }
 
-/// [R-ENGINE-017] and the standard library keeps them as directories, because
+/// [REQ-3017, REQ-3107] and the standard library keeps them as directories, because
 /// a component with data files needs somewhere to put them.
 #[test]
 fn a_bare_name_resolves_to_a_directory_of_its_own() {
@@ -60,7 +60,7 @@ fn a_bare_name_resolves_to_a_directory_of_its_own() {
     assert!(output.status.success(), "{output:?}");
 }
 
-/// [R-ENGINE-017] a name that is neither names both spellings, because a
+/// [REQ-3017, REQ-3107] a name that is neither names both spellings, because a
 /// reader who wrote one of them needs to know which was looked for.
 #[test]
 fn a_name_that_is_neither_names_both_spellings() {

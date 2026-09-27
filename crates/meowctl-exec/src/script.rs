@@ -3,7 +3,7 @@
 //! `v0.1.0` has `RunFunc`, an injection point on `ctx` alone, which is the
 //! only seam its tests have. This is the equivalent with the rest of the
 //! workspace behind it, and it fails a test that runs a command the test did
-//! not expect rather than returning an empty result; see [R-EXEC-012].
+//! not expect rather than returning an empty result; see [REQ-1612, REQ-1701].
 
 use std::collections::VecDeque;
 use std::path::PathBuf;

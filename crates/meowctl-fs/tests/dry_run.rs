@@ -27,7 +27,7 @@ fn dry_run() -> (DryRunFs, std::sync::Arc<MemFs>) {
     )
 }
 
-/// [R-FS-011] the guarantee the whole design rests on. `v0.1.0` made it by
+/// [REQ-1411, REQ-1504, REQ-1505] the guarantee the whole design rests on. `v0.1.0` made it by
 /// checking a flag in every effectful method and missed one; here it is not
 /// expressible.
 #[test]
@@ -56,7 +56,7 @@ fn nothing_reaches_the_underlying_filesystem() {
     );
 }
 
-/// [R-FS-012] a read of a path the run wrote answers with what was written, so
+/// [REQ-1412] a read of a path the run wrote answers with what was written, so
 /// a hook that writes then reads branches the same way it will for real.
 #[test]
 fn a_read_sees_what_this_run_would_have_written() {

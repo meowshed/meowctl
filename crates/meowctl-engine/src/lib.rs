@@ -7,7 +7,7 @@
 //! renderer concern threaded into the Starlark layer as a callback.
 //!
 //! The stages are distinct types, so one cannot be entered before the stage
-//! it depends on has produced its value; see [R-ENGINE-001]. `v0.1.0`
+//! it depends on has produced its value; see [REQ-3001]. `v0.1.0`
 //! expresses the same ordering in comments, which is how "pass one registers
 //! the package-manager handlers" became something a caller can forget.
 //!

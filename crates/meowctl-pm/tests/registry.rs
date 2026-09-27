@@ -26,7 +26,7 @@ fn component(pm_name: Option<&str>, exports: &[&str]) -> meowctl_starlark::Evalu
         .expect("the handler evaluates")
 }
 
-/// The four exports [R-PM-001] requires, and nothing optional.
+/// The four exports [REQ-2601, REQ-2700, REQ-2701] requires, and nothing optional.
 fn minimal() -> meowctl_starlark::Evaluated {
     component(
         Some("brew"),
@@ -53,7 +53,7 @@ fn install(manager: &str, name: &str, version: &str) -> PackageDecl {
     }
 }
 
-/// [R-PM-001] all four, or it is not a handler.
+/// [REQ-2601, REQ-2700, REQ-2701] all four, or it is not a handler.
 #[test]
 fn a_component_exporting_all_four_is_a_handler() {
     let registration = scan("homebrew", &minimal());
@@ -68,7 +68,7 @@ fn a_component_exporting_all_four_is_a_handler() {
     );
 }
 
-/// [R-PM-001] a component that names a manager and exports half of what a
+/// [REQ-2601, REQ-2700, REQ-2701] a component that names a manager and exports half of what a
 /// handler needs is nearly always a mistake, so it is reported rather than
 /// ignored.
 #[test]
@@ -87,7 +87,7 @@ fn a_component_that_names_no_manager_is_not_a_handler() {
     assert_eq!(scan("neovim", &evaluated), Registration::NotAHandler);
 }
 
-/// [R-PM-002] the two optional exports are what a handler may or may not have,
+/// [REQ-2602] the two optional exports are what a handler may or may not have,
 /// and each changes what dispatch does.
 #[test]
 fn the_optional_exports_are_recorded() {
@@ -108,7 +108,7 @@ fn the_optional_exports_are_recorded() {
     assert!(handler.has_add_repo);
 }
 
-/// [R-PM-004] `v0.1.0` overwrites the earlier handler, so which one wins
+/// [REQ-2604] `v0.1.0` overwrites the earlier handler, so which one wins
 /// depends on the order components happened to evaluate in.
 #[test]
 fn two_components_claiming_one_manager_are_reported() {
@@ -143,7 +143,7 @@ fn registering_the_same_component_twice_is_not_a_conflict() {
     assert_eq!(registry.managers(), ["brew"]);
 }
 
-/// [R-PM-010] what a `pkg()` turns into.
+/// [REQ-2610] what a `pkg()` turns into.
 #[test]
 fn a_package_declaration_becomes_a_call_to_install_pkg() {
     let mut registry = Registry::new();
@@ -163,7 +163,7 @@ fn a_package_declaration_becomes_a_call_to_install_pkg() {
     assert_eq!(call.keyword.get("cask"), Some(&Argument::Boolean(true)));
 }
 
-/// [R-PM-011] the other two actions go to their own functions.
+/// [REQ-2611] the other two actions go to their own functions.
 #[test]
 fn removing_and_updating_go_to_their_own_functions() {
     let mut registry = Registry::new();
@@ -192,7 +192,7 @@ fn removing_and_updating_go_to_their_own_functions() {
     assert_eq!(call.positional, ["git"], "update_pkg takes no version");
 }
 
-/// [R-PM-012] removing the fallback would break every handler that never
+/// [REQ-2612] removing the fallback would break every handler that never
 /// defined an update path, which is most of them.
 #[test]
 fn updating_without_update_pkg_installs_latest_instead() {
@@ -214,7 +214,7 @@ fn updating_without_update_pkg_installs_latest_instead() {
     );
 }
 
-/// [R-PM-013] a `repo()` on a handler with no `add_repo` has nowhere to go,
+/// [REQ-2613, REQ-2702] a `repo()` on a handler with no `add_repo` has nowhere to go,
 /// and saying so beats doing nothing.
 #[test]
 fn a_repository_declaration_needs_add_repo() {
@@ -254,7 +254,7 @@ fn a_repository_declaration_needs_add_repo() {
     );
 }
 
-/// [R-PM-030] a typo in a manager name is the common cause, and the list of
+/// [REQ-2630] a typo in a manager name is the common cause, and the list of
 /// what is registered is what makes it obvious.
 #[test]
 fn an_unhandled_manager_lists_the_ones_that_are_handled() {
@@ -283,7 +283,7 @@ fn an_empty_registry_says_so_rather_than_listing_nothing() {
     assert!(err.to_string().contains("none"), "{err}");
 }
 
-/// [R-PM-020] interrogation is a call like any other, made on the handler's
+/// [REQ-2620] interrogation is a call like any other, made on the handler's
 /// component.
 #[test]
 fn interrogation_is_a_call_to_the_handlers_component() {
@@ -298,7 +298,7 @@ fn interrogation_is_a_call_to_the_handlers_component() {
     assert!(call.keyword.is_empty());
 }
 
-/// [R-PM-014] every call names the handler's component, and the caller's `ctx`
+/// [REQ-2614] every call names the handler's component, and the caller's `ctx`
 /// is what the engine passes: the handler's effects belong to the component
 /// that asked for the package.
 #[test]
@@ -314,7 +314,7 @@ fn a_call_names_the_component_to_evaluate_and_nothing_about_the_caller() {
     assert_eq!(call.manager, "brew");
 }
 
-/// [R-PM-031] a handler that raises must fail the component that declared the
+/// [REQ-2631, REQ-2704] a handler that raises must fail the component that declared the
 /// package. A message naming only the handler sends the reader to a file they
 /// did not write.
 #[test]
@@ -334,7 +334,7 @@ fn a_handler_failure_names_both_components() {
     assert!(message.contains("brew: command not found"), "{message}");
 }
 
-/// [R-PM-032] a handler returning the wrong shape is a defect in the handler,
+/// [REQ-2632] a handler returning the wrong shape is a defect in the handler,
 /// and coercing it would hide which of the two files is wrong.
 #[test]
 fn a_handler_returning_the_wrong_shape_is_reported_as_the_handlers_defect() {
@@ -350,7 +350,7 @@ fn a_handler_returning_the_wrong_shape_is_reported_as_the_handlers_defect() {
     assert!(message.contains("a list of strings"), "{message}");
 }
 
-/// [R-PM-004] the registry answers whether a manager is handled, which is
+/// [REQ-2604] the registry answers whether a manager is handled, which is
 /// what a `pkg()` naming an unknown one is checked against.
 ///
 /// Mutation testing asked for this: `Registry::has` could return a constant

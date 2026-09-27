@@ -20,7 +20,7 @@ use crate::ConfigResult;
 /// It names `meowctl.mod`, which the rename to `deps.mod` left behind.
 /// Reproduced as it is, because the file is compared byte for byte and
 /// correcting a stale comment costs a corpus rebaseline and buys nothing a
-/// user reads; see [R-CONFIG-014].
+/// user reads; see [REQ-1214, REQ-1304].
 const HEADER: &str = "# meowctl.mod — machine-managed module file. Do not edit by hand.\n\n";
 
 /// One `dep()` statement.
@@ -71,9 +71,9 @@ impl Modfile {
     /// `internal/modfile/modfile.go` refuses these while parsing, and this is
     /// where that happens now: `v0.1.0` has one `dep()` for `deps.mod` that
     /// validates and another for `init.star` that takes no `source`, and
-    /// [R-CONFIG-010] merged them into one builtin. A manifest that names
+    /// [REQ-1210, REQ-1302] merged them into one builtin. A manifest that names
     /// both leaves the resolver choosing between two answers; see
-    /// [R-CONFIG-012].
+    /// [REQ-1212, REQ-1303].
     ///
     /// # Errors
     ///
@@ -127,7 +127,7 @@ impl Modfile {
 
         for dep in &self.deps {
             // Source and version are exclusive, and a dep carrying neither is
-            // rejected before it reaches here; see [R-CONFIG-012].
+            // rejected before it reaches here; see [REQ-1212, REQ-1303].
             if dep.source.is_empty() {
                 let _ = writeln!(
                     out,
@@ -173,7 +173,7 @@ impl Modfile {
     ///
     /// Atomically, unlike `modfile.Write`, which uses a plain write: a
     /// `deps.mod` truncated by a crash during `meowctl dep add` leaves a
-    /// configuration that does not parse; see [R-CONFIG-002].
+    /// configuration that does not parse; see [REQ-1202].
     ///
     /// # Errors
     ///
@@ -214,7 +214,7 @@ fn quote(text: &str) -> String {
 mod tests {
     use super::*;
 
-    /// [R-CONFIG-014] the layout `modfile.Write` produces, which a user's
+    /// [REQ-1214, REQ-1304] the layout `modfile.Write` produces, which a user's
     /// `git diff` will otherwise show as a change.
     #[test]
     fn a_manifest_renders_exactly_as_v0_1_0_renders_it() {
@@ -267,7 +267,7 @@ mod tests {
         assert_eq!(Modfile::default().render(), HEADER);
     }
 
-    /// [R-CONFIG-013] keyword order is `name` first, which is what the
+    /// [REQ-1213] keyword order is `name` first, which is what the
     /// regular-expression rewriter in `v0.1.0` requires and what keeps the two
     /// binaries writing the same bytes.
     #[test]

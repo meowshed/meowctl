@@ -13,13 +13,13 @@ use crate::theme::{Role, Theme};
 /// Something that renders events.
 ///
 /// A sink renders every event it is given. One that silently dropped a variant
-/// would make a command's output depend on where it ran; see [R-TUI-012].
+/// would make a command's output depend on where it ran; see [REQ-3212, REQ-3302, REQ-3303].
 pub trait Sink {
     /// Renders one event.
     ///
     /// A write that fails is not propagated: a closed pipe is normal when
     /// output goes into `head`, and a run must not abort for it; see
-    /// [R-TUI-070].
+    /// [REQ-3270, REQ-3323].
     fn handle(&mut self, event: &Event);
 
     /// Flushes anything held back.
@@ -91,7 +91,7 @@ impl Sink for PlainSink {
                 for (component, skipped) in planned {
                     match skipped {
                         // Every skip says why: a count alone is not something
-                        // a user can act on; see [R-ENGINE-052].
+                        // a user can act on; see [REQ-3052].
                         Some(reason) => {
                             let separator = self.theme.symbols().separator;
                             self.item(
@@ -136,7 +136,7 @@ impl Sink for PlainSink {
                 match outcome {
                     Outcome::Succeeded => self.item(Role::Success, &component.to_string()),
                     // Nothing to do is a success with nothing to say, so it
-                    // says nothing; see [R-ENGINE-033].
+                    // says nothing; see [REQ-3033, REQ-3111].
                     Outcome::NothingToDo => {}
                     Outcome::Failed { error } => {
                         self.item(Role::Failure, &format!("{component}: {error}"));
@@ -160,7 +160,7 @@ impl Sink for PlainSink {
             }
 
             // Captured output sits under its item and dimmed, which is the
-            // second level of indent and the last one; see [R-TUI-002].
+            // second level of indent and the last one; see [REQ-3202].
             Event::ProcessOutput { line, .. } => {
                 let text = self.theme.paint(Role::Muted, &format!("      {line}"));
                 self.line(&text);
@@ -197,7 +197,7 @@ impl Sink for PlainSink {
             // Shell code goes to the shell, not to a transcript. `meowctl
             // shell` writes it to stdout itself; a sink rendering a run puts
             // it where a reader can see what a component contributed; see
-            // [R-COMMON-044].
+            // [REQ-1044].
             Event::ShellLine { line } => {
                 let text = self.theme.paint(Role::Muted, &format!("      {line}"));
                 self.line(&text);
@@ -228,7 +228,7 @@ impl Sink for PlainSink {
 ///
 /// The interface another program reads. `doctor --json` stops being a
 /// hand-written special case and every command gains a machine-readable form;
-/// see [R-TUI-030] and [R-TUI-032].
+/// see [REQ-3230] and [REQ-3232].
 pub struct JsonSink {
     out: Box<dyn Write>,
 }
@@ -250,7 +250,7 @@ impl JsonSink {
 impl Sink for JsonSink {
     fn handle(&mut self, event: &Event) {
         // No colour, no glyph, no padding: a consumer that had to strip
-        // terminal decoration would be parsing a rendering; see [R-TUI-031].
+        // terminal decoration would be parsing a rendering; see [REQ-3231].
         let Ok(line) = serde_json::to_string(event) else {
             return;
         };
@@ -267,7 +267,7 @@ impl Sink for JsonSink {
 /// Not a rendering of a run. `meowctl hook shell` runs on every shell spawn
 /// and its stdout is passed to `eval`, so a glyph, an indent or a colour code
 /// would be evaluated as shell code. Every event but [`Event::ShellLine`] is
-/// dropped for the same reason; see [R-TUI-012] and [R-CLI-061].
+/// dropped for the same reason; see [REQ-3212, REQ-3302, REQ-3303] and [REQ-3461, REQ-3521].
 pub struct ShellSink {
     out: Box<dyn Write>,
 }

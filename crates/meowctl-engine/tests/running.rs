@@ -1,6 +1,6 @@
 //! Running a plan, against an in-memory world.
 //!
-//! [R-ENGINE-001] is held by the shape of this file rather than by a case in
+//! [REQ-3001] is held by the shape of this file rather than by a case in
 //! it: every test walks `discover` to `Graph::build` to `Plan::compute` to
 //! `Runner::run`, in that order, because each takes what the one before
 //! returned. A stage cannot be entered with what an earlier one has not
@@ -58,7 +58,7 @@ fn run(
     (runner.run(&plan), world)
 }
 
-/// [R-ENGINE-050] the stream a sink renders: a plan, then a phase around its
+/// [REQ-3050] the stream a sink renders: a plan, then a phase around its
 /// components, and a start and a finish around each.
 #[test]
 fn the_run_emits_the_events_a_sink_renders() {
@@ -91,7 +91,7 @@ fn the_run_emits_the_events_a_sink_renders() {
     );
 }
 
-/// [R-ENGINE-033] an absent hook is a success with nothing to do, not a skip:
+/// [REQ-3033, REQ-3111] an absent hook is a success with nothing to do, not a skip:
 /// most components define three of the thirteen phases.
 #[test]
 fn a_component_with_no_hook_for_the_phase_has_nothing_to_do() {
@@ -110,7 +110,7 @@ fn a_component_with_no_hook_for_the_phase_has_nothing_to_do() {
     );
 }
 
-/// [R-ENGINE-030] a phase stops at the first component that fails. Running on
+/// [REQ-3030, REQ-3108] a phase stops at the first component that fails. Running on
 /// would produce a cascade of errors about tools that never installed.
 #[test]
 fn a_phase_stops_at_the_first_component_that_fails() {
@@ -129,7 +129,7 @@ fn a_phase_stops_at_the_first_component_that_fails() {
     );
 }
 
-/// [R-ENGINE-060] and the failure names the component, the phase, and what
+/// [REQ-3060] and the failure names the component, the phase, and what
 /// went wrong.
 #[test]
 fn a_failure_names_the_component_the_phase_and_the_error() {
@@ -143,7 +143,7 @@ fn a_failure_names_the_component_the_phase_and_the_error() {
     assert!(message.contains("no"), "{message}");
 }
 
-/// [R-ENGINE-031] a phase set stops at the first failed phase, so a component
+/// [REQ-3031, REQ-3109] a phase set stops at the first failed phase, so a component
 /// is not configured after its install failed.
 #[test]
 fn a_phase_set_stops_at_the_first_failed_phase() {
@@ -161,7 +161,7 @@ fn a_phase_set_stops_at_the_first_failed_phase() {
     );
 }
 
-/// [R-ENGINE-063] a component that fails does not stop the run reporting the
+/// [REQ-3063] a component that fails does not stop the run reporting the
 /// ones that already succeeded.
 #[test]
 fn the_components_that_succeeded_are_still_reported() {
@@ -183,7 +183,7 @@ fn the_components_that_succeeded_are_still_reported() {
     assert!(report.failure.is_some());
 }
 
-/// [R-ENGINE-032] and [R-ENGINE-061]: a failed run undoes what it did, and
+/// [REQ-3032, REQ-3110] and [REQ-3061, REQ-3120]: a failed run undoes what it did, and
 /// says how that went -- the outcome and how many inverses applied, so a user
 /// who has to finish by hand knows where the run left them.
 #[test]
@@ -214,7 +214,7 @@ fn a_failed_run_rolls_back_what_it_did() {
     );
 }
 
-/// [R-ENGINE-032] and a caller that turned rollback off keeps what the run
+/// [REQ-3032, REQ-3110] and a caller that turned rollback off keeps what the run
 /// did, which is what `--no-rollback` is for.
 #[test]
 fn rollback_can_be_turned_off() {
@@ -240,7 +240,7 @@ fn rollback_can_be_turned_off() {
     );
 }
 
-/// [R-PM-015] and [R-PM-010]: a package a hook declares reaches the handler
+/// [REQ-2615, REQ-2703] and [REQ-2610]: a package a hook declares reaches the handler
 /// for its manager, with the arguments the declaration carried.
 #[test]
 fn a_package_a_hook_declares_reaches_its_handler() {
@@ -271,7 +271,7 @@ def interrogate(ctx):
     assert_eq!(world.exec.ran(), ["brew install git"]);
 }
 
-/// [R-PM-030] a package naming a manager nothing handles fails the component
+/// [REQ-2630] a package naming a manager nothing handles fails the component
 /// that declared it, and says what is registered.
 #[test]
 fn a_package_with_no_handler_fails_the_component_that_declared_it() {
@@ -286,7 +286,7 @@ fn a_package_with_no_handler_fails_the_component_that_declared_it() {
     assert!(failure.reason.contains("bwer"), "{}", failure.reason);
 }
 
-/// [R-PM-031] a handler that raises fails the component that declared the
+/// [REQ-2631, REQ-2704] a handler that raises fails the component that declared the
 /// package, and the message names both files.
 #[test]
 fn a_handler_that_raises_names_both_components() {
@@ -315,7 +315,7 @@ def interrogate(ctx):
     assert!(failure.reason.contains("git"), "{}", failure.reason);
 }
 
-/// [R-PM-012] a handler with no `update_pkg` installs `latest` instead, which
+/// [REQ-2612] a handler with no `update_pkg` installs `latest` instead, which
 /// is what most handlers rely on.
 #[test]
 fn updating_without_update_pkg_installs_latest() {
@@ -357,7 +357,7 @@ def interrogate(ctx):
     assert_eq!(world.exec.ran(), ["brew install git latest"]);
 }
 
-/// [R-ENGINE-051] the engine holds no renderer: everything a run says goes
+/// [REQ-3051, REQ-3117, REQ-3118] the engine holds no renderer: everything a run says goes
 /// out as an event. A test that reads only events sees the whole run.
 #[test]
 fn nothing_the_run_says_bypasses_the_event_stream() {
@@ -376,7 +376,7 @@ fn nothing_the_run_says_bypasses_the_event_stream() {
     );
 }
 
-/// [R-PM-020] `query_pm` reaches the handler for its manager and returns what
+/// [REQ-2620] `query_pm` reaches the handler for its manager and returns what
 /// `interrogate` returned, which is a list of package names.
 #[test]
 fn query_pm_returns_what_the_handler_reports() {
@@ -416,7 +416,7 @@ def interrogate(ctx):
     assert_eq!(written, ["git", "jq"], "{:?}", world.fs.paths());
 }
 
-/// [R-PM-020] `interrogate` runs with the asking component's `ctx`, not the
+/// [REQ-2620] `interrogate` runs with the asking component's `ctx`, not the
 /// handler's, so a handler reading `ctx.component_dir` sees the caller's.
 #[test]
 fn interrogate_runs_with_the_asking_components_ctx() {
@@ -449,7 +449,7 @@ def interrogate(ctx):
     );
 }
 
-/// [R-PM-032] a handler returning the wrong shape is reported as the
+/// [REQ-2632] a handler returning the wrong shape is reported as the
 /// handler's defect rather than coerced.
 #[test]
 fn an_interrogate_that_returns_the_wrong_shape_is_reported() {
@@ -479,7 +479,7 @@ def interrogate(ctx):
     );
 }
 
-/// [R-PM-021] and [R-EXEC-011]: during a dry run whether a command runs
+/// [REQ-2621] and [REQ-1611, REQ-1700]: during a dry run whether a command runs
 /// depends on the phase, and `interrogate` called from a read-only one still
 /// gets its answer. A plan that could not ask what is installed would be
 /// built on nothing.
@@ -566,7 +566,7 @@ fn run_hook(config: &Config, phase: Phase) -> (meowctl_engine::Report, support::
     (runner.run_hook(phase), world)
 }
 
-/// [R-ENGINE-035] every component runs, every time. `shell` runs on every
+/// [REQ-3035, REQ-3112, REQ-3113, REQ-3114, REQ-3115] every component runs, every time. `shell` runs on every
 /// shell spawn, so skipping one because it ran last time would mean a shell
 /// without its integration.
 #[test]
@@ -589,8 +589,8 @@ fn a_runtime_hook_runs_every_component() {
     assert_eq!(lines, ["export A=1", "set -gx B 2"]);
 }
 
-/// [R-ENGINE-035] no plan is announced and no phase is framed, so a sink
-/// writing shell code sees shell code and nothing else; see [R-CLI-061].
+/// [REQ-3035, REQ-3112, REQ-3113, REQ-3114, REQ-3115] no plan is announced and no phase is framed, so a sink
+/// writing shell code sees shell code and nothing else; see [REQ-3461, REQ-3521].
 #[test]
 fn a_runtime_hook_emits_only_what_a_hook_produced() {
     let config = Config::new().declaring(Declaration::new("zsh"), &emits("zsh", "export A=1"));
@@ -611,7 +611,7 @@ fn a_runtime_hook_emits_only_what_a_hook_produced() {
     }
 }
 
-/// [R-ENGINE-035] a component that fails stops the run and is reported, so
+/// [REQ-3035, REQ-3112, REQ-3113, REQ-3114, REQ-3115] a component that fails stops the run and is reported, so
 /// the caller can record why the shell has no integration.
 #[test]
 fn a_failing_runtime_hook_stops_and_says_which_component() {
@@ -636,7 +636,7 @@ fn a_failing_runtime_hook_stops_and_says_which_component() {
     );
 }
 
-/// [R-ENGINE-062] a run the user has stopped does not start another
+/// [REQ-3062, REQ-3121] a run the user has stopped does not start another
 /// component.
 #[test]
 fn an_interrupted_run_starts_no_further_component() {
@@ -676,7 +676,7 @@ fn an_interrupted_run_starts_no_further_component() {
     );
 }
 
-/// [R-ENGINE-064] and it keeps its journal, because the next run reports it
+/// [REQ-3064] and it keeps its journal, because the next run reports it
 /// and undoing work the user stopped is not what stopping asked for.
 #[test]
 fn an_interrupted_run_does_not_roll_back() {
@@ -707,7 +707,7 @@ fn an_interrupted_run_does_not_roll_back() {
     );
 }
 
-/// [R-ENGINE-062] a run nobody stopped is unaffected, which is the case that
+/// [REQ-3062, REQ-3121] a run nobody stopped is unaffected, which is the case that
 /// would break if the flag were read the wrong way round.
 #[test]
 fn a_run_nobody_stopped_finishes() {
@@ -718,7 +718,7 @@ fn a_run_nobody_stopped_finishes() {
     assert!(report.succeeded(), "{report:?}");
 }
 
-/// [R-ENGINE-041] a component that failed is not recorded as done.
+/// [REQ-3041] a component that failed is not recorded as done.
 ///
 /// Recording it would make the next run skip the thing that broke, which is
 /// the one component it must not skip.
@@ -767,7 +767,7 @@ fn a_failed_component_is_not_recorded_as_completed() {
     let _ = fs;
 }
 
-/// [R-ENGINE-003] a plan with nothing running says so, and one with something
+/// [REQ-3003, REQ-3101, REQ-3102] a plan with nothing running says so, and one with something
 /// running does not. It is what lets a command say "nothing to do" instead of
 /// drawing an empty phase.
 #[test]
@@ -793,7 +793,7 @@ fn a_plan_knows_whether_it_has_anything_to_do() {
     assert!(done.is_empty(), "everything recorded is nothing to do");
 }
 
-/// [R-ENGINE-030] a report says whether the run succeeded, which is what the
+/// [REQ-3030, REQ-3108] a report says whether the run succeeded, which is what the
 /// exit code is built from.
 #[test]
 fn a_report_says_whether_the_run_succeeded() {
@@ -806,7 +806,7 @@ fn a_report_says_whether_the_run_succeeded() {
     assert!(!report.succeeded(), "{report:?}");
 }
 
-/// [R-PM-010] a package's version reaches the handler, because
+/// [REQ-2610] a package's version reaches the handler, because
 /// `install_pkg(ctx, name, version)` is what a handler is written against and
 /// a package installed without its constraint is the wrong package.
 #[test]

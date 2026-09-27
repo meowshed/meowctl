@@ -4,7 +4,7 @@
 //! effect. A dry run renders it and stops; a real run executes exactly it, so
 //! the two cannot disagree about what work there is. `v0.1.0` printed one
 //! thing and ran another, which is what `fix(apply): dry-run claimed work
-//! that the runner skips` closed; see [R-ENGINE-002] and [R-ENGINE-003].
+//! that the runner skips` closed; see [REQ-3002, REQ-3100] and [REQ-3003, REQ-3101, REQ-3102].
 
 use meowctl_common::{ComponentId, Phase, PhaseSet, PlannedStep, SkipReason};
 use meowctl_config::Sentinel;
@@ -33,7 +33,7 @@ pub struct Inputs<'a> {
     /// The components the caller named, if any.
     pub filter: &'a [String],
     /// Components a guard dropped, with the guard, so the plan can say why
-    /// rather than leaving them out; see [R-ENGINE-052].
+    /// rather than leaving them out; see [REQ-3052].
     pub excluded: &'a [(ComponentId, String)],
     /// Whether to run everything regardless of what completed before.
     pub force: bool,
@@ -44,7 +44,7 @@ impl Plan {
     ///
     /// Nothing here reads a file or runs a command: the plan is a function of
     /// what it is given, which is what makes a dry run a prediction rather
-    /// than a description; see [R-ENGINE-002].
+    /// than a description; see [REQ-3002, REQ-3100].
     #[must_use]
     pub fn compute(graph: &Graph, phase_set: PhaseSet, inputs: &Inputs<'_>) -> Plan {
         let in_scope = scope(graph, inputs.filter);
@@ -53,7 +53,7 @@ impl Plan {
         for phase in phase_set.phases().iter().copied() {
             // A component a guard dropped is named once per phase, the same
             // as every other skip, so a reader counting lines gets the same
-            // number either way; see [R-ENGINE-052].
+            // number either way; see [REQ-3052].
             for (component, guard) in inputs.excluded {
                 steps.push(PlannedStep {
                     phase,
@@ -130,7 +130,7 @@ fn skip_reason(
     // A component whose phase is already recorded is skipped, and the plan
     // says so rather than listing it as pending work. Listing it is what made
     // the dry run report 120 components before and after a successful apply
-    // alike; see [R-ENGINE-002].
+    // alike; see [REQ-3002, REQ-3100].
     let completed = inputs
         .sentinel
         .is_some_and(|s| s.is_completed(phase.as_str(), component.logical_name()));

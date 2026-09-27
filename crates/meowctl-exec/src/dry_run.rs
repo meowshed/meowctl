@@ -4,7 +4,7 @@
 //! cannot ask `brew list` what is installed reports a plan built on nothing.
 //! It cannot allow every subprocess either. The phase decides, and it decides
 //! when this is constructed rather than on every call, so nothing below
-//! `meowctl-cli` branches on a dry run; see [R-EXEC-011] and [R-CTX-014].
+//! `meowctl-cli` branches on a dry run; see [REQ-1611, REQ-1700] and [REQ-2814].
 
 use std::path::PathBuf;
 

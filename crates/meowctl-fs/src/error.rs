@@ -9,14 +9,14 @@ use meowctl_common::Severity;
 ///
 /// Every variant names the path it was working on. A caller that surfaces
 /// "permission denied" without saying which file sends the user reading hook
-/// sources to find out; see [R-FS-030].
+/// sources to find out; see [REQ-1430].
 #[derive(Debug, thiserror::Error)]
 pub enum FsError {
     /// The path does not exist.
     ///
     /// Distinct from the other failures because callers act on it: a missing
     /// lock file is a clean slate and a missing `init.star` is fatal; see
-    /// [R-FS-032].
+    /// [REQ-1432].
     #[error("{path} does not exist")]
     NotFound {
         /// The path that was looked for.
@@ -40,7 +40,7 @@ pub enum FsError {
     /// The parent directory does not exist.
     ///
     /// Separate from `NotFound` so a dry run can predict it: it is the failure
-    /// a plan can see without performing the write; see [R-FS-033].
+    /// a plan can see without performing the write; see [REQ-1433].
     #[error("{path} cannot be written: its directory {parent} does not exist")]
     NoParent {
         /// The path that was to be written.

@@ -17,7 +17,7 @@ use crate::Error;
 /// (`@stdlib//components/zsh`) or module root (`@dotmeow`), and a
 /// GitHub-qualified path (`github.com/owner/repo//components/zsh`). The
 /// original text is kept so `Display` reproduces what was written; see
-/// [R-COMMON-001].
+/// [REQ-1001, REQ-1100].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ComponentId(String);
@@ -36,7 +36,7 @@ impl ComponentId {
     /// itself, which matches no module entry, and that is how a local
     /// component is distinguished from one that came from a module.
     /// `moduleKeyFromComponentURL` in `internal/cli/apply.go` is the same
-    /// computation; see [R-COMMON-002].
+    /// computation; see [REQ-1002].
     #[must_use]
     pub fn module_key(&self) -> &str {
         let s = self.0.strip_prefix('@').unwrap_or(&self.0);
@@ -61,7 +61,7 @@ impl ComponentId {
     ///
     /// `@stdlib//components/node` and `github://o/r//components/node` are
     /// both `node`. An `after` list names components this way, and so do a
-    /// lock entry and a sentinel record; see [R-COMMON-006].
+    /// lock entry and a sentinel record; see [REQ-1006].
     #[must_use]
     pub fn logical_name(&self) -> &str {
         let trimmed = self.0.trim_end_matches('/');
@@ -109,7 +109,7 @@ impl fmt::Display for ComponentId {
 ///
 /// A registry module is named by a bare identifier and resolved through the
 /// registry index. A GitHub module carries its owner, repository, and the tag
-/// or branch to resolve; see [R-COMMON-003].
+/// or branch to resolve; see [REQ-1003, REQ-1101].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModuleRef {
@@ -194,7 +194,7 @@ impl fmt::Display for ModuleRef {
 ///
 /// Validated on construction so a malformed hash fails where it is read rather
 /// than comparing unequal forever and looking like tampering; see
-/// [R-COMMON-004].
+/// [REQ-1004, REQ-1102].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Integrity(String);
@@ -211,7 +211,7 @@ impl Integrity {
     /// What `computeSRI` in `internal/starlark/loader/github.go` produces, and
     /// what every published `index.toml` carries. Here rather than at the two
     /// call sites that hash bytes, so there is one encoding of one hash; see
-    /// [R-COMMON-005].
+    /// [REQ-1005].
     #[must_use]
     pub fn compute(data: &[u8]) -> Integrity {
         let digest = Sha384::digest(data);
@@ -259,7 +259,7 @@ impl fmt::Display for Integrity {
 mod tests {
     use super::*;
 
-    /// [R-COMMON-001] all three forms are in real configurations, and Display
+    /// [REQ-1001, REQ-1100] all three forms are in real configurations, and Display
     /// reproduces what was written so a message quotes the user's own text.
     #[test]
     fn the_three_component_forms_round_trip() {
@@ -274,7 +274,7 @@ mod tests {
         }
     }
 
-    /// [R-COMMON-002] the key is what a lock lookup uses, and getting the
+    /// [REQ-1002] the key is what a lock lookup uses, and getting the
     /// `//` split wrong silently stops a module bump from invalidating.
     #[test]
     fn the_module_key_matches_v0_1_0() {
@@ -307,7 +307,7 @@ mod tests {
         );
     }
 
-    /// [R-COMMON-050] these strings come from files a user edits, so a
+    /// [REQ-1050] these strings come from files a user edits, so a
     /// malformed one returns an error rather than panicking.
     #[test]
     fn malformed_component_identifiers_are_rejected() {
@@ -316,7 +316,7 @@ mod tests {
         }
     }
 
-    /// [R-COMMON-003] the two source kinds resolve differently, so a string
+    /// [REQ-1003, REQ-1101] the two source kinds resolve differently, so a string
     /// that is neither must not become a registry module with a strange name.
     #[test]
     fn module_references_parse_both_forms() {
@@ -377,7 +377,7 @@ mod tests {
         );
     }
 
-    /// [R-COMMON-006] an `after` list names a component by its last segment,
+    /// [REQ-1006] an `after` list names a component by its last segment,
     /// and so do a lock entry and a sentinel record. The cases are the ones
     /// `TestLogicalName` covers.
     #[test]
@@ -395,7 +395,7 @@ mod tests {
         }
     }
 
-    /// [R-COMMON-004] an unvalidated hash compares unequal forever and looks
+    /// [REQ-1004, REQ-1102] an unvalidated hash compares unequal forever and looks
     /// like tampering, so it fails where it is read instead.
     #[test]
     fn integrity_hashes_are_validated_on_construction() {
@@ -405,7 +405,7 @@ mod tests {
         }
     }
 
-    /// [R-COMMON-005] the expected value comes from `sha384sum` rather than
+    /// [REQ-1005] the expected value comes from `sha384sum` rather than
     /// from either implementation, so the test checks the algorithm and not
     /// one program's opinion of it.
     #[test]
@@ -431,7 +431,7 @@ mod tests {
         assert!(!sri.matches(b"onf"));
     }
 
-    /// [R-COMMON-002] each half of a GitHub reference has to be there, and a
+    /// [REQ-1002] each half of a GitHub reference has to be there, and a
     /// missing one is a typo rather than a module.
     ///
     /// Mutation testing is what asked for this: every `||` in the guard could
@@ -464,7 +464,7 @@ mod tests {
         );
     }
 
-    /// [R-COMMON-002] and a registry name is letters, digits and three
+    /// [REQ-1002] and a registry name is letters, digits and three
     /// punctuation marks, so a typo does not become a confusing index lookup.
     #[test]
     fn a_registry_name_takes_only_what_a_name_takes() {
@@ -479,7 +479,7 @@ mod tests {
         }
     }
 
-    /// [R-COMMON-001] and [R-COMMON-004]: both types render as what was
+    /// [REQ-1001, REQ-1100] and [REQ-1004, REQ-1102]: both types render as what was
     /// written, because a message quotes the user's own text back at them.
     #[test]
     fn a_reference_and_a_hash_render_as_they_were_written() {
@@ -493,7 +493,7 @@ mod tests {
         assert_eq!(hash.to_string(), "sha384-AAAA");
     }
 
-    /// [R-COMMON-006] the logical name is what an `after` list refers to and
+    /// [REQ-1006] the logical name is what an `after` list refers to and
     /// what `state.toml` records, so it is the identity a component has
     /// across a run rather than a display convenience.
     ///

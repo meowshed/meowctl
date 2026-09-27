@@ -8,7 +8,7 @@ use starlark::values::{NoSerialize, ProvidesStaticType, StarlarkValue, Value, st
 /// The machine a run is happening on.
 ///
 /// The fields are the ones `platform()` returns in `v0.1.0`, under these
-/// names, and components index them; see [R-STAR-007].
+/// names, and components index them; see [REQ-2207].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Platform {
     /// `macos`, `linux`, or `windows`.
@@ -47,7 +47,7 @@ impl Platform {
     ///
     /// The conditions are `matchesPlatform`'s, and an unknown one is false
     /// rather than an error, so a configuration naming a platform this build
-    /// does not know falls through to its default; see [R-STAR-008].
+    /// does not know falls through to its default; see [REQ-2208].
     #[must_use]
     pub fn matches(&self, condition: &str) -> bool {
         match condition {
@@ -93,7 +93,7 @@ impl PlatformValue {
     /// The value for a platform.
     ///
     /// `meowctl-ctx` needs one: `ctx.platform` is the same struct
-    /// `platform()` returns; see [R-CTX-002].
+    /// `platform()` returns; see [REQ-2802, REQ-2900, REQ-2901].
     #[must_use]
     pub const fn new(platform: Platform) -> Self {
         PlatformValue(platform)
@@ -144,7 +144,7 @@ mod tests {
         }
     }
 
-    /// [R-STAR-008] the conditions a configuration writes, matched as
+    /// [REQ-2208] the conditions a configuration writes, matched as
     /// `matchesPlatform` matches them.
     #[test]
     fn the_platform_conditions_match_as_v0_1_0_does() {
@@ -161,7 +161,7 @@ mod tests {
         assert!(!arch.matches("//platform:linux-debian"));
     }
 
-    /// [R-STAR-008] a derivative matches its parent through `ID_LIKE`, which
+    /// [REQ-2208] a derivative matches its parent through `ID_LIKE`, which
     /// is why a Mint machine gets the `debian` case.
     #[test]
     fn a_derivative_distribution_matches_through_id_like() {
@@ -205,7 +205,7 @@ mod tests {
         assert!(!macos.matches("//platform:linux-arch"));
     }
 
-    /// [R-STAR-008] every condition `matchesPlatform` knows, each answering
+    /// [REQ-2208] every condition `matchesPlatform` knows, each answering
     /// on the machine it names and on one it does not.
     ///
     /// Table-driven because the failure this is here to catch is a deleted
@@ -252,7 +252,7 @@ mod tests {
         }
     }
 
-    /// [R-STAR-008] `//platform:macos-arm64` is false on every machine.
+    /// [REQ-2208] `//platform:macos-arm64` is false on every machine.
     ///
     /// `v0.1.0` detects no architecture, so matching would be worse than not:
     /// a component meant for Apple silicon would install on an Intel one.
@@ -266,7 +266,7 @@ mod tests {
         assert!(!linux("arch", "").matches("//platform:macos-arm64"));
     }
 
-    /// [R-STAR-008] a condition this build does not know is false rather than
+    /// [REQ-2208] a condition this build does not know is false rather than
     /// an error, so a configuration written for a newer meowctl falls through
     /// to its default instead of failing to evaluate.
     #[test]
@@ -280,7 +280,7 @@ mod tests {
         assert!(!macos.matches(""));
     }
 
-    /// [R-STAR-008] the `ID_LIKE` arm is what makes a Mint machine match a
+    /// [REQ-2208] the `ID_LIKE` arm is what makes a Mint machine match a
     /// `debian` case, and a distribution that is neither still does not.
     #[test]
     fn a_distribution_matches_through_id_like() {
@@ -289,7 +289,7 @@ mod tests {
         assert!(!linux("gentoo", "").matches("//platform:linux-debian"));
     }
 
-    /// [R-STAR-008] and a distribution name on a machine that is not Linux
+    /// [REQ-2208] and a distribution name on a machine that is not Linux
     /// matches nothing, because `ID_LIKE` is a Linux notion.
     #[test]
     fn a_distribution_condition_needs_a_linux_machine() {

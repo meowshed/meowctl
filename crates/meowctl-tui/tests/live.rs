@@ -129,7 +129,7 @@ fn install(component_name: &str) -> Vec<Event> {
     ]
 }
 
-/// [R-TUI-020] exactly one cursor-up per line drawn. A frame that drew three
+/// [REQ-3220, REQ-3305] exactly one cursor-up per line drawn. A frame that drew three
 /// lines and walked back two would overwrite a permanent line on the next one,
 /// and the damage shows up hours later as a garbled transcript.
 #[test]
@@ -163,7 +163,7 @@ fn every_line_drawn_is_walked_back_over_exactly_once() {
     );
 }
 
-/// [R-TUI-020] a permanent line is written where the region was, not inside
+/// [REQ-3220, REQ-3305] a permanent line is written where the region was, not inside
 /// it, so the region never scrolls a finished component away.
 #[test]
 fn a_finished_component_is_committed_above_the_region() {
@@ -171,7 +171,7 @@ fn a_finished_component_is_committed_above_the_region() {
     insta::assert_snapshot!(rendered);
 }
 
-/// [R-TUI-022] the terminal belongs to the subprocess until it is released.
+/// [REQ-3222] the terminal belongs to the subprocess until it is released.
 /// A renderer that kept drawing would fight the password prompt a cask puts
 /// up, which is the case this exists for.
 #[test]
@@ -204,7 +204,7 @@ fn the_region_stands_down_while_a_subprocess_owns_the_terminal() {
     );
 }
 
-/// [R-TUI-023] a command that exits with a hidden cursor leaves the user's
+/// [REQ-3223, REQ-3306] a command that exits with a hidden cursor leaves the user's
 /// shell broken, so the sink gives it back when it is finished with.
 #[test]
 fn the_cursor_is_restored_when_the_sink_finishes() {
@@ -213,7 +213,7 @@ fn the_cursor_is_restored_when_the_sink_finishes() {
     assert!(rendered.trim_end().ends_with("<show>"), "{rendered:?}");
 }
 
-/// [R-TUI-023] and when it is dropped, which is the path a panic takes.
+/// [REQ-3223, REQ-3306] and when it is dropped, which is the path a panic takes.
 #[test]
 fn the_cursor_is_restored_when_the_sink_is_dropped() {
     let captured = Captured::default();
@@ -235,7 +235,7 @@ fn the_cursor_is_restored_when_the_sink_is_dropped() {
     );
 }
 
-/// [R-TUI-020] the region is capped to the viewport, or the cursor-up
+/// [REQ-3220, REQ-3305] the region is capped to the viewport, or the cursor-up
 /// arithmetic of the next frame walks off the top of the screen.
 #[test]
 fn the_region_is_capped_to_the_viewport() {
@@ -257,7 +257,7 @@ fn the_region_is_capped_to_the_viewport() {
     );
 }
 
-/// [R-TUI-024] a component installing forty packages looks identical to one
+/// [REQ-3224] a component installing forty packages looks identical to one
 /// installing none unless the sub-work reaches the screen, and it goes on the
 /// component's own line rather than a third level of indent.
 #[test]
@@ -284,7 +284,7 @@ fn sub_work_goes_on_the_components_own_line() {
     }
 }
 
-/// [R-TUI-021] captured output appears under its component while the process
+/// [REQ-3221] captured output appears under its component while the process
 /// runs, which is the whole reason it is captured rather than streamed.
 #[test]
 fn captured_output_appears_while_the_process_runs() {
@@ -303,7 +303,7 @@ fn captured_output_appears_while_the_process_runs() {
     assert!(last_frame.contains("downloading"), "{last_frame:?}");
 }
 
-/// [R-TUI-025] a resize is picked up without a signal handler, because the
+/// [REQ-3225] a resize is picked up without a signal handler, because the
 /// width is read again for every frame.
 #[test]
 fn a_narrow_terminal_truncates_rather_than_wraps() {
@@ -323,7 +323,7 @@ fn a_narrow_terminal_truncates_rather_than_wraps() {
     }
 }
 
-/// [R-TUI-004] no sink puts the terminal into raw mode, and none of the
+/// [REQ-3204] no sink puts the terminal into raw mode, and none of the
 /// sequences that need it are written either: no alternate screen, no scroll
 /// region, no cursor save and restore. That is where terminal support
 /// diverges, and a hook shelling out needs the terminal it was given.
@@ -338,7 +338,7 @@ fn only_the_portable_control_subset_is_written() {
     }
 }
 
-/// [R-TUI-081] the matrix, in one snapshot. `v0.1.0` checks a few cases by
+/// [REQ-3281] the matrix, in one snapshot. `v0.1.0` checks a few cases by
 /// hand, which is how a tier nobody thought about ships broken.
 #[test]
 fn the_capability_matrix_renders() {
@@ -363,7 +363,7 @@ fn the_capability_matrix_renders() {
     insta::assert_snapshot!(out);
 }
 
-/// [R-TUI-026] the spinner advances on events rather than on a timer.
+/// [REQ-3226, REQ-3307] the spinner advances on events rather than on a timer.
 ///
 /// `v0.1.0` animates from a goroutine, which draws while nothing is
 /// happening and stops drawing while something is. A frame tied to the stream
@@ -395,7 +395,7 @@ fn the_spinner_advances_on_events_and_not_on_time() {
     assert_eq!(render(&started, terminal), second);
 }
 
-/// [R-TUI-020] a component name longer than the terminal is truncated, and
+/// [REQ-3220, REQ-3305] a component name longer than the terminal is truncated, and
 /// its note goes rather than wrapping.
 ///
 /// A line that wraps costs the region a row it did not account for, and the
@@ -431,7 +431,7 @@ fn a_name_longer_than_the_terminal_is_truncated_and_loses_its_note() {
     );
 }
 
-/// [R-TUI-020] a note is shown when there is room for it, so the width
+/// [REQ-3220, REQ-3305] a note is shown when there is room for it, so the width
 /// arithmetic is not simply dropping everything.
 #[test]
 fn a_note_is_shown_when_the_line_has_room() {
@@ -455,7 +455,7 @@ fn a_note_is_shown_when_the_line_has_room() {
     );
 }
 
-/// [R-TUI-024] a phase that failed says how many, and one that did not says
+/// [REQ-3224] a phase that failed says how many, and one that did not says
 /// nothing. A count of zero failures is a line nobody needs.
 #[test]
 fn a_phase_reports_its_failures_and_only_when_there_are_some() {

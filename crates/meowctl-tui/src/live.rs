@@ -3,7 +3,7 @@
 //! A region of status lines that is erased and redrawn where it stands, with
 //! finished work committed above it as permanent lines. The terminal never
 //! goes into raw mode, because a hook shells out to commands that need the
-//! real one; see [R-TUI-004].
+//! real one; see [REQ-3204].
 //!
 //! Only the portable control subset is used — cursor-up, erase-line, and
 //! hide/show cursor — plus synchronised output, which a terminal that does not
@@ -50,7 +50,7 @@ const FALLBACK_ROWS: usize = 12;
 struct Row {
     component: ComponentId,
     /// What the component is doing now, shown on its own line rather than by
-    /// indenting further; see [R-TUI-024].
+    /// indenting further; see [REQ-3224].
     note: String,
 }
 
@@ -61,14 +61,14 @@ pub struct LiveSink {
     /// The components currently in the region, in the order they started.
     rows: Vec<Row>,
     /// How many components were skipped, shown as a count rather than a line
-    /// each; see [R-TUI-024].
+    /// each; see [REQ-3224].
     skipped: usize,
     /// How many lines the last frame drew, which is how many to walk back up.
     drawn: usize,
-    /// Which spinner frame the next redraw uses; see [R-TUI-026].
+    /// Which spinner frame the next redraw uses; see [REQ-3226, REQ-3307].
     frame: usize,
     /// True between `TerminalRequested` and `TerminalReleased`, when the
-    /// terminal belongs to a subprocess; see [R-TUI-022].
+    /// terminal belongs to a subprocess; see [REQ-3222].
     paused: bool,
     /// True once the cursor has been hidden, so it is shown exactly once.
     hidden: bool,
@@ -104,7 +104,7 @@ impl LiveSink {
     /// Writes bytes, ignoring a failure.
     ///
     /// A closed pipe is normal when output goes into `head`, and a run must
-    /// not abort for it; see [R-TUI-070].
+    /// not abort for it; see [REQ-3270, REQ-3323].
     fn raw(&mut self, text: &str) {
         let _ = self.out.write_all(text.as_bytes());
         let _ = self.out.flush();
@@ -114,7 +114,7 @@ impl LiveSink {
     ///
     /// Exactly one cursor-up per line drawn, which is why `drawn` is a count
     /// of lines and not of rows: a frame that drew an overflow line has to
-    /// walk back over it too; see [R-TUI-020].
+    /// walk back over it too; see [REQ-3220, REQ-3305].
     fn erase(&mut self) {
         if self.drawn == 0 {
             return;
@@ -132,7 +132,7 @@ impl LiveSink {
     /// Writes a permanent line above the region.
     ///
     /// The region is erased first and redrawn afterwards, so a committed line
-    /// never lands inside it; see [R-TUI-020].
+    /// never lands inside it; see [REQ-3220, REQ-3305].
     fn commit(&mut self, text: &str) {
         self.erase();
         let line = format!("{text}\n");
@@ -151,7 +151,7 @@ impl LiveSink {
             return;
         }
         // Advanced only when something was drawn, so a redraw that had
-        // nothing to show does not skip a frame; see [R-TUI-026].
+        // nothing to show does not skip a frame; see [REQ-3226, REQ-3307].
         self.frame = self.frame.wrapping_add(1);
         if !self.hidden {
             self.raw(HIDE_CURSOR);
@@ -174,7 +174,7 @@ impl LiveSink {
         let mut lines: Vec<String> = self.rows.iter().map(|row| self.row_line(row)).collect();
 
         // Capped to the viewport, so the cursor-up arithmetic of the next
-        // frame can never walk past the top of the screen; see [R-TUI-020].
+        // frame can never walk past the top of the screen; see [REQ-3220, REQ-3305].
         let limit = self.max_rows();
         if lines.len() > limit {
             let hidden = lines.len() - limit;
@@ -195,7 +195,7 @@ impl LiveSink {
             .paint(Role::Accent, frames[self.frame % frames.len()]);
 
         // Two spaces of indent, the mark, a space, the name, then two spaces
-        // before a note. Nothing indents further; see [R-TUI-002].
+        // before a note. Nothing indents further; see [REQ-3202].
         let budget = usize::from(self.width().saturating_sub(4));
         let name = row.component.to_string();
         let (name, note) = if display_width(&name) > budget {
@@ -226,7 +226,7 @@ impl LiveSink {
     /// The width now.
     ///
     /// Re-read per frame, so a resize is picked up without a signal handler;
-    /// see [R-TUI-025].
+    /// see [REQ-3225].
     fn width(&self) -> u16 {
         self.theme
             .caps
@@ -310,7 +310,7 @@ impl Sink for LiveSink {
 
             // A skip is a count on its own line rather than a line each: on a
             // configuration whose components come from an aggregate module
-            // there are a hundred of them; see [R-TUI-024].
+            // there are a hundred of them; see [REQ-3224].
             Event::ComponentSkipped { .. } => {
                 self.skipped += 1;
                 self.draw();
@@ -326,7 +326,7 @@ impl Sink for LiveSink {
                         self.commit(&line);
                     }
                     // Nothing to do is a success with nothing to say; see
-                    // [R-ENGINE-033].
+                    // [REQ-3033, REQ-3111].
                     Outcome::NothingToDo => self.draw(),
                     Outcome::Failed { error } => {
                         let line = self.item(
@@ -339,7 +339,7 @@ impl Sink for LiveSink {
             }
 
             // Sub-work goes on the component's status line, which keeps the
-            // two-indent rule; see [R-TUI-024].
+            // two-indent rule; see [REQ-3224].
             Event::OpApplied { kind, target } => {
                 self.set_note(&format!("{kind} {target}"));
             }
@@ -349,7 +349,7 @@ impl Sink for LiveSink {
             }
 
             // Captured output appears under its component while the process
-            // runs, on the component's own line; see [R-TUI-021].
+            // runs, on the component's own line; see [REQ-3221].
             Event::ProcessOutput { line, .. } => {
                 self.set_note(line);
             }
@@ -360,7 +360,7 @@ impl Sink for LiveSink {
 
             // The terminal belongs to the subprocess until it is released:
             // the region goes, the cursor comes back, and nothing is written
-            // in between; see [R-TUI-022].
+            // in between; see [REQ-3222].
             Event::TerminalRequested => {
                 self.stand_down();
                 self.paused = true;
@@ -414,7 +414,7 @@ impl Sink for LiveSink {
         }
     }
 
-    /// Erases the region and gives the cursor back; see [R-TUI-023].
+    /// Erases the region and gives the cursor back; see [REQ-3223, REQ-3306].
     fn finish(&mut self) {
         self.rows.clear();
         self.skipped = 0;
@@ -424,7 +424,7 @@ impl Sink for LiveSink {
 
 impl Drop for LiveSink {
     /// A panic between drawing and finishing would otherwise leave the user's
-    /// shell without a cursor; see [R-TUI-023].
+    /// shell without a cursor; see [REQ-3223, REQ-3306].
     fn drop(&mut self) {
         self.stand_down();
     }

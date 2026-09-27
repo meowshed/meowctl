@@ -20,7 +20,7 @@ fn document(tag: &str, assets: &[&str]) -> Vec<u8> {
     .into_bytes()
 }
 
-/// [R-CLI-072] the tag and the version are one `v` apart, which is why the
+/// [REQ-3472, REQ-3530, REQ-3531] the tag and the version are one `v` apart, which is why the
 /// comparison is a function rather than an equality at the call site.
 #[test]
 fn a_tag_and_a_version_are_compared_across_the_v() {
@@ -31,7 +31,7 @@ fn a_tag_and_a_version_are_compared_across_the_v() {
     assert!(!release.is("v0.2.0"), "the version does not carry the v");
 }
 
-/// [R-CLI-073] the asset is the one named for this platform, and a release
+/// [REQ-3473, REQ-3532] the asset is the one named for this platform, and a release
 /// with none says which platform was looked for and where to look.
 #[test]
 fn the_asset_for_a_platform_is_found_by_name() {
@@ -57,7 +57,7 @@ fn the_asset_for_a_platform_is_found_by_name() {
     assert!(said.contains("https://h/releases/v0.2.0"), "{said}");
 }
 
-/// [R-CLI-071] a release publishing no checksums is refused, rather than
+/// [REQ-3471, REQ-3529] a release publishing no checksums is refused, rather than
 /// treated as one that needs no verification.
 #[test]
 fn a_release_with_no_checksums_is_refused() {
@@ -73,7 +73,7 @@ fn a_release_with_no_checksums_is_refused() {
     );
 }
 
-/// [R-CLI-070] the bytes are hashed here, so the only way to pass is to be
+/// [REQ-3470, REQ-3527, REQ-3528] the bytes are hashed here, so the only way to pass is to be
 /// the bytes the release published.
 #[test]
 fn bytes_that_match_what_was_published_pass() {
@@ -86,7 +86,7 @@ fn bytes_that_match_what_was_published_pass() {
     verify(&line, "meowctl-aarch64-apple-darwin", bytes).expect("the bytes are the bytes");
 }
 
-/// [R-CLI-070] and bytes that do not are refused, naming both hashes so a
+/// [REQ-3470, REQ-3527, REQ-3528] and bytes that do not are refused, naming both hashes so a
 /// reader can tell a corrupted download from a substituted one.
 #[test]
 fn bytes_that_do_not_match_are_refused() {
@@ -103,7 +103,7 @@ fn bytes_that_do_not_match_are_refused() {
     assert!(said.contains("sha384-"), "{said}");
 }
 
-/// [R-CLI-071] an asset with no line is unverifiable, and unverifiable is
+/// [REQ-3471, REQ-3529] an asset with no line is unverifiable, and unverifiable is
 /// refused.
 #[test]
 fn an_asset_with_no_line_is_refused() {
@@ -118,7 +118,7 @@ fn an_asset_with_no_line_is_refused() {
     );
 }
 
-/// [R-CLI-071] a line that is not a hash and a name is a broken checksum
+/// [REQ-3471, REQ-3529] a line that is not a hash and a name is a broken checksum
 /// file, named by its line so it can be found.
 #[test]
 fn a_line_that_is_not_a_hash_and_a_name_is_refused() {
@@ -136,7 +136,7 @@ fn a_line_that_is_not_a_hash_and_a_name_is_refused() {
     verify(&file, "meowctl-y", b"x").expect("the good line");
 }
 
-/// [R-CLI-071] comments and blank lines are skipped, because a checksum file
+/// [REQ-3471, REQ-3529] comments and blank lines are skipped, because a checksum file
 /// a human maintains will have them.
 #[test]
 fn comments_and_blank_lines_are_skipped() {
@@ -167,7 +167,7 @@ fn the_checksum_file_is_found_among_the_assets() {
     assert_eq!(release.checksums().expect("it is there").name, CHECKSUMS);
 }
 
-/// [R-CLI-071] a broken line is numbered by its line, because a checksum file
+/// [REQ-3471, REQ-3529] a broken line is numbered by its line, because a checksum file
 /// is read by a human when it goes wrong and "somewhere in this file" is not
 /// an answer.
 #[test]

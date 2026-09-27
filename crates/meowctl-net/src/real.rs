@@ -7,19 +7,19 @@ use crate::{Http, NetError, NetResult};
 /// How long a request may take, start to finish.
 ///
 /// What `v0.1.0` gives every one of its clients. A shell hook that triggers a
-/// resolution is otherwise a hang with no output; see [R-NET-002].
+/// resolution is otherwise a hang with no output; see [REQ-1802].
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The largest body that will be read.
 ///
 /// `v0.1.0` calls `io.ReadAll` and has no bound, so a server that streams
 /// forever is an out-of-memory kill with no message. 64 MiB is two orders of
-/// magnitude above the largest module published; see [R-NET-006].
+/// magnitude above the largest module published; see [REQ-1806, REQ-1902].
 pub const MAX_BODY_BYTES: u64 = 64 * 1024 * 1024;
 
 /// Fetches over the network.
 ///
-/// HTTPS only, including across a redirect, which [R-NET-003] and [R-NET-005]
+/// HTTPS only, including across a redirect, which [REQ-1803, REQ-1900] and [REQ-1805]
 /// require and `v0.1.0` does not do: it builds requests with the default
 /// client, so one `source` template in a registry index could downgrade every
 /// module fetch to plaintext.
@@ -63,7 +63,7 @@ impl Default for RealHttp {
 /// an error; this catches the rest -- a 204 has no body and a 3xx here means
 /// redirects were exhausted, and extracting either as a tarball reports a
 /// corrupt archive rather than what happened. Separate from the request so
-/// the rule is testable without a server; see [R-NET-004].
+/// the rule is testable without a server; see [REQ-1804, REQ-1901].
 fn status_failure(url: &str, code: u16) -> Option<NetError> {
     (code != 200).then(|| NetError::Status {
         url: url.to_owned(),
@@ -89,7 +89,7 @@ impl Http for RealHttp {
     }
 }
 
-/// Maps a `ureq` failure onto the four cases [R-NET-010] distinguishes.
+/// Maps a `ureq` failure onto the four cases [REQ-1810] distinguishes.
 fn translate(url: &str, error: ureq::Error) -> NetError {
     let url = url.to_owned();
     match error {
@@ -130,7 +130,7 @@ fn translate(url: &str, error: ureq::Error) -> NetError {
 mod tests {
     use super::*;
 
-    /// [R-NET-003] and [R-NET-005]: the refusal happens before any request,
+    /// [REQ-1803, REQ-1900] and [REQ-1805]: the refusal happens before any request,
     /// which is why it can be checked without a server.
     ///
     /// One `https_only` on the agent gives both. A caller can check the URL
@@ -146,13 +146,13 @@ mod tests {
         assert_eq!(err.url(), "http://example.invalid/index.toml");
     }
 
-    /// [R-NET-012] `RealHttp` is what performs a request, and these are the
+    /// [REQ-1812] `RealHttp` is what performs a request, and these are the
     /// parts of it that can be held without a server: the client's
     /// configuration and the refusals that happen before anything is sent.
     /// The request itself is exercised by `meowctl-module`'s live registry
     /// test, which is skipped when the network is not there.
     ///
-    /// [R-NET-002] every request carries a timeout, and the default is the
+    /// [REQ-1802] every request carries a timeout, and the default is the
     /// 30 seconds `v0.1.0` gives all of its clients. A resolution without one
     /// is a hang with no output.
     #[test]
@@ -160,7 +160,7 @@ mod tests {
         assert_eq!(DEFAULT_TIMEOUT, Duration::from_secs(30));
     }
 
-    /// [R-NET-004] only 200 is a body, and everything else is a failure
+    /// [REQ-1804, REQ-1901] only 200 is a body, and everything else is a failure
     /// carrying the code, which is what tells a missing module from a
     /// rate-limited one.
     #[test]
@@ -174,7 +174,7 @@ mod tests {
         }
     }
 
-    /// [R-NET-004] a status that is not 200 is a failure carrying the code,
+    /// [REQ-1804, REQ-1901] a status that is not 200 is a failure carrying the code,
     /// which is what tells a missing module from a rate-limited one. The
     /// constructor for that error is here and the `ScriptedHttp` test asserts
     /// the code survives; what needs a server is producing the status, not
@@ -189,7 +189,7 @@ mod tests {
         assert!(err.to_string().contains("429"), "{err}");
     }
 
-    /// [R-NET-006] a body is bounded, so a URL answering with an endless
+    /// [REQ-1806, REQ-1902] a body is bounded, so a URL answering with an endless
     /// stream fails rather than filling the disk. The bound is an order of
     /// magnitude above the largest module published.
     #[test]

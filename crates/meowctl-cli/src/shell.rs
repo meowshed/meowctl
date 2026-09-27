@@ -3,7 +3,7 @@
 //! Reproduced from `shellSnippets` in `internal/cli/shell.go` byte for byte.
 //! A user's `~/.zshrc` evaluates this, so it is a machine interface and not
 //! prose: a reworded comment is a diff in everybody's dotfiles; see
-//! [R-CLI-021].
+//! [REQ-3421, REQ-3511].
 
 use crate::cli::Shell;
 

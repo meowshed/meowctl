@@ -3,7 +3,7 @@
 //! The fixture is not hand-written: it came out of `lock.Write` in the Go
 //! tree, given a structure with every field populated. A round trip through
 //! our own reader and writer proves the two agree with each other; only a
-//! fixture proves they agree with `v0.1.0`; see [R-CONFIG-023].
+//! fixture proves they agree with `v0.1.0`; see [REQ-1223].
 
 // `clippy.toml` exempts tests from `expect_used`, but only a function carrying
 // `#[test]`. A helper in a test binary is test code by construction.
@@ -105,10 +105,10 @@ fn populated() -> LockFile {
     }
 }
 
-/// [R-CONFIG-023] byte for byte, because a semantic comparison hides a key
+/// [REQ-1223] byte for byte, because a semantic comparison hides a key
 /// reorder and a reorder is what breaks reproducibility.
 ///
-/// The fixture is also where [R-CONFIG-020] and [R-CONFIG-021] are held: the
+/// The fixture is also where [REQ-1220, REQ-1305, REQ-1306, REQ-1307] and [REQ-1221] are held: the
 /// four tables and the per-file hash map are in it, so a table dropped or a
 /// key renamed fails here rather than on somebody's machine.
 #[test]
@@ -135,7 +135,7 @@ fn a_v0_1_0_lock_file_parses_back_to_its_structure() {
     assert_eq!(LockFile::read(&fs, path).expect("read"), populated());
 }
 
-/// [R-CONFIG-003] a first run has no lock, and treating that as a failure
+/// [REQ-1203, REQ-1300] a first run has no lock, and treating that as a failure
 /// would make `init` the only command that works.
 #[test]
 fn a_missing_lock_is_an_empty_one() {
@@ -144,7 +144,7 @@ fn a_missing_lock_is_an_empty_one() {
     assert_eq!(lock, LockFile::default());
 }
 
-/// [R-CONFIG-024] the local file is how a machine differs from the committed
+/// [REQ-1224, REQ-1308] the local file is how a machine differs from the committed
 /// configuration, so it wins.
 #[test]
 fn a_local_lock_overlays_the_shared_one() {
@@ -178,7 +178,7 @@ fn a_local_lock_overlays_the_shared_one() {
     assert_eq!(merged.modules["other"].version, "9.9.9");
 }
 
-/// [R-CONFIG-031] a user who installed an earlier build has the version 1
+/// [REQ-1231] a user who installed an earlier build has the version 1
 /// shape on disk, and a parse error would strand them.
 #[test]
 fn the_version_1_installed_lock_still_parses() {
@@ -200,7 +200,7 @@ fn the_version_1_installed_lock_still_parses() {
     assert_eq!(fingerprints["zsh"], "");
 }
 
-/// [R-CONFIG-030] and [R-CONFIG-032]: each component with the fingerprint of
+/// [REQ-1230] and [REQ-1232]: each component with the fingerprint of
 /// the module it came from, sorted, so the file does not churn and shows a
 /// diff on every
 /// apply.
@@ -232,7 +232,7 @@ fn an_installed_lock_is_written_sorted_and_in_the_current_shape() {
     );
 }
 
-/// [R-CONFIG-041] `v0.1.0` ignores the field, so an older binary rewrites a
+/// [REQ-1241, REQ-1312] `v0.1.0` ignores the field, so an older binary rewrites a
 /// newer file and drops what it did not understand.
 #[test]
 fn a_sentinel_from_a_newer_build_is_refused_rather_than_overwritten() {
@@ -246,11 +246,11 @@ fn a_sentinel_from_a_newer_build_is_refused_rather_than_overwritten() {
     assert!(message.contains("newer"), "{message}");
 }
 
-/// [R-CONFIG-040] the sentinel is read back as what was written, including the
+/// [REQ-1240] the sentinel is read back as what was written, including the
 /// timestamps, which are TOML datetimes rather than strings.
 ///
-/// The fixture carries what [R-CONFIG-042], [R-CONFIG-043] and
-/// [R-CONFIG-044] require: `last_run` with its four fields, a
+/// The fixture carries what [REQ-1242], [REQ-1243, REQ-1313] and
+/// [REQ-1244] require: `last_run` with its four fields, a
 /// `completed_components` entry with its phase, component and timestamp, and
 /// `rolled_back` as one of the four strings.
 #[test]
@@ -287,7 +287,7 @@ fn a_sentinel_round_trips() {
     assert_eq!(Sentinel::read(&fs, out).expect("reread"), sentinel);
 }
 
-/// [R-ENGINE-043] a module bump has to make the next run redo the components
+/// [REQ-3043, REQ-3116] a module bump has to make the next run redo the components
 /// that came from it.
 #[test]
 fn forgetting_a_component_clears_every_phase_it_completed() {
@@ -313,7 +313,7 @@ fn forgetting_a_component_clears_every_phase_it_completed() {
     assert!(sentinel.is_completed("install", "b"));
 }
 
-/// [R-CONFIG-001] these are the names a user has on disk, so they are not ours
+/// [REQ-1201] these are the names a user has on disk, so they are not ours
 /// to change.
 #[test]
 fn the_file_names_are_the_ones_v0_1_0_uses() {
@@ -350,7 +350,7 @@ fn the_file_names_are_the_ones_v0_1_0_uses() {
     }
 }
 
-/// [R-CONFIG-004] a user who wrote their configuration before the rename needs
+/// [REQ-1204, REQ-1301] a user who wrote their configuration before the rename needs
 /// the three commands that fix it, not a missing-file error.
 #[test]
 fn a_pre_rename_directory_is_told_how_to_migrate() {
@@ -375,7 +375,7 @@ fn a_pre_rename_directory_is_told_how_to_migrate() {
     }
 }
 
-/// [R-CLI-050] someone who has not run `init` should be told to, not handed a
+/// [REQ-3450, REQ-3515, REQ-3516] someone who has not run `init` should be told to, not handed a
 /// path they have never seen.
 #[test]
 fn a_directory_with_no_configuration_says_to_run_init() {
@@ -399,7 +399,7 @@ fn a_configured_directory_passes() {
 /// The manifest `v0.1.0` wrote, checked into the tree.
 const V0_1_0_MODFILE: &str = include_str!("fixtures/deps.mod.v0_1_0");
 
-/// [R-CONFIG-011], [R-CONFIG-013] and [R-CONFIG-014]: byte for byte, from a
+/// [REQ-1211], [REQ-1213] and [REQ-1214, REQ-1304]: byte for byte, from a
 /// fixture `modfile.Write` produced rather than from a reading of it. The
 /// four statements are all in it, and so is the keyword order.
 #[test]
@@ -444,7 +444,7 @@ fn a_manifest_is_written_exactly_as_v0_1_0_writes_it() {
     );
 }
 
-/// [R-CONFIG-010] a manifest this writer produced has to evaluate, or
+/// [REQ-1210, REQ-1302] a manifest this writer produced has to evaluate, or
 /// `meowctl dep add` writes a file the next run cannot read.
 #[test]
 fn a_written_manifest_evaluates() {
@@ -462,7 +462,7 @@ fn a_written_manifest_evaluates() {
     assert_eq!(result.declarations.replaces.len(), 2);
 }
 
-/// [R-CONFIG-061] a hash that is not a W3C Subresource Integrity one fails
+/// [REQ-1261] a hash that is not a W3C Subresource Integrity one fails
 /// where the file is read.
 ///
 /// The alternative is what the first implementation did: keep the string,
@@ -492,8 +492,8 @@ fn a_lock_with_a_malformed_integrity_is_refused() {
     assert!(said.contains("sha384-"), "{said}");
 }
 
-/// [R-CONFIG-061] and a per-file hash is held to the same form, because that
-/// is what [R-MODULE-041] compares a cached module against.
+/// [REQ-1261] and a per-file hash is held to the same form, because that
+/// is what [REQ-2441] compares a cached module against.
 #[test]
 fn a_malformed_per_file_hash_is_refused() {
     let fs = memory();
@@ -516,7 +516,7 @@ fn a_malformed_per_file_hash_is_refused() {
     assert!(err.to_string().contains("components/git.star"), "{err}");
 }
 
-/// [R-CONFIG-061] an empty hash is not malformed. A replaced module points at
+/// [REQ-1261] an empty hash is not malformed. A replaced module points at
 /// a local path and has nothing to verify.
 #[test]
 fn a_replaced_module_with_no_hash_is_accepted() {
@@ -538,7 +538,7 @@ fn a_replaced_module_with_no_hash_is_accepted() {
     assert!(lock.modules["stdlib"].replaced);
 }
 
-/// [R-CONFIG-012] a dependency naming both leaves the resolver choosing
+/// [REQ-1212, REQ-1303] a dependency naming both leaves the resolver choosing
 /// between two answers, so reading the manifest fails instead.
 #[test]
 fn a_dep_with_a_version_and_a_source_is_refused() {
@@ -561,7 +561,7 @@ fn a_dep_with_a_version_and_a_source_is_refused() {
     assert!(said.contains("mutually exclusive"), "{said}");
 }
 
-/// [R-CONFIG-012] and one naming neither is equally unusable.
+/// [REQ-1212, REQ-1303] and one naming neither is equally unusable.
 #[test]
 fn a_dep_with_neither_is_refused() {
     use meowctl_config::{Dep, Modfile};
@@ -581,7 +581,7 @@ fn a_dep_with_neither_is_refused() {
     assert!(err.to_string().contains("exactly one"), "{err}");
 }
 
-/// [R-CONFIG-012] `replace()` carries the same rule, with its own two fields.
+/// [REQ-1212, REQ-1303] `replace()` carries the same rule, with its own two fields.
 #[test]
 fn a_replace_follows_the_same_rule() {
     use meowctl_config::{Modfile, Replace};
@@ -610,7 +610,7 @@ fn a_replace_follows_the_same_rule() {
     assert!(err.to_string().contains("path"), "{err}");
 }
 
-/// [R-CONFIG-011] and [R-CONFIG-012]: the four statements a manifest may
+/// [REQ-1211] and [REQ-1212, REQ-1303]: the four statements a manifest may
 /// carry, each in a form the rule accepts.
 #[test]
 fn the_four_statements_a_manifest_carries_are_accepted() {
@@ -652,7 +652,7 @@ fn the_four_statements_a_manifest_carries_are_accepted() {
         .expect("the four statements are what a manifest is made of");
 }
 
-/// [R-CONFIG-060] the parser's position reaches the user, because "this file
+/// [REQ-1260, REQ-1315] the parser's position reaches the user, because "this file
 /// is malformed" for a 200-line lock sends them reading the whole thing.
 #[test]
 fn a_malformed_file_names_the_file_and_where_it_broke() {
@@ -673,7 +673,7 @@ fn a_malformed_file_names_the_file_and_where_it_broke() {
     );
 }
 
-/// [R-CONFIG-033] the fingerprint is a chain, not one field: a GitHub module
+/// [REQ-1233] the fingerprint is a chain, not one field: a GitHub module
 /// re-synced to a new commit has to invalidate even though no version moved.
 #[test]
 fn a_fingerprint_falls_through_version_then_commit_then_hash() {
@@ -701,7 +701,7 @@ fn a_fingerprint_falls_through_version_then_commit_then_hash() {
     assert_eq!(hashed.fingerprint(), "sha384-AAA");
 }
 
-/// [R-CONFIG-043] and [R-ENGINE-041]: recording a completion has to record
+/// [REQ-1243, REQ-1313] and [REQ-3041]: recording a completion has to record
 /// it, because the sentinel is what makes an interrupted run resume where it
 /// stopped rather than start over.
 ///
@@ -730,7 +730,7 @@ fn recording_a_completion_records_it() {
     assert_eq!(sentinel.completed_components.len(), 2);
 }
 
-/// [R-CONFIG-040] a sentinel that was never written reads as a first run
+/// [REQ-1240] a sentinel that was never written reads as a first run
 /// carrying the current schema version, so the next write does not claim to
 /// be version zero.
 #[test]
@@ -743,7 +743,7 @@ fn a_sentinel_that_is_not_there_is_a_first_run_at_the_current_version() {
     assert!(sentinel.last_run.phase_set.is_empty());
 }
 
-/// [R-CONFIG-044] the four strings, because `v0.1.0` reads this field and an
+/// [REQ-1244] the four strings, because `v0.1.0` reads this field and an
 /// outcome it does not know is an outcome it ignores.
 #[test]
 fn the_rollback_outcomes_are_the_four_v0_1_0_declares() {
@@ -755,7 +755,7 @@ fn the_rollback_outcomes_are_the_four_v0_1_0_declares() {
     assert_eq!(RolledBack::Failed.as_str(), "failed");
 }
 
-/// [R-CONFIG-031] an `installed.lock` from a newer build is refused rather
+/// [REQ-1231] an `installed.lock` from a newer build is refused rather
 /// than rewritten, and one at the current version is read.
 ///
 /// The comparison is strictly greater: the current version is not newer than
@@ -785,7 +785,7 @@ components = []
     InstalledLock::read(&fs, path).expect("the current version is not newer than itself");
 }
 
-/// [R-CONFIG-021] a control character in a value is escaped as `\uXXXX`
+/// [REQ-1221] a control character in a value is escaped as `\uXXXX`
 /// rather than written raw, because a lock with a raw one does not parse
 /// back and both binaries have to be able to read what either wrote.
 ///
@@ -830,7 +830,7 @@ fn a_control_character_is_escaped_numerically() {
     assert_eq!(read.modules["odd"].version, "1.0\u{1}0");
 }
 
-/// [R-CONFIG-023] an empty array of tables is emitted as nothing, not as a
+/// [REQ-1223] an empty array of tables is emitted as nothing, not as a
 /// bare header, because `v0.1.0` omits it and the files are compared byte for
 /// byte.
 #[test]
@@ -851,7 +851,7 @@ fn an_empty_array_of_tables_writes_nothing() {
     );
 }
 
-/// [R-CONFIG-014] a space in a manifest value is a space, not `\u0020`.
+/// [REQ-1214, REQ-1304] a space in a manifest value is a space, not `\u0020`.
 ///
 /// The boundary is 0x20 exclusive: below it is a control character and gets
 /// the numeric form, and 0x20 itself is a space that every path in the file

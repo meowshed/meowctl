@@ -1,6 +1,6 @@
-# Prose. Neither `ci.yml` nor `rust.yml` triggers on a Markdown change, and
-# this repository is mostly documentation right now: the specifications, the
-# design documents, and the plan. An unchecked rule is one that drifts.
+# Prose. `ci.yml` doesn't lint Markdown, and the record under `project/` is
+# Markdown: the vision, the specifications, the requirements,
+# the decisions and the tasks. An unchecked rule is one that drifts.
 name: Docs
 
 on:

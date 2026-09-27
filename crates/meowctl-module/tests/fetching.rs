@@ -102,7 +102,7 @@ fn a_registry_module_is_fetched_verified_and_extracted() {
     );
 }
 
-/// [R-MODULE-032] a module ships scripts meowctl runs, and a dropped bit makes
+/// [REQ-2432] a module ships scripts meowctl runs, and a dropped bit makes
 /// every one of them unusable. `v0.1.0` fixed this once already.
 ///
 /// Windows has no bit for any filesystem to carry, so what is checked there is
@@ -135,13 +135,13 @@ fn the_executable_bit_survives_extraction() {
     );
 }
 
-/// [R-MODULE-040], [R-MODULE-041] and [R-MODULE-043]: a verified cache
+/// [REQ-2440], [REQ-2441] and [REQ-2443]: a verified cache
 /// answers without a request, and `OfflineHttp` is what proves there was
 /// none.
 ///
 /// The second loader is a fresh one over the same cache directory, so the
 /// answer can only have come from a key both agree on -- the module's name
-/// and its resolved version, which is what [R-MODULE-040] fixes. A key that
+/// and its resolved version, which is what [REQ-2440] fixes. A key that
 /// included anything per-run would miss here and fetch.
 #[test]
 fn a_verified_cache_needs_no_network_at_all() {
@@ -162,7 +162,7 @@ fn a_verified_cache_needs_no_network_at_all() {
     assert_eq!(source, b"APT = 1\n");
 }
 
-/// [R-MODULE-042] the cache is a copy, not the authority. Something that can
+/// [REQ-2442, REQ-2510] the cache is a copy, not the authority. Something that can
 /// write to it can otherwise change what a hook runs.
 #[test]
 fn a_cache_whose_files_changed_is_fetched_again() {
@@ -191,7 +191,7 @@ fn a_cache_whose_files_changed_is_fetched_again() {
     );
 }
 
-/// [R-MODULE-042] a cache `v0.1.0` populated has the `.sri` sidecar and no
+/// [REQ-2442, REQ-2510] a cache `v0.1.0` populated has the `.sri` sidecar and no
 /// per-file record, and what it holds is therefore unknown.
 #[test]
 fn a_cache_with_no_record_is_fetched_again() {
@@ -215,7 +215,7 @@ fn a_cache_with_no_record_is_fetched_again() {
     assert_eq!(source, b"APT = 1\n");
 }
 
-/// [R-MODULE-044] the sidecar `v0.1.0` reads keeps its name and its format,
+/// [REQ-2444, REQ-2511, REQ-2512] the sidecar `v0.1.0` reads keeps its name and its format,
 /// because the two binaries share one cache directory.
 #[test]
 fn the_v0_1_0_sidecar_is_written_where_v0_1_0_looks_for_it() {
@@ -238,12 +238,12 @@ fn the_v0_1_0_sidecar_is_written_where_v0_1_0_looks_for_it() {
     );
 }
 
-/// [R-MODULE-013] is held by the crate rather than by a case: nothing here
+/// [REQ-2413, REQ-2503] is held by the crate rather than by a case: nothing here
 /// spawns a process, because `meowctl-module` has no `Executor` to spawn one
 /// with -- a machine being bootstrapped may not have `git` yet. What it has
-/// is an `Http`, and [R-NET-003] is where the scheme is enforced.
+/// is an `Http`, and [REQ-1803, REQ-1900] is where the scheme is enforced.
 ///
-/// [R-MODULE-030] and [R-MODULE-031]: the hash is checked before anything is
+/// [REQ-2430, REQ-2506] and [REQ-2431, REQ-2507, REQ-2508]: the hash is checked before anything is
 /// extracted, and the message carries both hashes so a reader can tell which
 /// is which.
 #[test]
@@ -277,7 +277,7 @@ fn a_tarball_that_does_not_match_the_index_is_refused_before_extraction() {
     );
 }
 
-/// [R-MODULE-033] a tarball is remote input, and an entry that climbs out of
+/// [REQ-2433] a tarball is remote input, and an entry that climbs out of
 /// the module root is how it writes somewhere it was not invited. Both forms
 /// are refused: `..` and an absolute path.
 #[test]
@@ -321,7 +321,7 @@ source = "https://registry.invalid/{{name}}/{{version_no_v}}.tar.gz"
     );
 }
 
-/// [R-MODULE-034] a GitHub archive puts everything under `repo-<commit>/`.
+/// [REQ-2434, REQ-2509] a GitHub archive puts everything under `repo-<commit>/`.
 /// `v0.1.0` extracts it as it comes and then looks one directory too high, so
 /// a `github:` module has never resolved its files or its manifest.
 #[test]
@@ -356,7 +356,7 @@ fn a_github_archive_loses_its_single_top_level_directory() {
     );
 }
 
-/// [R-MODULE-011] a ref moves and a commit does not, so a recorded commit is
+/// [REQ-2411, REQ-2501, REQ-2502] a ref moves and a commit does not, so a recorded commit is
 /// fetched without asking the API what the ref points at today.
 #[test]
 fn a_recorded_commit_skips_the_api_call() {
@@ -380,7 +380,7 @@ fn a_recorded_commit_skips_the_api_call() {
     );
 }
 
-/// [R-MODULE-060] the three ways an index fetch fails need three different
+/// [REQ-2460, REQ-2514] the three ways an index fetch fails need three different
 /// fixes, so the caller has to be able to tell them apart.
 #[test]
 fn an_index_that_will_not_load_says_which_failure_it_was() {
@@ -417,7 +417,7 @@ fn an_index_that_will_not_load_says_which_failure_it_was() {
     assert!(matches!(err, ModuleError::IndexUnreadable { .. }), "{err}");
 }
 
-/// [R-MODULE-061] a module that is not published and a version that was never
+/// [REQ-2461] a module that is not published and a version that was never
 /// released need different fixes, so they are different errors.
 #[test]
 fn a_missing_module_and_a_missing_version_are_different_failures() {
@@ -440,7 +440,7 @@ fn a_missing_module_and_a_missing_version_are_different_failures() {
     assert!(err.to_string().contains("9.9.9"), "{err}");
 }
 
-/// [R-MODULE-020] a replacement is a checkout somebody is editing, so it is
+/// [REQ-2420, REQ-2504] a replacement is a checkout somebody is editing, so it is
 /// served as it stands and never hashed.
 #[test]
 fn a_replaced_module_is_served_from_the_local_checkout() {
@@ -462,7 +462,7 @@ fn a_replaced_module_is_served_from_the_local_checkout() {
     assert_eq!(source, b"APT = local\n");
 }
 
-/// [R-MODULE-064] a typo in a `replace` path must not silently fall back to
+/// [REQ-2464] a typo in a `replace` path must not silently fall back to
 /// upstream, which is the opposite of what the directive asked for.
 #[test]
 fn a_replacement_that_is_not_there_fails_rather_than_fetching() {
@@ -482,7 +482,7 @@ fn a_replacement_that_is_not_there_fails_rather_than_fetching() {
     assert!(http.asked().is_empty(), "nothing was fetched");
 }
 
-/// [R-STAR-020] a local `load()` reads from the root its scheme names, and
+/// [REQ-2220] a local `load()` reads from the root its scheme names, and
 /// nowhere above it.
 #[test]
 fn a_local_load_stays_under_its_root() {
@@ -506,7 +506,7 @@ fn a_local_load_stays_under_its_root() {
     assert!(matches!(err, ModuleError::UnusableUrl { .. }), "{err}");
 }
 
-/// [R-MODULE-063] an extraction that stops partway must not leave something a
+/// [REQ-2463] an extraction that stops partway must not leave something a
 /// later run reads as a complete module. The staging directory is what makes
 /// the cache directory's existence mean what every caller assumes it means.
 #[test]
@@ -537,7 +537,7 @@ fn a_partial_extraction_is_not_left_where_a_module_belongs() {
     );
 }
 
-/// [R-STAR-022] the check happens before the source is handed to an
+/// [REQ-2222] the check happens before the source is handed to an
 /// evaluator, because a file checked afterwards has already run.
 #[test]
 fn a_file_changed_since_extraction_is_refused_rather_than_returned() {
@@ -617,7 +617,7 @@ fn the_loader_refuses_a_url_it_cannot_parse() {
     assert!(ModuleUrl::parse("github://nope").is_err());
 }
 
-/// [R-MODULE-045] the cache is populated during a dry run.
+/// [REQ-2445] the cache is populated during a dry run.
 ///
 /// A dry run has to evaluate a configuration's modules to produce a plan, and
 /// evaluating them means fetching them. The fetch is a read as far as the
@@ -643,7 +643,7 @@ fn a_fetch_fills_the_cache_whether_or_not_anything_will_be_applied() {
     assert!(!entries.is_empty(), "nothing was cached");
 }
 
-/// [R-MODULE-033] every way an entry can climb out of the module directory.
+/// [REQ-2433] every way an entry can climb out of the module directory.
 ///
 /// A tarball is remote input, so this is the guard that stands between a
 /// published module and the user's home directory. Table-driven because the
@@ -665,7 +665,7 @@ fn every_shape_of_escaping_path_is_refused() {
     }
 }
 
-/// [R-MODULE-033] and a path that only looks like one is kept: `./a` is `a`,
+/// [REQ-2433] and a path that only looks like one is kept: `./a` is `a`,
 /// which is how a tar writer that prefixes everything with `./` is read.
 #[test]
 fn a_leading_dot_is_normalised_rather_than_refused() {
@@ -679,7 +679,7 @@ fn a_leading_dot_is_normalised_rather_than_refused() {
     );
 }
 
-/// [R-MODULE-011] every part of a `github://` URL is required, and a URL
+/// [REQ-2411, REQ-2501, REQ-2502] every part of a `github://` URL is required, and a URL
 /// missing one is a mistake rather than a module with an empty name.
 ///
 /// Table-driven for the same reason as the archive guard: each `||` in the

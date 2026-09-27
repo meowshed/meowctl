@@ -5,7 +5,7 @@
 //! share a configuration directory during the rewrite, so a journal written by
 //! one has to replay under the other; the field names here are read from
 //! `internal/rollback/rollback.go` and are not ours to change; see
-//! [R-OPS-020].
+//! [REQ-2020, REQ-2116].
 
 use std::io::{BufRead as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -33,7 +33,7 @@ pub struct Record {
 ///
 /// Three outcomes rather than a boolean, because `partial` is the one a user
 /// most needs to see and it is what `state.toml` already records; see
-/// [R-OPS-024] and [R-CONFIG-044].
+/// [REQ-2024] and [REQ-1244].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
     /// Every inverse applied.
@@ -71,7 +71,7 @@ pub struct Replay {
 ///
 /// Append a record before applying its operation. A crash between the two
 /// leaves a journal that replays a no-op, which is safe; the other order
-/// leaves an effect with no undo, which is not; see [R-OPS-021].
+/// leaves an effect with no undo, which is not; see [REQ-2021].
 #[derive(Debug)]
 pub struct Journal {
     path: PathBuf,
@@ -102,7 +102,7 @@ impl Journal {
     /// Whether the journal holds operations that were never undone.
     ///
     /// A non-empty journal at startup is an interrupted previous run, and the
-    /// engine reports it before doing anything else; see [R-ENGINE-042].
+    /// engine reports it before doing anything else; see [REQ-3042].
     #[must_use]
     pub const fn is_pending(&self) -> bool {
         self.seq > 0
@@ -126,7 +126,7 @@ impl Journal {
     ///
     /// [`OpsError::Journal`] when the record cannot be written. The caller
     /// must not apply the operation then: an effect with no record of how to
-    /// undo it is what this crate exists to prevent; see [R-OPS-032].
+    /// undo it is what this crate exists to prevent; see [REQ-2032].
     pub fn append(
         &mut self,
         phase: &str,
@@ -173,7 +173,7 @@ impl Journal {
     ///
     /// A line that cannot be parsed is reported and skipped rather than
     /// aborting, because one corrupt line must not strand every earlier
-    /// operation; see [R-OPS-030].
+    /// operation; see [REQ-2030, REQ-2120].
     ///
     /// # Errors
     ///
@@ -402,7 +402,7 @@ fn payload(forward: &Op, inverse: &Op) -> serde_json::Value {
         // Not a shape `v0.1.0` writes: it never journals these. A v0.1.0
         // binary replaying one reports "inverse not implemented" and carries
         // on, which is the same outcome it reaches today by having no record
-        // at all; see [R-OPS-017].
+        // at all; see [REQ-2017, REQ-2113, REQ-2114, REQ-2115].
         Op::DefaultsWrite { domain, key, .. } => match inverse {
             Op::DefaultsWrite {
                 value, value_type, ..
@@ -431,7 +431,7 @@ fn payload(forward: &Op, inverse: &Op) -> serde_json::Value {
 /// Replays a journal, applying inverses in reverse order.
 ///
 /// Continues after a failure and reports which ones failed, because stopping
-/// at the first leaves the rest of the run un-undone; see [R-OPS-023].
+/// at the first leaves the rest of the run un-undone; see [REQ-2023, REQ-2117].
 ///
 /// # Errors
 ///

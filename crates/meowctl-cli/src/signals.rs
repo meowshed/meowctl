@@ -3,7 +3,7 @@
 //! A signal arrives at the process, not at the sink and not at the engine, so
 //! this lives here: a library that installed a handler would be taking a
 //! process-wide resource its callers did not ask it to take; see
-//! [R-CLI-014].
+//! [REQ-3414].
 //!
 //! The work happens on a thread rather than in a signal handler. A handler
 //! runs between any two instructions and may call only async-signal-safe
@@ -26,9 +26,9 @@ const SHOW_CURSOR: &[u8] = b"\x1b[?25h";
 ///
 /// The returned flag is set by the first interrupt and read by the engine
 /// between components, which is what makes a run stop rather than die; see
-/// [R-ENGINE-062]. A second interrupt stops the process at once, because a
+/// [REQ-3062, REQ-3121]. A second interrupt stops the process at once, because a
 /// user who has asked twice is not asking for a tidier stop; see
-/// [R-CLI-053].
+/// [REQ-3453].
 ///
 /// A machine that will not let us watch is one where an interrupt kills the
 /// process outright and the cursor stays hidden, which is worth less than

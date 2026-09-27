@@ -11,7 +11,7 @@ pub enum PmError {
     /// Nothing handles this manager.
     ///
     /// The registered managers are listed because a typo is the common cause
-    /// and the list is what makes it obvious; see [R-PM-030].
+    /// and the list is what makes it obvious; see [REQ-2630].
     #[error(
         "no component handles the package manager {manager}; registered: {}",
         list(registered)
@@ -26,7 +26,7 @@ pub enum PmError {
     /// Two components claim the same manager.
     ///
     /// `v0.1.0` overwrites the earlier one, which makes the winner depend on
-    /// evaluation order; see [R-PM-004].
+    /// evaluation order; see [REQ-2604].
     #[error("{first} and {second} both handle {manager}; only one component may")]
     DuplicateHandler {
         /// The manager both claim.
@@ -41,7 +41,7 @@ pub enum PmError {
     ///
     /// Both components are named: the one that asked for the package and the
     /// one that handles the manager. A message naming only the handler sends
-    /// the reader to a file they did not write; see [R-PM-031].
+    /// the reader to a file they did not write; see [REQ-2631, REQ-2704].
     ///
     /// Boxed because six strings would make every `Result` in this crate the
     /// size of its largest failure.
@@ -51,7 +51,7 @@ pub enum PmError {
     /// A handler function returned something of the wrong shape.
     ///
     /// A defect in the handler rather than in the configuration that used it,
-    /// and coercing it would hide which; see [R-PM-032].
+    /// and coercing it would hide which; see [REQ-2632].
     #[error("{handler}'s {function} returned {found} rather than {expected}")]
     HandlerReturned {
         /// The component that handles the manager.

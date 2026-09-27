@@ -3,7 +3,7 @@
 //! Every write goes through [`FileSystem`], so an extraction is testable
 //! against `MemFs` and invisible to the real disk under a dry run. The archive
 //! is remote input, so every entry's path is checked before anything is
-//! written; see [R-MODULE-033].
+//! written; see [REQ-2433].
 
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
@@ -20,7 +20,7 @@ pub struct ArchiveFile {
     pub path: String,
     /// The contents.
     pub contents: Vec<u8>,
-    /// Whether the entry carried any executable bit; see [R-MODULE-032].
+    /// Whether the entry carried any executable bit; see [REQ-2432].
     pub executable: bool,
 }
 
@@ -75,7 +75,7 @@ pub fn read(module: &str, data: &[u8]) -> ModuleResult<Vec<ArchiveFile>> {
 ///
 /// A release tarball has `MODULE.meow` at its root and nothing is dropped. A
 /// GitHub archive has everything under `repo-<commit>/` and that segment goes;
-/// see [R-MODULE-034].
+/// see [REQ-2434, REQ-2509].
 #[must_use]
 pub fn strip_single_root(files: Vec<ArchiveFile>) -> Vec<ArchiveFile> {
     let Some(shared) = shared_root(&files) else {

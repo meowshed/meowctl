@@ -1,7 +1,7 @@
 //! Resolving a GitHub ref to a commit, and the URLs that follow from it.
 //!
 //! A ref is a tag or a branch, and both move. Recording the commit is what
-//! makes a later fetch reproduce the same code; see [R-MODULE-011].
+//! makes a later fetch reproduce the same code; see [REQ-2411, REQ-2501, REQ-2502].
 
 use meowctl_net::Http;
 use serde::Deserialize;

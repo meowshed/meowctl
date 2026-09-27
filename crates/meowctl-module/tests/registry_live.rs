@@ -38,7 +38,7 @@ fn the_published_index_parses_and_every_module_has_a_source() {
 
 /// The stdlib is what every configuration loads, and its release tarball is
 /// built without a top-level directory. If that ever changes,
-/// [R-MODULE-034] is what decides whether the module still resolves, and this
+/// [REQ-2434, REQ-2509] is what decides whether the module still resolves, and this
 /// is where it is noticed.
 #[test]
 #[ignore = "reaches the published registry"]
@@ -80,7 +80,7 @@ fn the_published_stdlib_fetches_verifies_and_extracts() {
     );
 }
 
-/// [R-MODULE-034] against the real thing. GitHub serves a repository archive
+/// [REQ-2434, REQ-2509] against the real thing. GitHub serves a repository archive
 /// with every entry under `repo-<ref>/`, and `v0.1.0` looks one directory
 /// above where that puts the files. This is the test that says the archive
 /// still has that shape.

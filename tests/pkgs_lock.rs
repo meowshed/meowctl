@@ -1,6 +1,6 @@
 //! `pkgs.lock` and `pkgs.local.lock`, written by a real run.
 //!
-//! Driven through the binary because what [R-CONFIG-025] promises is about
+//! Driven through the binary because what [REQ-1225, REQ-1309] promises is about
 //! which of two files a component's packages land in, and that depends on
 //! which entry point declared it -- a split no library call can show.
 
@@ -60,7 +60,7 @@ fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
-/// [R-CONFIG-025] a component declared in `init.star` records into the shared
+/// [REQ-1225, REQ-1309] a component declared in `init.star` records into the shared
 /// file, and one declared in `local.star` into the machine-local one. Getting
 /// this backwards commits a machine's private packages to a shared
 /// repository.
@@ -85,7 +85,7 @@ fn the_declaring_file_decides_which_lock_records_the_package() {
     );
 }
 
-/// [R-CONFIG-025] and [R-CONFIG-027]: the constraint is recorded as both the
+/// [REQ-1225, REQ-1309] and [REQ-1223]: the constraint is recorded as both the
 /// requested and the installed version, which is what `appendPkgsLock`
 /// writes -- nothing interrogates the manager for what it actually put down.
 /// Asserted on the content rather than on the bytes, because these two are
@@ -100,7 +100,7 @@ fn the_constraint_is_recorded_as_both_versions() {
     assert!(shared.contains("installed = \"14.1.0\""), "{shared}");
 }
 
-/// [R-CONFIG-025] a package declared with no version records empty strings
+/// [REQ-1225, REQ-1309] a package declared with no version records empty strings
 /// rather than being left out. The entry is what says the package is managed.
 #[test]
 fn a_package_with_no_constraint_still_gets_an_entry() {
@@ -111,7 +111,7 @@ fn a_package_with_no_constraint_still_gets_an_entry() {
     assert!(local.contains("[packages.fake.bat]"), "{local}");
 }
 
-/// [R-CONFIG-025] and [R-CONFIG-026]: merged into what is there, not
+/// [REQ-1225, REQ-1309] and [REQ-1226, REQ-1310, REQ-1311]: merged into what is there, not
 /// replacing it. A second component's packages must not remove the first's,
 /// and an entry for a package nothing declares any more survives.
 #[test]
@@ -140,7 +140,7 @@ fn a_second_run_keeps_what_the_first_recorded() {
     assert!(after.contains("ripgrep"), "{after}");
 }
 
-/// [R-CONFIG-026] a run that installs nothing writes no file. `v0.1.0` skips
+/// [REQ-1226, REQ-1310, REQ-1311] a run that installs nothing writes no file. `v0.1.0` skips
 /// the write when nothing was pinned, and a configuration with no packages
 /// should not grow an empty lock.
 #[test]

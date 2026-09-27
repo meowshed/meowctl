@@ -29,7 +29,7 @@ pub enum RolledBack {
 }
 
 impl RolledBack {
-    /// The string the file stores; see [R-CONFIG-044].
+    /// The string the file stores; see [REQ-1244].
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -113,7 +113,7 @@ impl Sentinel {
 
         // `v0.1.0` ignores this field, so an older binary rewrites a newer
         // file and drops what it did not understand. Refusing is visible and
-        // recoverable; the data loss is neither; see [R-CONFIG-041].
+        // recoverable; the data loss is neither; see [REQ-1241, REQ-1312].
         if sentinel.schema_version > CURRENT_SCHEMA {
             return Err(ConfigError::NewerSchema {
                 path: path.to_path_buf(),
@@ -139,7 +139,7 @@ impl Sentinel {
     /// `v0.1.0` records the whole order once the phase is clean, which means
     /// an interruption loses everything that phase had done. The timestamp is
     /// a value rather than a reading of the clock, because a component that
-    /// asks the clock cannot be tested; see [R-ENGINE-041].
+    /// asks the clock cannot be tested; see [REQ-3041].
     pub fn record(&mut self, phase: &str, component: &str, at: Option<toml::value::Datetime>) {
         if self.is_completed(phase, component) {
             return;
@@ -154,7 +154,7 @@ impl Sentinel {
     /// Forgets everything recorded for a component, so the next run redoes it.
     ///
     /// Used when the module a component came from has changed; see
-    /// [R-ENGINE-043].
+    /// [REQ-3043, REQ-3116].
     pub fn forget(&mut self, component: &str) {
         self.completed_components
             .retain(|c| c.component != component);

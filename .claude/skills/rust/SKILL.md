@@ -1,13 +1,13 @@
 ---
 name: rust
-description: Rust conventions for the meowctl v0.2.0 workspace - crate boundaries, effects behind traits, operations as data, error handling with thiserror and miette, the Starlark bridge, code intelligence through rust-analyzer, diagnostics through the event stream, testing with nextest and insta, and the lints this repository enforces. Load before writing or reviewing Rust code here.
+description: Rust conventions for the meowctl v0.2.0 workspace - crate boundaries, effects behind traits, operations as data, error handling with thiserror and Starlark spans, the Starlark bridge, code intelligence through rust-analyzer, diagnostics through the event stream, testing with nextest and insta, and the lints this repository enforces. Load before writing or reviewing Rust code here.
 ---
 
 # Rust in this workspace
 
-`docs/design/0.2.0-rust-rewrite.md` decides the crate layout and the execution
-model. This skill covers how to write code inside those decisions. When the two
-disagree, the design document wins.
+The decision records under `project/adrs/`, starting with ADR-0001, decide the
+crate layout and the execution model. This skill covers how to write code
+inside those decisions. When the two disagree, the decision record wins.
 
 ## Crate boundaries
 
@@ -113,13 +113,14 @@ pub enum ModuleError {
 }
 ```
 
-`meowctl-cli` converts to `miette` at the boundary and renders with source
-spans. This is how a mistake in `init.star` becomes a diagnostic pointing at
+`starlark-rust` renders a Starlark error with its source span, and
+`meowctl-cli` passes that text through. This is how a mistake in `init.star` becomes a diagnostic pointing at
 the line, instead of a string that describes it. The Go tree could not do this,
 which is why its Starlark errors name a file and nothing more.
 
-Exit codes are a single mapping in `meowctl-cli`, from the error taxonomy in
-`meowctl-common`. No other crate knows an exit code exists.
+`meowctl-common` holds the one table from `Severity` to an exit code, and only
+`meowctl-cli` calls it. No other crate chooses the exit code for an error it
+returns ([REQ-1108]).
 
 Never use `unwrap` or `expect` outside tests and `build.rs`. When an invariant
 truly cannot fail, write the reason:
@@ -161,9 +162,9 @@ does the network and there is no `tokio` in the tree. This is a deliberate
 choice, not an omission: `meowctl hook shell` runs on every shell spawn, and
 startup cost is the thing that makes or breaks that command.
 
-Adding an async runtime is an architecture change. Route it through
-`/amend-spec` against the design document, with a measurement that shows why
-the sequential path is not enough.
+Adding an async runtime is an architecture change. Write a draft decision that
+supersedes ADR-0008, with a measurement that shows why the sequential path is
+not enough.
 
 ## Diagnostics
 
@@ -188,7 +189,7 @@ in `mod tests`; integration tests live in `tests/`.
 Every test that checks a specification requirement names it:
 
 ```rust
-/// [R-MODULE-031] a replaced module skips integrity verification
+/// [REQ-2431] a replaced module skips integrity verification
 #[test]
 fn replace_with_local_path_bypasses_integrity() { ... }
 ```
@@ -250,10 +251,10 @@ Adding one is a decision. Prefer the standard library, then something already
 in the tree, then a well-maintained crate with a licence `cargo deny` accepts.
 Say in the pull request why the dependency earns its place.
 
-The design document already picks the load-bearing ones: `starlark`, `clap`,
-`thiserror`, `miette`, `toml`, `serde`, `semver`, `ureq`, `rustls`, `sha2`,
-`tar`, `flate2`, `anstyle`, and `insta`. Replacing one of those is a design
-change, not a dependency bump.
+ADR-0001 and ADR-0010 name the load-bearing ones: `starlark`, `clap`,
+`thiserror`, `toml`, `serde`, `semver`, `ureq`, `sha2`, `tar`, `flate2`,
+`terminal_size`, and `insta`. Replacing one of those is a design change, not a
+dependency bump.
 
 `cargo machete` catches dependencies nobody uses. Run it before opening a pull
 request that changes a `Cargo.toml`.

@@ -2,7 +2,7 @@
 //!
 //! Resolution is here rather than in `meowctl-fs` because a dry run and a real
 //! run must resolve a path identically. A filesystem that resolved its own
-//! paths could plan against different files than it writes; see [R-FS-002].
+//! paths could plan against different files than it writes; see [REQ-1402, REQ-1500].
 
 use std::path::{Path, PathBuf};
 
@@ -32,7 +32,7 @@ impl Env for SystemEnv {
 /// `$MEOWCTL_CONFIG`, then `$XDG_CONFIG_HOME/meowctl`, then
 /// `~/.config/meowctl`. `v0.1.0` resolves the last two in
 /// `internal/cli/config.go` and does not consult `$MEOWCTL_CONFIG`; that
-/// variable is added by [R-COMMON-020] so the compatibility corpus can point
+/// variable is added by [REQ-1020] so the compatibility corpus can point
 /// two binaries at one configuration without a flag on every call.
 ///
 /// # Errors
@@ -53,7 +53,7 @@ pub fn config_dir(env: &impl Env) -> Result<PathBuf, Error> {
 /// `$XDG_CACHE_HOME/meowctl/modules`, then `~/.cache/meowctl/modules`.
 /// `v0.1.0` uses the second unconditionally, ignoring `$XDG_CACHE_HOME`, which
 /// means a machine that relocates its cache still has meowctl writing to the
-/// default. Honouring the variable is a deliberate change; see [R-COMMON-021].
+/// default. Honouring the variable is a deliberate change; see [REQ-1021].
 ///
 /// # Errors
 ///
@@ -72,7 +72,7 @@ pub fn cache_dir(env: &impl Env) -> Result<PathBuf, Error> {
 ///
 /// The same two `os.UserHomeDir` reads, which is what `v0.1.0` calls. `$HOME`
 /// is tried first on every platform, because a Windows shell that sets it
-/// means it; see [R-COMMON-023].
+/// means it; see [REQ-1023, REQ-1106].
 ///
 /// # Errors
 ///
@@ -99,7 +99,7 @@ pub fn home_dir(env: &impl Env) -> Result<PathBuf, Error> {
 /// afterwards. `v0.1.0` expands `~` the same way in `expandPath` but accepts a
 /// relative path and resolves it against whatever the process working
 /// directory happens to be, which is not something a component author can
-/// predict. Refusing is a deliberate change; see [R-COMMON-022].
+/// predict. Refusing is a deliberate change; see [REQ-1022, REQ-1104, REQ-1105].
 ///
 /// `~user` is left alone by `v0.1.0` and is therefore refused here, because
 /// passing it through produces a literal directory named `~user`.
@@ -205,7 +205,7 @@ mod tests {
         }
     }
 
-    /// [R-COMMON-020] the order decides which configuration a command reads,
+    /// [REQ-1020] the order decides which configuration a command reads,
     /// and getting it wrong sends a run at the wrong machine's dotfiles.
     #[test]
     fn the_config_directory_prefers_the_explicit_override() {
@@ -234,7 +234,7 @@ mod tests {
         assert_eq!(config_dir(&env).unwrap(), under_home(".config/meowctl"));
     }
 
-    /// [R-COMMON-023] `os.UserHomeDir` reads this on Windows, and reading
+    /// [REQ-1023, REQ-1106] `os.UserHomeDir` reads this on Windows, and reading
     /// only `$HOME` made every invocation there fail before it did anything.
     #[test]
     #[cfg(windows)]
@@ -243,7 +243,7 @@ mod tests {
         assert_eq!(home_dir(&env).unwrap(), PathBuf::from(HOME));
     }
 
-    /// [R-COMMON-023] `$HOME` first on every platform, because a Windows
+    /// [REQ-1023, REQ-1106] `$HOME` first on every platform, because a Windows
     /// shell that sets it means it.
     #[test]
     #[cfg(windows)]
@@ -252,7 +252,7 @@ mod tests {
         assert_eq!(home_dir(&env).unwrap(), PathBuf::from(HOME));
     }
 
-    /// [R-COMMON-023] and `$USERPROFILE` is not read anywhere else, so a
+    /// [REQ-1023, REQ-1106] and `$USERPROFILE` is not read anywhere else, so a
     /// Linux container that happens to set it is not redirected.
     #[test]
     #[cfg(not(windows))]
@@ -262,7 +262,7 @@ mod tests {
     }
 
     /// The variable the message names differs per platform, because the
-    /// variables do; see [R-COMMON-023]. What matters is that nothing is
+    /// variables do; see [REQ-1023, REQ-1106]. What matters is that nothing is
     /// guessed.
     #[test]
     fn a_missing_home_is_an_error_rather_than_a_guess() {
@@ -273,7 +273,7 @@ mod tests {
         assert!(named.contains("HOME"), "{named}");
     }
 
-    /// [R-COMMON-021] `v0.1.0` ignores `XDG_CACHE_HOME`; honouring it is the
+    /// [REQ-1021] `v0.1.0` ignores `XDG_CACHE_HOME`; honouring it is the
     /// deliberate change, and the fallback still matches.
     #[test]
     fn the_cache_directory_honours_xdg_and_falls_back_as_v0_1_0_does() {
@@ -290,7 +290,7 @@ mod tests {
         );
     }
 
-    /// [R-COMMON-022] `~` expansion matches `expandPath`, including `~` alone.
+    /// [REQ-1022, REQ-1104, REQ-1105] `~` expansion matches `expandPath`, including `~` alone.
     #[test]
     fn a_leading_tilde_expands() {
         let env = FakeEnv::new(&[("HOME", HOME)]);
@@ -301,7 +301,7 @@ mod tests {
         );
     }
 
-    /// [R-COMMON-022] a relative path resolves against a working directory a
+    /// [REQ-1022, REQ-1104, REQ-1105] a relative path resolves against a working directory a
     /// hook author cannot predict, so it is refused rather than guessed at.
     #[test]
     fn a_relative_path_is_refused_with_the_reason() {
@@ -325,7 +325,7 @@ mod tests {
         assert!(resolve("", &env).is_err());
     }
 
-    /// [R-MODULE-033] a tarball is remote input, and an entry that climbs out
+    /// [REQ-2433] a tarball is remote input, and an entry that climbs out
     /// of the module root is how it writes somewhere it was not invited.
     #[test]
     fn containment_is_checked_lexically() {

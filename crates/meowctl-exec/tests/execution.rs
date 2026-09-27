@@ -1,11 +1,11 @@
 //! What running a command has to do, and what it must not know about.
 //!
-//! [R-EXEC-001] is held by the file rather than by one test: running to
+//! [REQ-1601] is held by the file rather than by one test: running to
 //! completion and resolving a name on `PATH` are the two things the trait
 //! covers, and both are exercised below against `RealExecutor` as well as the
-//! scripted one, which is [R-EXEC-010].
+//! scripted one, which is [REQ-1610].
 //!
-//! [R-EXEC-022] is held by what is absent: nothing here constructs a
+//! [REQ-1622, REQ-1702, REQ-1703, REQ-1704] is held by what is absent: nothing here constructs a
 //! renderer, because `meowctl-exec` cannot -- it depends on
 //! `meowctl-common` for the event vocabulary and on nothing that renders.
 
@@ -27,7 +27,7 @@ fn record(run: impl FnOnce(&mut dyn FnMut(Event))) -> Vec<Event> {
     events
 }
 
-/// [R-EXEC-003] component code reads `exit_code` and `stdout` by name, so the
+/// [REQ-1603] component code reads `exit_code` and `stdout` by name, so the
 /// shape of a result is part of the Starlark API rather than an internal
 /// detail.
 #[test]
@@ -45,7 +45,7 @@ fn a_result_carries_the_three_fields_separately() {
     assert!(!out.is_empty());
 }
 
-/// [R-EXEC-004] an interrogation hook asking about a package it does not have
+/// [REQ-1604] an interrogation hook asking about a package it does not have
 /// gets a non-zero exit and wants to read it, not to fail.
 #[test]
 fn a_non_zero_exit_is_a_result_and_not_an_error() {
@@ -61,7 +61,7 @@ fn record_run(exec: &dyn Executor, command: &Command) -> Output {
     exec.run(command, &mut sink).expect("run")
 }
 
-/// [R-EXEC-020] a long install that showed nothing until it finished would
+/// [REQ-1620] a long install that showed nothing until it finished would
 /// look hung, so output reaches the sink line by line.
 #[test]
 fn output_reaches_the_sink_as_lines() {
@@ -99,7 +99,7 @@ fn a_trailing_newline_does_not_become_an_empty_line() {
     assert_eq!(count, 1, "{events:?}");
 }
 
-/// [R-EXEC-012] a test that runs something it did not expect has found a
+/// [REQ-1612, REQ-1701] a test that runs something it did not expect has found a
 /// defect, and an empty result would hide it.
 #[test]
 fn an_unscripted_command_fails_the_test() {
@@ -112,7 +112,7 @@ fn an_unscripted_command_fails_the_test() {
     assert!(err.to_string().contains("rm -rf /"), "{err}");
 }
 
-/// [R-EXEC-011] and [R-ENGINE-034]: an executor is built for a phase, which
+/// [REQ-1611, REQ-1700] and [REQ-3034]: an executor is built for a phase, which
 /// is what the engine does per phase during a dry run -- it is the only place
 /// that knows both the flag and the phase. An install_check hook that cannot
 /// interrogate the system plans
@@ -127,7 +127,7 @@ fn a_read_only_phase_still_runs_commands_in_a_dry_run() {
     assert_eq!(got.stdout, "git\n");
 }
 
-/// [R-EXEC-011] and every other phase runs nothing at all.
+/// [REQ-1611, REQ-1700] and every other phase runs nothing at all.
 #[test]
 fn a_mutating_phase_runs_nothing_in_a_dry_run() {
     let scripted = ScriptedExecutor::new([]);
@@ -171,8 +171,8 @@ fn a_windows_program_resolves_without_its_extension() {
     );
 }
 
-/// [R-EXEC-032] asking whether a tool exists is a question, not an assertion,
-/// and [R-EXEC-001] and [R-EXEC-010]: `RealExecutor` resolves a real name on a
+/// [REQ-1632] asking whether a tool exists is a question, not an assertion,
+/// and [REQ-1601] and [REQ-1610]: `RealExecutor` resolves a real name on a
 /// real `PATH`.
 #[test]
 fn which_answers_absent_rather_than_failing() {
@@ -181,7 +181,7 @@ fn which_answers_absent_rather_than_failing() {
     assert!(exec.which("nonesuch").expect("which").is_none());
 }
 
-/// [R-EXEC-021] the sink stands down for the duration, and [R-EXEC-023] a
+/// [REQ-1621] the sink stands down for the duration, and [REQ-1623] a
 /// captured command must not tear the live region down.
 #[test]
 fn only_an_interactive_command_asks_for_the_terminal() {
@@ -195,7 +195,7 @@ fn only_an_interactive_command_asks_for_the_terminal() {
     );
 }
 
-/// [R-EXEC-030] a hook calling a package manager that is not installed is the
+/// [REQ-1630] a hook calling a package manager that is not installed is the
 /// commonest failure there is, and the message has to name it.
 #[test]
 fn a_missing_program_is_named() {
@@ -232,7 +232,7 @@ fn the_real_executor_captures_output() {
     assert!(got.stdout.contains("hello"), "{got:?}");
 }
 
-/// [R-EXEC-005] a hook that lost PATH would lose every tool, so the overrides
+/// [REQ-1605] a hook that lost PATH would lose every tool, so the overrides
 /// go over the parent environment rather than replacing it.
 #[test]
 fn the_environment_is_merged_rather_than_replaced() {
@@ -253,7 +253,7 @@ fn the_environment_is_merged_rather_than_replaced() {
     assert_eq!(got.stdout, "value:set", "{got:?}");
 }
 
-/// [R-EXEC-002] a command is a program and an argument list, never a shell
+/// [REQ-1602] a command is a program and an argument list, never a shell
 /// string, so an argument containing a space or a semicolon is an argument.
 ///
 /// `v0.1.0` does the same, and it is what keeps a component from being a
@@ -270,7 +270,7 @@ fn an_argument_with_a_space_stays_one_argument() {
     exec.run(&command, &mut events).expect("the run");
 }
 
-/// [R-EXEC-031] the sink gets the terminal back even when the command never
+/// [REQ-1631] the sink gets the terminal back even when the command never
 /// starts, because a renderer that never hears the second half never draws
 /// again and the user is left with a dead screen.
 ///
@@ -295,7 +295,7 @@ fn the_terminal_comes_back_when_the_command_fails() {
     );
 }
 
-/// [R-EXEC-020] output is split into the lines a sink renders: a trailing
+/// [REQ-1620] output is split into the lines a sink renders: a trailing
 /// newline does not become a blank line, and a command that printed nothing
 /// produces no lines at all.
 ///
@@ -316,7 +316,7 @@ fn a_command_that_printed_nothing_produces_no_lines() {
     );
 }
 
-/// [R-EXEC-001] and [R-EXEC-010]: a name that is on `PATH` resolves to the
+/// [REQ-1601] and [REQ-1610]: a name that is on `PATH` resolves to the
 /// file, not merely to "something was found".
 #[test]
 fn which_answers_with_the_path_it_found() {
@@ -336,7 +336,7 @@ fn which_answers_with_the_path_it_found() {
     );
 }
 
-/// [R-EXEC-012] the scripted executor records what it was asked to run, which
+/// [REQ-1612, REQ-1701] the scripted executor records what it was asked to run, which
 /// is how a test asserts on a command it did not write itself.
 #[test]
 fn the_scripted_executor_records_what_it_ran() {
@@ -358,7 +358,7 @@ fn the_scripted_executor_records_what_it_ran() {
     assert!(exec.is_exhausted(), "both have run");
 }
 
-/// [R-EXEC-020] a blank line in the middle of a command's output is a blank
+/// [REQ-1620] a blank line in the middle of a command's output is a blank
 /// line, because `brew` separates its sections with them and collapsing them
 /// changes what the user sees.
 #[test]

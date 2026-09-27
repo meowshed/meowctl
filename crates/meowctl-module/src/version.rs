@@ -13,7 +13,7 @@ use std::fmt;
 ///
 /// `none` is a real value in Minimal Version Selection: it orders below every
 /// version and means "no requirement", which is how a module drops out of a
-/// build list; see [R-MODULE-002].
+/// build list; see [REQ-2402].
 #[derive(Debug, Clone)]
 pub enum Version {
     /// No requirement.
@@ -129,7 +129,7 @@ mod tests {
         Version::parse(text).expect("a version")
     }
 
-    /// [R-MODULE-002] lexicographic ordering would put v0.10.0 below v0.9.0,
+    /// [REQ-2402] lexicographic ordering would put v0.10.0 below v0.9.0,
     /// which is how a resolution silently picks an older module.
     #[test]
     fn versions_compare_numerically_rather_than_as_text() {
@@ -147,7 +147,7 @@ mod tests {
         assert_eq!(v("1.2.3").as_str(), "1.2.3");
     }
 
-    /// [R-MODULE-002] `none` is a value, not an error: it is how a module with
+    /// [REQ-2402] `none` is a value, not an error: it is how a module with
     /// no requirement drops out of a build list.
     #[test]
     fn none_orders_below_every_version() {
@@ -156,7 +156,7 @@ mod tests {
         assert_eq!(v("").as_str(), "none");
     }
 
-    /// [R-MODULE-003] a typo must fail resolution rather than be skipped,
+    /// [REQ-2403] a typo must fail resolution rather than be skipped,
     /// which would silently drop a dependency.
     #[test]
     fn a_version_that_is_not_semver_fails_and_says_so() {

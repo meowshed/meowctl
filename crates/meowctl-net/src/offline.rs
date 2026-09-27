@@ -4,10 +4,10 @@ use crate::{Http, NetError, NetResult};
 
 /// Fails every request without making one.
 ///
-/// This is how [R-MODULE-043] is checked. A resolution that completes against
+/// This is how [REQ-2443] is checked. A resolution that completes against
 /// `OfflineHttp` reached the network zero times, and that is a fact about the
 /// implementation rather than an assertion a test can forget to write; see
-/// [R-NET-014].
+/// [REQ-1814, REQ-1905].
 ///
 /// It is also what `--offline` will be built on, once there is a flag for it.
 #[derive(Debug, Clone, Copy, Default)]
@@ -25,7 +25,7 @@ impl Http for OfflineHttp {
 mod tests {
     use super::*;
 
-    /// [R-NET-014] the point of the type is that it cannot succeed.
+    /// [REQ-1814, REQ-1905] the point of the type is that it cannot succeed.
     #[test]
     fn every_request_fails_as_offline() {
         let err = OfflineHttp.get("https://example.invalid/i").unwrap_err();

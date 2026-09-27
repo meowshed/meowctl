@@ -2,7 +2,7 @@
 //!
 //! From the build rather than from variables a linker patched, so a build
 //! with no flags reports what it is instead of `dev/unknown/unknown`; see
-//! [R-CLI-013].
+//! [REQ-3413, REQ-3507].
 
 /// The version, the target, the commit, and the build date.
 ///
@@ -32,5 +32,5 @@ pub fn string() -> String {
 pub const NUMBER: &str = env!("CARGO_PKG_VERSION");
 
 /// The target triple this build is for, which names the asset it updates
-/// from; see [R-CLI-073].
+/// from; see [REQ-3473, REQ-3532].
 pub const TARGET: &str = env!("MEOWCTL_TARGET");

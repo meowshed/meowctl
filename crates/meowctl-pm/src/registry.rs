@@ -9,10 +9,10 @@ use crate::{PmError, PmResult};
 /// The global naming the manager a component handles.
 const PM_NAME: &str = "pm_name";
 
-/// The functions a handler must export; see [R-PM-001].
+/// The functions a handler must export; see [REQ-2601, REQ-2700, REQ-2701].
 const REQUIRED: [&str; 3] = ["install_pkg", "uninstall_pkg", "interrogate"];
 
-/// The optional ones; see [R-PM-002].
+/// The optional ones; see [REQ-2602].
 const UPDATE_PKG: &str = "update_pkg";
 const ADD_REPO: &str = "add_repo";
 
@@ -24,10 +24,10 @@ pub struct Handler {
     /// The component that exports it.
     pub component: String,
     /// Whether it exports `update_pkg`, which decides whether `uppkg()` falls
-    /// back to installing `latest`; see [R-PM-012].
+    /// back to installing `latest`; see [REQ-2612].
     pub has_update: bool,
     /// Whether it exports `add_repo`, without which a `repo()` has nowhere to
-    /// go; see [R-PM-013].
+    /// go; see [REQ-2613, REQ-2702].
     pub has_add_repo: bool,
 }
 
@@ -39,11 +39,11 @@ pub enum Registration {
     /// It names a manager and does not export everything a handler needs.
     ///
     /// Reported rather than ignored, because it is nearly always a mistake;
-    /// see [R-PM-001].
+    /// see [REQ-2601, REQ-2700, REQ-2701].
     Incomplete {
         /// The manager it named.
         manager: String,
-        /// What it did not export, in the order [R-PM-001] lists them.
+        /// What it did not export, in the order [REQ-2601, REQ-2700, REQ-2701] lists them.
         missing: Vec<String>,
     },
     /// It names no manager, which is what almost every component does.
@@ -86,7 +86,7 @@ pub fn scan(component: &str, evaluated: &Evaluated) -> Registration {
 /// One call to make on a handler.
 ///
 /// Data rather than an invocation, so the engine can make it with the `ctx` of
-/// the component that declared the package; see [R-PM-014].
+/// the component that declared the package; see [REQ-2614].
 #[derive(Debug, Clone, PartialEq)]
 pub struct Call {
     /// The component whose file exports the function.
@@ -120,7 +120,7 @@ impl Registry {
     ///
     /// [`PmError::DuplicateHandler`] when another component already handles
     /// the manager. `v0.1.0` overwrites instead, which makes the winner depend
-    /// on the order components happened to evaluate in; see [R-PM-004].
+    /// on the order components happened to evaluate in; see [REQ-2604].
     pub fn register(&mut self, handler: Handler) -> PmResult<()> {
         if let Some(existing) = self.handlers.get(&handler.manager) {
             // Registering the same component twice is not a conflict: an
@@ -142,7 +142,7 @@ impl Registry {
     ///
     /// # Errors
     ///
-    /// [`PmError::NoHandler`], listing what is registered; see [R-PM-030].
+    /// [`PmError::NoHandler`], listing what is registered; see [REQ-2630].
     pub fn handler(&self, manager: &str) -> PmResult<&Handler> {
         self.handlers
             .get(manager)
@@ -182,7 +182,7 @@ impl Registry {
             ),
             // A handler with no `update_pkg` installs `latest` instead.
             // Removing the fallback would break every handler that never
-            // defined an update path; see [R-PM-012].
+            // defined an update path; see [REQ-2612].
             PackageAction::Update if handler.has_update => {
                 ("update_pkg", vec![declaration.name.clone()])
             }
@@ -205,7 +205,7 @@ impl Registry {
     /// # Errors
     ///
     /// [`PmError::NoHandler`] when nothing handles the manager, and
-    /// [`PmError::NoAddRepo`] when the handler exports none; see [R-PM-013].
+    /// [`PmError::NoAddRepo`] when the handler exports none; see [REQ-2613, REQ-2702].
     pub fn call_for_repo(&self, declaration: &RepoDecl) -> PmResult<Call> {
         let handler = self.handler(&declaration.manager)?;
         if !handler.has_add_repo {

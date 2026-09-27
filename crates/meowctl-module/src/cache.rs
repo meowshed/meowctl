@@ -3,11 +3,11 @@
 //! `<cache root>/<name>/<key>/`, where the key is the resolved version for a
 //! registry module and the commit SHA for a GitHub one. Two configurations on
 //! one machine at different versions therefore do not fight; see
-//! [R-MODULE-040].
+//! [REQ-2440].
 //!
 //! The cache is meowctl's own storage rather than the user's configuration, so
 //! a dry run fills it for real: a cold machine could otherwise produce no plan
-//! at all; see [R-MODULE-045].
+//! at all; see [REQ-2445].
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -23,13 +23,13 @@ use crate::{ModuleError, ModuleResult, archive, github, registry};
 /// SRI.
 ///
 /// Read and written in exactly the format `writeSRISidecar` uses, because the
-/// two binaries share one cache directory; see [R-MODULE-044].
+/// two binaries share one cache directory; see [REQ-2444, REQ-2511, REQ-2512].
 const TARBALL_RECORD: &str = ".sri";
 
 /// The file holding one hash per extracted file.
 ///
 /// `v0.1.0` does not write it and ignores it, so a cache it populated has no
-/// per-file record and is re-fetched once; see [R-MODULE-042].
+/// per-file record and is re-fetched once; see [REQ-2442, REQ-2510].
 const FILE_RECORD: &str = ".files";
 
 /// Where a module comes from.
@@ -54,7 +54,7 @@ pub enum Source {
         owner: String,
         /// Repository name.
         repo: String,
-        /// The commit, already resolved from the ref; see [R-MODULE-011].
+        /// The commit, already resolved from the ref; see [REQ-2411, REQ-2501, REQ-2502].
         commit: String,
         /// The archive URL.
         url: String,
@@ -124,7 +124,7 @@ impl Source {
             Source::Registry { expected, .. } => expected.as_ref(),
             // GitHub serves a repository, not a published artefact, and there
             // is nothing to compare against until the first fetch. What makes
-            // it reproducible is the commit, not a hash; see [R-MODULE-011].
+            // it reproducible is the commit, not a hash; see [REQ-2411, REQ-2501, REQ-2502].
             Source::GitHub { .. } => None,
         }
     }
@@ -163,7 +163,7 @@ impl Cache {
     /// # Errors
     ///
     /// Never: an unreadable or malformed record is an absent one, which
-    /// [R-MODULE-042] re-fetches.
+    /// [REQ-2442, REQ-2510] re-fetches.
     #[must_use]
     pub fn tarball_hash(&self, fs: &dyn FileSystem, module: &str, key: &str) -> Option<Integrity> {
         let raw = fs.read(&self.dir(module, key).join(TARBALL_RECORD)).ok()?;
@@ -173,7 +173,7 @@ impl Cache {
     /// Whether the cache holds this module and every file still hashes to what
     /// was recorded.
     ///
-    /// A cache with no record is not verified, per [R-MODULE-042]: it was
+    /// A cache with no record is not verified, per [REQ-2442, REQ-2510]: it was
     /// extracted by something that did not write one, and what it holds is
     /// unknown.
     #[must_use]
@@ -198,7 +198,7 @@ impl Cache {
     ///
     /// Returns the directory it is in. A module already verified is returned
     /// without a request, which is what makes a fully cached lock resolve
-    /// offline; see [R-MODULE-041] and [R-MODULE-043].
+    /// offline; see [REQ-2441] and [REQ-2443].
     ///
     /// # Errors
     ///
@@ -225,7 +225,7 @@ impl Cache {
         })?;
 
         // Before extracting, never after: an archive checked afterwards has
-        // already written its files somewhere; see [R-MODULE-030].
+        // already written its files somewhere; see [REQ-2430, REQ-2506].
         if let Some(expected) = source.expected() {
             let actual = Integrity::compute(&tarball);
             if &actual != expected {
@@ -253,7 +253,7 @@ impl Cache {
 
         // Into a sibling, then renamed. An extraction interrupted partway
         // leaves a directory whose name says what it is, and never one a later
-        // run mistakes for a complete module; see [R-MODULE-063].
+        // run mistakes for a complete module; see [REQ-2463].
         let staging = self.root.join(module).join(format!(".incoming-{key}"));
         fs.remove_dir_all(&staging)?;
         archive::write_into(fs, &staging, &files)?;
@@ -272,7 +272,7 @@ impl Cache {
     /// Reads one file out of a cached module, checking it first.
     ///
     /// The check is against the record written at extraction, so a file
-    /// changed since is refused rather than evaluated; see [R-STAR-022].
+    /// changed since is refused rather than evaluated; see [REQ-2222].
     ///
     /// # Errors
     ///

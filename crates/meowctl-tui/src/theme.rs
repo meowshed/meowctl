@@ -5,25 +5,25 @@
 //!
 //! 1. **One symbol vocabulary.** A glyph means the same thing in every
 //!    command. Before the design system there were four competing ones:
-//!    `ok`/`FAIL`, `->`/`--`, `+`/`-`, and `✓`; see [R-TUI-001].
+//!    `ok`/`FAIL`, `->`/`--`, `+`/`-`, and `✓`; see [REQ-3201].
 //! 2. **Two levels of indent, never more.** Column zero is the command
 //!    talking about itself, two spaces is one item, and captured subprocess
 //!    output sits under its item and dimmed. Deeper stops being scannable;
-//!    see [R-TUI-002].
+//!    see [REQ-3202].
 //! 3. **Colour is redundant.** Every state is legible from its symbol and its
 //!    wording alone, so a pipe, `NO_COLOR`, or a monochrome terminal loses
-//!    decoration and never information; see [R-TUI-003].
+//!    decoration and never information; see [REQ-3203, REQ-3300].
 //!
 //! What does not carry over is the palette being compiled in. It is data
 //! here, with the Catppuccin values as the default, so a user whose terminal
-//! clashes has somewhere to go; see [R-TUI-050].
+//! clashes has somewhere to go; see [REQ-3250, REQ-3313].
 
 use crate::caps::{Caps, ColourDepth};
 
 /// What a line is saying.
 ///
 /// A role, never a colour: call sites name one of these, so the palette
-/// changes in one place; see [R-TUI-051].
+/// changes in one place; see [REQ-3251].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     /// Something finished as it should.
@@ -98,7 +98,7 @@ pub const UNICODE: Symbols = Symbols {
 /// The same distinctions without Unicode.
 ///
 /// Every state stays distinguishable: an ASCII terminal loses shape and not
-/// meaning; see [R-TUI-043].
+/// meaning; see [REQ-3243, REQ-3309].
 pub const ASCII: Symbols = Symbols {
     success: "+",
     failure: "x",
@@ -134,7 +134,7 @@ pub struct Colour {
 ///
 /// One variant: a file that does not parse and a file naming a role that does
 /// not exist are the same mistake from the user's side, and the message
-/// carries which it was; see [R-TUI-052].
+/// carries which it was; see [REQ-3252].
 #[derive(Debug, thiserror::Error)]
 #[error("the theme is unusable and the default is in use: {reason}")]
 pub struct ThemeError {
@@ -166,11 +166,11 @@ impl Palette {
     /// one colour changed writes one table. A role it names is replaced
     /// whole: a partial colour is four numbers with one missing, and guessing
     /// which default to mix in produces a colour nobody chose; see
-    /// [R-TUI-054].
+    /// [REQ-3254, REQ-3315].
     ///
     /// Takes the text rather than a path, because this crate depends on
     /// `meowctl-common` and on nothing else in the workspace and has no
-    /// `FileSystem` to read with; see [R-TUI-055].
+    /// `FileSystem` to read with; see [REQ-3255].
     ///
     /// # Errors
     ///
@@ -205,7 +205,7 @@ impl Palette {
 /// The file's shape: a table per role, each naming all four numbers.
 ///
 /// `deny_unknown_fields` so a misspelled role is a mistake the user hears
-/// about rather than a table that silently does nothing; see [R-TUI-053].
+/// about rather than a table that silently does nothing; see [REQ-3253, REQ-3314].
 #[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ThemeFile {
@@ -326,7 +326,7 @@ impl Theme {
         };
 
         // Downsampled to what the terminal reports rather than assumed; see
-        // [R-TUI-042].
+        // [REQ-3242, REQ-3308].
         match self.caps.colour {
             ColourDepth::None => text.to_owned(),
             ColourDepth::Ansi16 => format!("\x1b[{}m{text}\x1b[0m", colour.ansi16),
@@ -380,7 +380,7 @@ mod tests {
         })
     }
 
-    /// [R-TUI-001] a glyph means one thing everywhere, which is what the
+    /// [REQ-3201] a glyph means one thing everywhere, which is what the
     /// vocabulary is for.
     #[test]
     fn every_state_has_a_distinct_glyph_in_both_tiers() {
@@ -397,7 +397,7 @@ mod tests {
         }
     }
 
-    /// [R-TUI-043] an ASCII terminal loses shape, not meaning.
+    /// [REQ-3243, REQ-3309] an ASCII terminal loses shape, not meaning.
     #[test]
     fn a_non_unicode_locale_gets_the_ascii_set() {
         assert_eq!(theme(ColourDepth::None, false).symbols(), ASCII);
@@ -426,7 +426,7 @@ mod tests {
         }
     }
 
-    /// [R-TUI-003] a monochrome terminal loses decoration and never
+    /// [REQ-3203, REQ-3300] a monochrome terminal loses decoration and never
     /// information, so the text is the text.
     #[test]
     fn no_colour_returns_the_text_unchanged() {
@@ -436,7 +436,7 @@ mod tests {
         );
     }
 
-    /// [R-TUI-042] truecolor on a 16-colour terminal is garbage, so the
+    /// [REQ-3242, REQ-3308] truecolor on a 16-colour terminal is garbage, so the
     /// escape matches the depth.
     #[test]
     fn the_escape_matches_the_depth() {

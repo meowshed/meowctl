@@ -1,260 +1,200 @@
+---
+id: constitution
+artifact: constitution
+status: live
+revised: 2026-09-27
+---
+
 # CLAUDE.md
 
 <role>
-Root policy for Claude Code working in the meowctl repository. This file is
-canonical. Anything under `.claude/` adds routing and workflow detail and must
-not override this policy. Where a document under `docs/` disagrees with this
-file, this file wins and the document gets fixed.
+The root policy for the meowctl repository. It outranks everything under
+`.claude/`: a skill that disagrees with it gets fixed, because two policies
+that disagree leave you no way to tell which one holds. The record under
+`project/` is the single source of truth for what meowctl must do and why:
+its vision, specifications, requirements, decisions, epics and tasks.
 </role>
 
 <project>
-meowctl manages dotfiles and developer environments. Users declare components
-in Starlark; the binary supplies the evaluator, the module system, the
-lifecycle engine, and the terminal output.
-
-`v0.1.0` was the Go implementation. `v0.2.0` is a ground-up rewrite in
-canonical Rust — not a transliteration of the Go code — and it replaced the Go
-tree at the cutover. The plan is `docs/design/0.2.0-rust-rewrite.md`: it names
-the architectural defects that justified a rewrite, the crate layout, the
-terminal output redesign, and the milestone order. Every milestone in it is
-done; what it says about `cmd/` and `internal/` describes a tree that is no
-longer here.
+meowctl manages dotfiles and developer environments. You declare components in
+Starlark, and the binary supplies the evaluator, the module system, the
+lifecycle engine and the terminal output. `v0.1.0` was written in Go; `v0.2.0`
+is a rewrite in Rust that keeps every user-facing format and signature of
+`v0.1.0`.
 </project>
 
 <principles>
 
-<principle name="always_technical_english">
-Load the `technical-english` skill at the start of every conversation, before
-writing anything, and keep it loaded. It governs all prose you produce here —
-design documents, specifications, code comments, commit messages, pull request
-bodies, issue text, and your own replies in chat. This is not conditional on
-the task looking like a writing task; a commit message is prose and a chat
-reply is prose.
+<principle name="write_to_the_prose_standard">
+Load the `meow-prose:writing` skill before you write anything, and write in
+the language `.meowpaw/profile.toml` declares. It governs every text you write
+here: records, code comments, commit messages, pull request bodies, issues and
+chat replies. The rule isn't limited to tasks that look like writing, because
+a commit message and a chat reply are prose too.
 </principle>
 
 <principle name="spec_first">
-No behaviour ships that a specification does not describe. Before writing code
-whose behaviour no requirement in `docs/spec/` covers, stop and write the
-requirement. When an implementation contradicts a requirement, stop and run
-`/amend-spec`; never write code the spec forbids and reword the spec
-afterwards. The `spec-driven` skill has the method.
+Ship no behaviour that no requirement in `project/requirements/` describes.
+Before you write code that no requirement covers, write the requirement first.
+When the code contradicts a requirement, stop and write a draft that
+supersedes it, because rewording a record after the code shipped hides a
+decision nobody took. Cite each requirement a test holds as `[REQ-NNNN]` in
+the test's doc comment. The `meow-method:method` skill has the steps.
 </principle>
 
 <principle name="parity_is_the_contract">
-The Starlark API, the command surface, and every config and lock format —
-`init.star`, `local.star`, `deps.mod`, `deps.lock`, `pkgs.lock`,
-`installed.lock`, `state.toml` — stay compatible with `v0.1.0`, byte for byte
-where the file is machine-written. A change that makes the internals tidier at
-the cost of a format or a builtin signature is a regression, not a refactor.
+Keep the Starlark API, the command surface and every config and lock format
+compatible with `v0.1.0`: `init.star`, `local.star`, `deps.mod`, `deps.lock`,
+`pkgs.lock`, `installed.lock` and `state.toml`, byte for byte where the file
+is machine-written. A change that tidies the internals at the cost of a format
+or a builtin signature is a regression, because users' existing files stop
+working. Terminal output is the one exception, and ADR-0003 and ADR-0010
+bound it.
 
-Terminal output is the single carve-out, redesigned under §4 of the plan. It is
-bounded by what that section names.
-
-The compat corpus proved this and was deleted with the Go tree, which is what
-`docs/design/0.2.0-execution-plan.md` issue 34 records. Nothing regenerates an
-oracle now, so a format change is caught by the specification and by the
-fixtures in `crates/meowctl-module/tests/fixtures/`, not by a diff against a
-binary. Opening the API is a 0.3.0 decision and needs `/amend-spec`, not a
-pull request that happens to widen a signature.
+The specification and the fixtures in `crates/meowctl-module/tests/fixtures/`
+catch a format change, because no `v0.1.0` binary runs beside the tests to
+compare against. Widening the API is a `0.3.0` decision and needs a decision
+record of its own.
 </principle>
 
-<principle name="effects_are_traits">
-`FileSystem` and `Executor` are constructed once, at the binary, and threaded
-down. No layer below `meowctl-cli` reads a global, resolves its own paths, or
-branches on a dry-run flag: a dry run is a different implementation, not a
-different code path.
+<principle name="starlark_surface_is_frozen">
+Keep the predeclared set at what `v0.1.0` accepts: `component`, `pkg`,
+`unpkg`, `uppkg`, `repo`, `query_pm`, `dep`, `module`, `replace`, `select` and
+`platform`. The `ctx` object passed to hooks carries the methods SPC-2800
+lists. A component is a `.star` file, and a package manager
+is a component that exports `pm_name`, `install_pkg`, `uninstall_pkg` and
+`interrogate`.
 
-This is defect #4 in the plan, and it is the one that has already shipped a bug
-— `fix(apply): dry-run claimed work that the runner skips`. A new `if dry_run`
-anywhere in the tree is a review finding.
+The `meowctl-stdlib` and `dotmeow` repositories are the real corpus: a change
+that makes them evaluate differently is a defect, whatever the unit tests say.
+`crates/meowctl-starlark/tests/stdlib.rs` runs against them when they're
+checked out beside this repository and skips when they aren't, so check them
+out before you change the evaluator.
 </principle>
 
-<principle name="the_engine_does_not_render">
-`meowctl-engine` emits `Event`s and holds no renderer. Sinks consume them.
-Terminal ownership is negotiated between the executor and the sink, so nothing
-in the Starlark or engine layers knows a terminal exists.
-
-The Go tree got this wrong — `buildRunner` takes a `tui.Writer`, and the cost
-is `SuspendOutput`, a renderer concern threaded into `ctx` as a callback. Any
-Rust code that passes a renderer into the engine reproduces the defect.
-</principle>
-
-<principle name="operations_are_data">
-Every reversible effect is a variant of `meowctl-ops::Op` with an `inverse()`,
-not a method that performs it. The rollback journal is a log of `Op`s. This is
-what makes it impossible to add an effect that silently has no undo — the
-compiler asks for the inverse.
-</principle>
-
-<principle name="reviewable_history">
-`main` is the only long-lived branch and carries the Rust workspace under
-`crates/`. Work on a feature branch off `main`, open a pull request, and squash
-merge it. Never commit to `main` directly, including for a one-line fix.
-Conventional commit subjects. The `scm` skill has the branch names, the pull
-request body, and the merge rules.
-</principle>
-
-<principle name="no_ai_attribution">
-Never mention Claude, Claude Code, or any AI tool in a commit message, a pull
-request title or body, a review comment, an issue, a tag annotation, or release
-notes. No `Co-Authored-By` trailer naming an AI, no "Generated with" footer, no
-`noreply@anthropic.com`, and no paraphrase. This overrides the default harness
-guidance that asks for such a trailer.
-
-The repository owner asked for this and asked that existing trailers be removed
-from history, so treat it as a property of the project rather than a style
-preference.
-
-Check your own message before committing. Match the attribution patterns, not
-the bare word, so a path such as `.claude/commands/` does not trip it:
-
-```bash
-git log -1 --format=%B |
-  grep -iE 'co-authored-by.*(claude|anthropic|copilot)|generated with|noreply@anthropic'
-```
-</principle>
-
-</principles>
-
-<architecture>
-
-The target is a Cargo workspace. Dependencies point strictly downward; there
-are no cycles. `docs/design/0.2.0-rust-rewrite.md` §3 is authoritative — this
-table is the index, not the decision.
+<principle name="dependencies_point_down">
+Keep the Cargo workspace acyclic, with every dependency pointing down this
+list, because a cycle would force two crates to change together:
 
 | Crate | Holds |
 | --- | --- |
 | `meowctl-common` | `ComponentId`, `ModuleRef`, `Phase`, `PhaseSet`, XDG paths, the error and exit-code taxonomy, SRI hashes, the `Event` vocabulary |
 | `meowctl-config` | Every on-disk schema, its version, atomic writes, and the syntax-aware Starlark editor |
-| `meowctl-fs` | `FileSystem` — real, dry-run, in-memory |
+| `meowctl-fs` | `FileSystem`: real, dry-run and in-memory |
 | `meowctl-exec` | `Executor`, env merging, terminal hand-off |
-| `meowctl-ops` | The `Op` enum with `apply`/`inverse`, and the write-ahead journal |
+| `meowctl-net` | `Http`: every request meowctl makes |
+| `meowctl-ops` | The `Op` enum with `apply` and `inverse`, and the write-ahead journal |
 | `meowctl-starlark` | Evaluator, builtins, accumulator, `load()` resolution, diagnostics with spans |
 | `meowctl-module` | Module graph, MVS, registry and GitHub loaders, cache, integrity |
 | `meowctl-pm` | Package-manager handler registry and dispatch |
-| `meowctl-ctx` | The Starlark `ctx` value — binding only |
+| `meowctl-ctx` | The Starlark `ctx` value, binding only |
 | `meowctl-engine` | Phases, graph, the `Plan` as a value, the runner, sentinel state, rollback driving |
-| `meowctl-tui` | Live, plain, and JSON sinks; theme as data; the `Interaction` trait |
+| `meowctl-tui` | Live, plain and JSON sinks; theme as data; the `Interaction` trait |
 | `meowctl-release` | What a release is, which asset belongs to this platform, and whether these bytes are it |
 | `meowctl-cli` | The clap surface and exit-code mapping |
 
-Three boundaries carry the design, and crossing one is a defect however small
-the change looks:
+Two crates carry stricter limits. `meowctl-common` depends on no workspace
+crate and performs no input or output, so every other crate can use it.
+`meowctl-tui` depends only on `meowctl-common`, for the `Event` vocabulary,
+so it never learns the engine exists. ADR-0001 gives the reasons for the
+layout.
+</principle>
 
-- `meowctl-common` depends on no workspace crate and performs no input or
-  output.
-- `meowctl-tui` depends on `meowctl-common` for the `Event` vocabulary and on
-  nothing else in the workspace. It does not know the engine exists.
-- Nothing below `meowctl-cli` constructs an effect. `FileSystem` and `Executor`
-  arrive as arguments.
+<principle name="effects_are_traits">
+Construct `FileSystem`, `Executor` and `Http` once, in `meowctl-cli`, and pass
+them down as arguments. No crate below `meowctl-cli` reads a global, resolves
+its own paths or branches on a dry-run flag, because a dry run is a different
+implementation of the traits. A new `if dry_run` anywhere in the tree is a
+review finding: the Go tree shipped `fix(apply): dry-run claimed work that
+the runner skips` for exactly this reason.
+</principle>
 
-</architecture>
+<principle name="the_engine_does_not_render">
+Keep `meowctl-engine` free of renderers: it emits `Event`s, and sinks in
+`meowctl-tui` consume them. The executor and the sink negotiate who owns the
+terminal, so the Starlark and engine layers never know a terminal exists. Code
+that passes a renderer into the engine repeats the Go tree's defect, where
+`buildRunner` took a `tui.Writer` and needed `SuspendOutput` threaded through
+`ctx` as a callback.
+</principle>
 
-<starlark_surface>
+<principle name="operations_are_data">
+Add every reversible effect as a variant of `meowctl-ops::Op` with an
+`inverse()`, never as a method that performs it. The rollback journal is a
+log of `Op`s, so the compiler asks for the inverse of every new effect and
+none ships without an undo.
+</principle>
 
-The Starlark API is frozen at what `v0.1.0` accepts. The predeclared set is
-`component`, `pkg`, `unpkg`, `uppkg`, `repo`, `query_pm`, `dep`, `module`,
-`replace`, `select`, and `platform`; the `ctx` object passed to hooks carries
-the file, process, network, macOS, templating, and shell-integration methods
-`docs/spec/ctx.md` lists. A component is a `.star` file; a package
-manager is a component exporting `pm_name`, `install_pkg`, `uninstall_pkg`, and
-`interrogate`.
+<principle name="lints_encode_the_principles">
+Every crate inherits the workspace lints in the root `Cargo.toml` with
+`lints.workspace = true`. `print_stdout` and `print_stderr` are denied outside
+`meowctl-tui`, because output belongs to the sinks, and `unwrap_used` is
+denied outside tests, because the binary runs on every shell spawn and an
+`unwrap` turns a recoverable error into a process death.
+`mise run check` fails on any of them.
+</principle>
 
-`v0.2.0` runs `starlark-rust` rather than `go.starlark.net`. They are
-independent implementations of the same specification, and four differences
-were load-bearing: `load()` interception for the composite loader, custom
-values with attributes for `ctx`, per-evaluation state reachable from a
-builtin, and calling a Starlark function from Rust. The M0 spike answered all
-four; `docs/spec/starlark.md` carries the findings.
+<principle name="reviewable_history">
+Work on a feature branch off `main`, open a pull request and squash-merge it.
+Never commit to `main` directly, even a one-line fix, because `main` is the
+only long-lived branch and each commit on it should be one reviewed change.
+Write conventional commit subjects under 72 characters, signed off and
+signed. The `scm` skill has the branch names, the pull request body and the
+merge rules.
+</principle>
 
-The `meowctl-stdlib` and `dotmeow` repositories are the real corpus. A change
-that makes them evaluate differently is a defect, whatever the tests say.
-`crates/meowctl-starlark/tests/stdlib.rs` runs against them when they are
-checked out beside this repository, and skips when they are not.
+<principle name="no_ai_attribution">
+Never mention Claude, Claude Code or any AI tool in a commit message, a pull
+request title or body, a review comment, an issue, a tag annotation or release
+notes: no `Co-Authored-By` trailer naming an AI, no "Generated with" footer,
+no `noreply@anthropic.com` and no paraphrase. This overrides the harness
+default that asks for such a trailer, because the repository owner asked for
+it and had the existing trailers removed from history.
 
-</starlark_surface>
-
-<build>
-
-`mise install` gets the toolchain: one pinned Rust channel, its language
-server, and the test runner. Run the whole gate before opening a pull
-request:
+Check your message before you commit. The pattern matches attribution rather
+than the bare word, so a path such as `.claude/skills/` doesn't trip it:
 
 ```bash
-mise run all            # fmt-check, check, test, doc, deny, lint-md
+git log -1 --format=%B |
+  grep -iE 'co-authored-by.*(claude|anthropic|copilot)|generated with|noreply@anthropic'
 ```
 
-Or one at a time:
+Any output means the message carries attribution; amend it before you push.
+</principle>
 
-```bash
-mise run build          # cargo build --workspace
-mise run check          # clippy with -D warnings
-mise run test           # cargo nextest run --workspace
-mise run fmt            # cargo fmt --all
-mise run deny           # advisories, licences, bans, sources
-mise run unused-deps    # cargo machete
-mise run snapshots      # cargo insta review
-```
-
-CI runs the test matrix on Linux only. The tree still carries `cfg(unix)` and
-`cfg(windows)` code, so `mise run check-windows` is what is left before
-touching anything behind a `cfg` — the last two Windows failures were an
-unused import and a path literal that is absolute on one platform and not the
-other.
-
+<principle name="releases_carry_checksums">
 A tag matching `v*` runs `.github/workflows/release.yml`, which builds four
-targets and publishes `checksums.sri`. A release without that file is one
-`self-update` refuses, so the workflow is not optional dressing; see
-[R-CLI-071].
+targets and publishes `checksums.sri`. Keep that step, because `self-update`
+refuses a release without the file ([REQ-3471, REQ-3529]).
+</principle>
 
-Workspace lints are in the root `Cargo.toml` and every crate inherits them
-with `lints.workspace = true`. Two of them encode principles from this file:
-`print_stdout` and `print_stderr` are denied outside `meowctl-tui`, and
-`unwrap_used` is denied outside tests.
+</principles>
 
-`.claude/settings.json` enables the `rust-analyzer-lsp` plugin, so the `LSP`
-tool has code intelligence over the workspace. The `rust` skill says what it
-answers and what to do when the server fails to start.
+<gate>
+Run `mise install` once to get the pinned Rust toolchain, its language server
+and the test runner. Then run the whole gate before you open a pull request:
 
-</build>
+```bash
+mise run all
+```
 
-<workflow>
+It runs these tasks in order, fastest failure first, and stops at the first
+that fails:
 
-Work is specification-driven. A change moves through five steps, each with a
-command:
-
-| Command | Does | Stops at |
+| Task | Runs | Fails on |
 | --- | --- | --- |
-| `/spec` | Writes or extends a component spec in `docs/spec/` | Human approval |
-| `/plan` | Decomposes an approved spec into issues with dependencies | Human approval, before creating anything on GitHub |
-| `/implement` | Builds one issue on a feature branch | A pull request, never a merge |
-| `/verify` | Checks code against spec in both directions | A report, fixes nothing |
-| `/review` | Reviews a pull request against its spec and conventions | A verdict |
-| `/amend-spec` | Proposes a spec change after implementation contradicted it | Human approval |
+| `fmt-check` | `cargo fmt --all -- --check` | Any file `rustfmt` would change |
+| `check` | `cargo clippy --workspace --all-targets -- -D warnings` | Any clippy or workspace lint warning |
+| `test` | `cargo nextest run --workspace` | Any failing test |
+| `doc` | `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS=-D warnings` | A broken intra-doc link or any rustdoc warning |
+| `deny` | `cargo deny check` | An advisory, a disallowed licence, a banned crate or an unknown source |
+| `unused-deps` | `cargo machete` | A dependency nothing uses |
+| `lint-md` | `markdownlint-cli2` over the Markdown outside `.claude/` and `CLAUDE.md` | A Markdown rule `.markdownlint.yaml` enables |
 
-The skills in `.claude/skills/`:
-
-- `technical-english` — all prose. Always loaded, see the principle above.
-- `spec-driven` — requirement identifiers, traceability, the divergence
-  protocol.
-- `scm` — branches, commits, pull requests, squash merges, the attribution ban.
-- `rust` — crate boundaries, errors, the Starlark bridge, tests.
-
-</workflow>
-
-<maintenance>
-
-Keep this file and `docs/` synchronized with the code. When you change:
-
-- **the crate layout or a boundary** — update
-  `docs/design/0.2.0-rust-rewrite.md` §3 and the table above
-- **the terminal output model** — update §4 of the plan
-- **the milestone order** — update §6 and §7 of the plan
-- **build or lint configuration** — update the `<build>` section above
-- **any documentation file** — add, move, or delete its line in
-  `docs/README.md`, which lists every one
-
-This file is the only instruction file in the repository. If a tool wants its
-own, point it here instead of adding a second source of truth.
-
-</maintenance>
+The pre-commit hooks run `fmt-check` and `check` on every commit that touches
+Rust. CI runs the tests on Linux only, but the tree carries `cfg(unix)` and
+`cfg(windows)` code, so run `mise run check-windows` before you touch code
+behind a `cfg`. The last two Windows failures were an unused import and a path
+literal that is absolute on one platform and relative on the other. Run
+`mise run snapshots` to review a changed `insta` snapshot.
+</gate>

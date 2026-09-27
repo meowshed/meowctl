@@ -12,7 +12,7 @@ use meowctl_common::ComponentId;
 use meowctl_engine::{Declaration, EngineError, discover};
 use support::{Config, NoLoads, graph_of, linux, macos, plain};
 
-/// [R-ENGINE-013] declaration order is the tie-break, so two runs of the same
+/// [REQ-3013] declaration order is the tie-break, so two runs of the same
 /// configuration produce the same order and a plan is worth reading.
 #[test]
 fn components_with_no_edge_between_them_keep_declaration_order() {
@@ -25,7 +25,7 @@ fn components_with_no_edge_between_them_keep_declaration_order() {
     assert_eq!(graph.names(), ["zsh", "neovim", "git"]);
 }
 
-/// [R-ENGINE-013] and an edge wins over declaration order.
+/// [REQ-3013] and an edge wins over declaration order.
 #[test]
 fn a_component_runs_after_what_it_names() {
     let config = Config::new()
@@ -39,7 +39,7 @@ fn a_component_runs_after_what_it_names() {
     assert_eq!(graph.names(), ["mise", "neovim"]);
 }
 
-/// [R-ENGINE-014] a component file may name what it runs after itself, which
+/// [REQ-3014, REQ-3104] a component file may name what it runs after itself, which
 /// is what keeps a component from being a change to `init.star` as well.
 #[test]
 fn a_component_file_may_name_its_own_dependencies() {
@@ -54,7 +54,7 @@ fn a_component_file_may_name_its_own_dependencies() {
     assert_eq!(graph.names(), ["mise", "neovim"]);
 }
 
-/// [R-ENGINE-014] and a name the configuration does not declare is pulled in
+/// [REQ-3014, REQ-3104] and a name the configuration does not declare is pulled in
 /// rather than ignored: a component that names a dependency is relying on it.
 #[test]
 fn an_undeclared_dependency_is_pulled_into_the_graph() {
@@ -72,7 +72,7 @@ fn an_undeclared_dependency_is_pulled_into_the_graph() {
     assert_eq!(graph.names(), ["mise", "test-mise"]);
 }
 
-/// [R-ENGINE-011] and what it pulls in is marked, because a `meowctl remove`
+/// [REQ-3011, REQ-3103] and what it pulls in is marked, because a `meowctl remove`
 /// of one tool must not run the uninstall hook of the package manager it was
 /// reached through.
 #[test]
@@ -95,7 +95,7 @@ fn a_component_reached_through_a_dependency_is_not_declared() {
     assert_eq!(declared.get("mise"), Some(&false));
 }
 
-/// [R-ENGINE-011] transitively, so declaring an aggregate brings in what it
+/// [REQ-3011, REQ-3103] transitively, so declaring an aggregate brings in what it
 /// needs without copying its whole tree into `init.star`.
 #[test]
 fn dependencies_are_followed_all_the_way_down() {
@@ -108,7 +108,7 @@ fn dependencies_are_followed_all_the_way_down() {
     assert_eq!(graph.names(), ["bottom", "middle", "top"]);
 }
 
-/// [R-ENGINE-010] a component declared in both `init.star` and `local.star`
+/// [REQ-3010] a component declared in both `init.star` and `local.star`
 /// counts once, and the first declaration is the one that stands.
 #[test]
 fn a_component_declared_twice_counts_once() {
@@ -127,7 +127,7 @@ fn a_component_declared_twice_counts_once() {
     );
 }
 
-/// [R-ENGINE-012] a component declaring a `platforms` list that does not hold
+/// [REQ-3012] a component declaring a `platforms` list that does not hold
 /// this machine's operating system is dropped.
 #[test]
 fn a_platform_guard_drops_a_component() {
@@ -150,7 +150,7 @@ fn a_platform_guard_drops_a_component() {
     );
 }
 
-/// [R-ENGINE-012] a `distros` guard matches the distribution or its `ID_LIKE`
+/// [REQ-3012] a `distros` guard matches the distribution or its `ID_LIKE`
 /// by equality. `select()` matches `ID_LIKE` by substring; these are not the
 /// same rule, whatever an earlier draft of the requirement said.
 #[test]
@@ -181,7 +181,7 @@ fn a_distro_guard_matches_the_distribution_or_its_id_like() {
     );
 }
 
-/// [R-ENGINE-012] a component declaring neither guard runs everywhere, and a
+/// [REQ-3012] a component declaring neither guard runs everywhere, and a
 /// guard that is not a list of strings is ignored rather than refused.
 #[test]
 fn a_component_with_no_usable_guard_runs_everywhere() {
@@ -198,7 +198,7 @@ fn a_component_with_no_usable_guard_runs_everywhere() {
     );
 }
 
-/// [R-ENGINE-052] a component a guard dropped is reported rather than being
+/// [REQ-3052] a component a guard dropped is reported rather than being
 /// silently absent, because "it did not run" is not something a user can act
 /// on.
 #[test]
@@ -216,7 +216,7 @@ fn a_dropped_component_says_which_guard_dropped_it() {
     assert!(guard.contains("linux"), "{guard}");
 }
 
-/// [R-ENGINE-015] a cycle names the components on it. `TopoSort` reports only
+/// [REQ-3015, REQ-3105] a cycle names the components on it. `TopoSort` reports only
 /// that there is one, which leaves a user with a hundred components and no
 /// way to find the two that point at each other.
 #[test]
@@ -237,7 +237,7 @@ fn a_cycle_names_the_components_on_it() {
     assert_eq!(names, ["a", "b"], "and nothing else: {err}");
 }
 
-/// [R-ENGINE-016] naming a component restricts the run to it and what it
+/// [REQ-3016, REQ-3106] naming a component restricts the run to it and what it
 /// needs. Excluding the dependency is what made `meowctl apply test-mise`
 /// fail on a tool that was never installed.
 #[test]
@@ -257,7 +257,7 @@ fn a_filter_keeps_what_the_named_components_depend_on() {
     assert_eq!(scoped.names(), ["mise", "test-mise"]);
 }
 
-/// [R-ENGINE-016] a name matching nothing is an error, because an empty run
+/// [REQ-3016, REQ-3106] a name matching nothing is an error, because an empty run
 /// reports success.
 #[test]
 fn a_filter_matching_nothing_is_an_error() {
@@ -270,7 +270,7 @@ fn a_filter_matching_nothing_is_an_error() {
     assert!(err.to_string().contains("nonesuch"), "{err}");
 }
 
-/// [R-ENGINE-020] and [R-PM-003]: every component is evaluated once before any
+/// [REQ-3020] and [REQ-2603]: every component is evaluated once before any
 /// hook runs, so a hook in the first can declare a package the last handles.
 #[test]
 fn package_manager_handlers_are_registered_during_discovery() {
@@ -296,7 +296,7 @@ def interrogate(ctx):
     assert_eq!(discovered.registry.managers(), ["brew"]);
 }
 
-/// [R-PM-004] two components claiming one manager is reported, where `v0.1.0`
+/// [REQ-2604] two components claiming one manager is reported, where `v0.1.0`
 /// lets whichever evaluated last win.
 #[test]
 fn two_components_claiming_one_manager_fail_discovery() {
@@ -323,7 +323,7 @@ def interrogate(ctx):
     assert!(err.to_string().contains("brew"), "{err}");
 }
 
-/// [R-ENGINE-021] the second pass reuses what the first found rather than
+/// [REQ-3021] the second pass reuses what the first found rather than
 /// evaluating the file again, which is what makes the two passes one read.
 #[test]
 fn what_a_component_exports_is_kept_for_the_second_pass() {
@@ -357,7 +357,7 @@ fn a_component_that_does_not_evaluate_names_itself() {
     assert!(err.to_string().contains("broken"), "{err}");
 }
 
-/// [R-ENGINE-018] a module's components refer to each other by name. Reading
+/// [REQ-3018] a module's components refer to each other by name. Reading
 /// `after = ["fish-config"]` inside `@dotmeow` against the configuration
 /// looks for a file the user never wrote, and fails on every configuration
 /// that uses an aggregate module.
@@ -378,7 +378,7 @@ fn a_bare_dependency_inside_a_module_resolves_inside_that_module() {
     assert_eq!(graph.names(), ["fish-config", "@dotmeow"]);
 }
 
-/// [R-ENGINE-018] and the rule is about where the name is written, not about
+/// [REQ-3018] and the rule is about where the name is written, not about
 /// the name: the same bare name in the configuration's own component means a
 /// component in the configuration.
 #[test]
@@ -391,7 +391,7 @@ fn a_bare_dependency_in_the_configuration_resolves_in_the_configuration() {
     assert_eq!(graph.names(), ["helper", "mine"]);
 }
 
-/// [R-ENGINE-018] a name that is already qualified is left alone, whoever
+/// [REQ-3018] a name that is already qualified is left alone, whoever
 /// wrote it: `@dotmeow` depending on `@stdlib//components/tmux` means that
 /// one, not a `tmux` of its own.
 #[test]
@@ -410,7 +410,7 @@ fn a_qualified_dependency_is_left_alone_inside_a_module() {
     assert_eq!(graph.names(), ["tmux", "@dotmeow"]);
 }
 
-/// [R-ENGINE-018] a name already carrying `@` is left alone, and so is one
+/// [REQ-3018] a name already carrying `@` is left alone, and so is one
 /// carrying `//`. Only a bare name is read against its declarer's module.
 ///
 /// The two are separate cases: `@dotmeow` has the sigil and no path, and
@@ -439,7 +439,7 @@ fn a_name_that_is_already_qualified_is_left_as_written() {
     );
 }
 
-/// [R-ENGINE-018] a component that belongs to no module leaves a bare name
+/// [REQ-3018] a component that belongs to no module leaves a bare name
 /// alone, because there is no module for it to mean.
 #[test]
 fn a_bare_name_declared_outside_a_module_stays_bare() {
@@ -450,7 +450,7 @@ fn a_bare_name_declared_outside_a_module_stays_bare() {
     );
 }
 
-/// [R-ENGINE-013] an edge is followed once every component it waits on is
+/// [REQ-3013] an edge is followed once every component it waits on is
 /// done, and not before. A component waiting on two is not freed by one.
 #[test]
 fn a_component_waiting_on_two_is_not_freed_by_one() {

@@ -3,11 +3,11 @@
 //! The vocabulary lives here rather than in `meowctl-engine` so a sink never
 //! depends on the engine that emits into it. That is what lets the sinks be
 //! tested against a fixture stream with no engine and no terminal; see
-//! [R-COMMON-040] and [R-TUI-080].
+//! [REQ-1040] and [REQ-3280].
 //!
 //! An event carries facts, never decoration. A colour, a glyph, or a rendered
 //! line here would make `JsonSink` emit terminal output and give the engine a
-//! theme; see [R-COMMON-043].
+//! theme; see [REQ-1043].
 
 use serde::{Deserialize, Serialize};
 
@@ -31,7 +31,7 @@ pub enum Level {
 ///
 /// Every skip carries one. "120 components skipped" is the line that made
 /// `v0.1.0`'s dry run useless, because a user cannot act on it; see
-/// [R-ENGINE-052].
+/// [REQ-3052].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "reason")]
 pub enum SkipReason {
@@ -53,7 +53,7 @@ pub enum Outcome {
     /// The hook ran and succeeded.
     Succeeded,
     /// The component exports no hook for this phase, which is a success with
-    /// nothing to do rather than a skip; see [R-ENGINE-033].
+    /// nothing to do rather than a skip; see [REQ-3033, REQ-3111].
     NothingToDo,
     /// The hook failed.
     Failed {
@@ -85,12 +85,12 @@ pub struct PlannedStep {
 
 /// Everything a command can report.
 ///
-/// The engine emits these and holds no renderer; see [R-ENGINE-051].
+/// The engine emits these and holds no renderer; see [REQ-3051, REQ-3117, REQ-3118].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "event")]
 pub enum Event {
     /// A plan was computed. Emitted before execution, and on its own under
-    /// `--dry-run`; see [R-ENGINE-050].
+    /// `--dry-run`; see [REQ-3050].
     PlanComputed {
         /// The set being run.
         phase_set: PhaseSet,
@@ -173,12 +173,12 @@ pub enum Event {
     },
 
     /// A subprocess needs the real terminal. The sink stands down until
-    /// [`Event::TerminalReleased`]; see [R-EXEC-021].
+    /// [`Event::TerminalReleased`]; see [REQ-1621].
     TerminalRequested,
 
     /// The terminal is available again. Emitted even when the process failed,
     /// because a renderer that never reclaims it leaves the user without a
-    /// cursor; see [R-EXEC-031].
+    /// cursor; see [REQ-1631].
     TerminalReleased,
 
     /// A problem in a source file, with the position to point at.
@@ -195,7 +195,7 @@ pub enum Event {
     ///
     /// What `ctx.emit` produces. An event rather than a write to stdout,
     /// because `ctx` holds no renderer and only the `shell` and `login`
-    /// commands render it at all; see [R-CTX-024] and [R-COMMON-044].
+    /// commands render it at all; see [REQ-2824, REQ-2905] and [REQ-1044].
     ShellLine {
         /// The line, as the component wrote it.
         line: String,
@@ -205,8 +205,8 @@ pub enum Event {
     ///
     /// What `ctx.add_path` produces. An event rather than a call to `setenv`,
     /// because the process environment is an effect and `ctx` reaches every
-    /// effect through something it was given; see [R-CTX-025] and
-    /// [R-COMMON-044].
+    /// effect through something it was given; see [REQ-2825, REQ-2906] and
+    /// [REQ-1044].
     PathPrepended {
         /// The directory.
         directory: String,
@@ -216,7 +216,7 @@ pub enum Event {
     ///
     /// The only variant carrying free text, and it carries a level so the sink
     /// rather than the call site decides where it lands. Anything a sink needs
-    /// to render differently belongs in its own variant; see [R-COMMON-042].
+    /// to render differently belongs in its own variant; see [REQ-1042, REQ-1109, REQ-1110].
     Message {
         /// How serious it is.
         level: Level,
@@ -233,7 +233,7 @@ mod tests {
         name.parse().unwrap()
     }
 
-    /// [R-COMMON-040], [R-COMMON-041] and [R-COMMON-044]: every variant a
+    /// [REQ-1040], [REQ-1041] and [REQ-1044]: every variant a
     /// command produces survives a round trip through JSON, which is what
     /// `JsonSink` needs and what makes the list here the whole vocabulary --
     /// `ShellLine` and `PathPrepended` included, which are effects a hook
@@ -320,7 +320,7 @@ mod tests {
         }
     }
 
-    /// [R-TUI-030] the JSON form is an interface another program reads, so
+    /// [REQ-3230] the JSON form is an interface another program reads, so
     /// every object says which event it is.
     #[test]
     fn the_json_form_is_tagged_by_event_name() {
@@ -336,7 +336,7 @@ mod tests {
         assert!(json.contains(r#""phase":"install_check""#), "{json}");
     }
 
-    /// [R-COMMON-042] free text is confined to one variant, which is what
+    /// [REQ-1042, REQ-1109, REQ-1110] free text is confined to one variant, which is what
     /// keeps the rest of the stream structured.
     #[test]
     fn only_message_carries_unstructured_text() {
@@ -348,7 +348,7 @@ mod tests {
         assert!(json.contains(r#""level":"warn""#), "{json}");
     }
 
-    /// [R-COMMON-043] an event that carried a colour or a glyph would make the
+    /// [REQ-1043] an event that carried a colour or a glyph would make the
     /// JSON sink emit terminal decoration.
     #[test]
     fn no_event_carries_decoration() {

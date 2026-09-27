@@ -53,7 +53,7 @@ impl IndexEntry {
     /// absent rather than as a mismatch, because refusing would make a
     /// malformed entry in someone else's index unfixable from here. The cache
     /// record still hashes what was extracted, so the module is not
-    /// unverified afterwards; see [R-MODULE-044].
+    /// unverified afterwards; see [REQ-2444, REQ-2511, REQ-2512].
     #[must_use]
     pub fn integrity_for(&self, version: &str) -> Option<Integrity> {
         self.integrity.get(version)?.parse().ok()
@@ -106,7 +106,7 @@ impl Index {
 
     /// Fetches and parses the index.
     ///
-    /// The three failures [R-MODULE-060] distinguishes are three variants
+    /// The three failures [REQ-2460, REQ-2514] distinguishes are three variants
     /// here: the request, the status inside it, and the parse.
     ///
     /// # Errors
@@ -124,7 +124,7 @@ impl Index {
     ///
     /// # Errors
     ///
-    /// [`ModuleError::NoSuchModule`], which [R-MODULE-061] wants distinct from
+    /// [`ModuleError::NoSuchModule`], which [REQ-2461] wants distinct from
     /// a version that does not exist.
     pub fn entry(&self, module: &str) -> ModuleResult<&IndexEntry> {
         self.modules
@@ -198,7 +198,7 @@ source = "https://github.com/meowshed/meowctl-{name}/archive/refs/tags/{version}
         assert!(Index::parse("u", INDEX.as_bytes()).is_ok());
     }
 
-    /// [R-MODULE-060] a body that is not an index is the third of the three
+    /// [REQ-2460, REQ-2514] a body that is not an index is the third of the three
     /// failures, and it has to be distinguishable from the other two.
     #[test]
     fn a_body_that_is_not_an_index_says_so() {
