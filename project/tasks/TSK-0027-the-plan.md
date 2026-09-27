@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-3001, REQ-3002, REQ-3003, REQ-3050, REQ-3052, REQ-3100, REQ-3101, REQ-3102]
-issue:
+issue: 125
+projected: d3f5374636e1
 ---
 
 # The plan

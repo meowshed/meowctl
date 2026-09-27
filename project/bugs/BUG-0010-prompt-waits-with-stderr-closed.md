@@ -6,7 +6,7 @@ severity: minor
 violates: REQ-3341
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 146
 ---
 
 # With stderr closed at startup, a prompt waits for an answer to a question nobody saw

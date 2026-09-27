@@ -6,7 +6,7 @@ severity: minor
 violates: REQ-2540
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 149
 ---
 
 # A GitHub ref that doesn't exist is reported as a bare HTTP 422

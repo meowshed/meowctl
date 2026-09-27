@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-2420, REQ-2421, REQ-2422, REQ-2450, REQ-2451, REQ-2452, REQ-2453, REQ-2464, REQ-2504, REQ-2505, REQ-2513]
-issue:
+issue: 117
+projected: 5471f9d627e0
 ---
 
 # Locking, syncing, and overrides

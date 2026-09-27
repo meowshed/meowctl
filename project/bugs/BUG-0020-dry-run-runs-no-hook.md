@@ -6,7 +6,7 @@ severity: major
 violates: REQ-3172
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 156
 ---
 
 # `apply --dry-run` runs no hook, so the per-phase dry-run executor is dead code in the binary

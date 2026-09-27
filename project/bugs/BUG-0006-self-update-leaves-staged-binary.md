@@ -6,7 +6,7 @@ severity: minor
 violates: REQ-3543
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 142
 ---
 
 # `self-update` leaves the staged binary behind when it can't make it executable

@@ -6,7 +6,7 @@ severity: minor
 violates: REQ-2704
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 153
 ---
 
 # A raising `interrogate` doesn't name the asking component in its message

@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-1250, REQ-1251, REQ-1252, REQ-1253, REQ-1314]
-issue:
+issue: 105
+projected: 54c5a865321a
 ---
 
 # The syntax-aware Starlark editor

@@ -6,7 +6,7 @@ severity: critical
 violates: REQ-2025
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 137
 ---
 
 # The rollback journal is never truncated, so a failed run undoes an earlier successful run

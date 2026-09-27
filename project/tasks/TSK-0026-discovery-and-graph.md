@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-1006, REQ-2234, REQ-3010, REQ-3011, REQ-3012, REQ-3013, REQ-3014, REQ-3015, REQ-3016, REQ-3017, REQ-3018, REQ-3020, REQ-3021, REQ-3103, REQ-3104, REQ-3105, REQ-3106, REQ-3107]
-issue:
+issue: 124
+projected: c1a35553c83f
 ---
 
 # Discovery and the component graph

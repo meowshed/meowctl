@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-1001, REQ-1002, REQ-1003, REQ-1004, REQ-1010, REQ-1011, REQ-1012, REQ-1013, REQ-1020, REQ-1021, REQ-1022, REQ-1030, REQ-1031, REQ-1032, REQ-1050, REQ-1051, REQ-1100, REQ-1101, REQ-1102, REQ-1103, REQ-1104, REQ-1105, REQ-1107, REQ-1108]
-issue:
+issue: 99
+projected: cd3f88ff94e1
 ---
 
 # Domain types and the error taxonomy

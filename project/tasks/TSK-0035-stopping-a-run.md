@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-3064, REQ-3453, REQ-3454, REQ-3519]
-issue:
+issue: 133
+projected: 5e872c2fcf43
 ---
 
 # Stopping a run

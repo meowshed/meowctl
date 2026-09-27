@@ -6,7 +6,7 @@ severity: major
 violates: REQ-3541
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 141
 ---
 
 # `init <repo-url>` writes the archive straight into the configuration root, so a failure partway leaves files behind

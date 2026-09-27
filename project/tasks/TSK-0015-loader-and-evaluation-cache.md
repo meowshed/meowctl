@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-2223, REQ-2253]
-issue:
+issue: 113
+projected: adaaf02ed9b9
 ---
 
 # The Loader trait and evaluation caching

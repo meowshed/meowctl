@@ -6,7 +6,7 @@ severity: critical
 violates: REQ-2341
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 138
 ---
 
 # meowctl never reads the Linux distribution, so every `distros` guard and distribution case fails on Linux

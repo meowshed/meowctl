@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-2401, REQ-2402, REQ-2403, REQ-2404, REQ-2405, REQ-2461, REQ-2462, REQ-2500]
-issue:
+issue: 116
+projected: 51d73e189442
 ---
 
 # Version selection

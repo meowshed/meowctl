@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-3260, REQ-3261, REQ-3262, REQ-3319, REQ-3320]
-issue:
+issue: 123
+projected: 96fcc6ad156b
 ---
 
 # Interaction

@@ -5,7 +5,7 @@ status: approved
 severity: minor
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 144
 ---
 
 # A failure recording packages after a failed run replaces the run's failure

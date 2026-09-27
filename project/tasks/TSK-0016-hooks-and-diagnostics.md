@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-2230, REQ-2231, REQ-2232, REQ-2240, REQ-2241, REQ-2242, REQ-2250, REQ-2251, REQ-2252, REQ-2305, REQ-2306, REQ-2307]
-issue:
+issue: 114
+projected: faa975536266
 ---
 
 # Calling hooks and diagnostics

@@ -6,7 +6,7 @@ severity: major
 violates: REQ-3522
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 147
 ---
 
 # `hook` exits 3 and prints an error on every shell spawn when a stale `.hook-error` can't be removed

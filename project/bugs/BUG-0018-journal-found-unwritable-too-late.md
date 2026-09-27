@@ -6,7 +6,7 @@ severity: major
 violates: REQ-2140
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 154
 ---
 
 # An unwritable journal is found at the first reversible effect, after irreversible steps have run

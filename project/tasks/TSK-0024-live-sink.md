@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-3204, REQ-3220, REQ-3221, REQ-3222, REQ-3223, REQ-3224, REQ-3225, REQ-3226, REQ-3281, REQ-3305, REQ-3306, REQ-3307]
-issue:
+issue: 122
+projected: 8633fde20935
 ---
 
 # The live sink

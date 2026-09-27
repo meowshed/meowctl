@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-1040, REQ-1041, REQ-1042, REQ-1043, REQ-1109, REQ-1110]
-issue:
+issue: 100
+projected: 1529cca94f51
 ---
 
 # The event vocabulary

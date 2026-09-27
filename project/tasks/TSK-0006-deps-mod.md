@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-1210, REQ-1211, REQ-1212, REQ-1213, REQ-1214, REQ-1302, REQ-1303, REQ-1304]
-issue:
+issue: 104
+projected: 64b09dc37332
 ---
 
 # deps.mod reading and writing

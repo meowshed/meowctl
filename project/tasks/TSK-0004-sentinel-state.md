@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-1240, REQ-1241, REQ-1242, REQ-1243, REQ-1244, REQ-1312, REQ-1313]
-issue:
+issue: 102
+projected: 072e52f505d6
 ---
 
 # Sentinel state

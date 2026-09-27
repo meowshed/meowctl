@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-1226, REQ-1310, REQ-1311]
-issue:
+issue: 132
+projected: dfd094ed72ba
 ---
 
 # The package locks

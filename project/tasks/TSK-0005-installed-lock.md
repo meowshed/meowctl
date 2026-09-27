@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-1230, REQ-1231, REQ-1232, REQ-1233]
-issue:
+issue: 103
+projected: 88299cb55411
 ---
 
 # installed.lock, both schema versions

@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-1201, REQ-1202, REQ-1203, REQ-1204, REQ-1260, REQ-1262, REQ-1263, REQ-1300, REQ-1301, REQ-1315]
-issue:
+issue: 106
+projected: 44a1416221ab
 ---
 
 # Config layout and the legacy check

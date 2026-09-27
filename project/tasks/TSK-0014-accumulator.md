@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-2210, REQ-2211, REQ-2212]
-issue:
+issue: 112
+projected: d46484d35e88
 ---
 
 # The accumulator

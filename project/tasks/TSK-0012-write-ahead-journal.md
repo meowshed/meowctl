@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-2020, REQ-2021, REQ-2022, REQ-2023, REQ-2024, REQ-2025, REQ-2026, REQ-2030, REQ-2031, REQ-2032, REQ-2116, REQ-2117, REQ-2118, REQ-2119, REQ-2120]
-issue:
+issue: 110
+projected: de02f8d13489
 ---
 
 # The write-ahead journal

@@ -6,7 +6,7 @@ severity: minor
 violates: REQ-3370
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 157
 ---
 
 # The live sink counts characters, so a row holding a wide character can wrap

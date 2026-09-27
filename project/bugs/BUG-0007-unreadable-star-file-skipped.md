@@ -6,7 +6,7 @@ severity: major
 violates: REQ-3140
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 143
 ---
 
 # An `init.star` or `local.star` that exists but can't be read is skipped as if absent

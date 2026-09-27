@@ -6,7 +6,7 @@ severity: major
 violates: REQ-2253
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 139
 ---
 
 # The CLI ignores the severity lower crates compute, so a module that won't fetch during `apply` exits 3

@@ -6,7 +6,7 @@ severity: minor
 violates: REQ-3340
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 145
 ---
 
 # A terminal narrower than 20 columns is laid out at 80, so every live frame wraps

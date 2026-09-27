@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-3040, REQ-3041, REQ-3042, REQ-3043, REQ-3044, REQ-3116]
-issue:
+issue: 127
+projected: d37655b4c12a
 ---
 
 # Sentinel and staleness

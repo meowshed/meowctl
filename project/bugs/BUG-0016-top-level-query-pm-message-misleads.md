@@ -6,7 +6,7 @@ severity: minor
 violates: REQ-2343
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 152
 ---
 
 # A top-level `query_pm` blames the evaluation instead of saying it works only in a hook

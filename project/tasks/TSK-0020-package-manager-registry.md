@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-2205, REQ-2233, REQ-2601, REQ-2602, REQ-2604, REQ-2610, REQ-2611, REQ-2612, REQ-2613, REQ-2614, REQ-2620, REQ-2630, REQ-2631, REQ-2632, REQ-2700, REQ-2701, REQ-2702, REQ-2704]
-issue:
+issue: 118
+projected: 18805d11a609
 ---
 
 # The package-manager registry

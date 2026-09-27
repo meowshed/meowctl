@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-2603, REQ-2615, REQ-2621, REQ-2703, REQ-3030, REQ-3031, REQ-3032, REQ-3033, REQ-3034, REQ-3051, REQ-3060, REQ-3061, REQ-3062, REQ-3063, REQ-3108, REQ-3109, REQ-3110, REQ-3111, REQ-3117, REQ-3118, REQ-3120, REQ-3121]
-issue:
+issue: 126
+projected: deca78de0d9f
 ---
 
 # Phase execution and rollback

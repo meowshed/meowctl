@@ -6,7 +6,7 @@ severity: minor
 violates: REQ-2141
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 155
 ---
 
 # A torn journal record swallows the record appended after it

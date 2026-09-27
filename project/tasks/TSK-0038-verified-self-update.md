@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-3471, REQ-3472, REQ-3473, REQ-3474, REQ-3475, REQ-3476, REQ-3529, REQ-3530, REQ-3531, REQ-3532]
-issue:
+issue: 136
+projected: 57f72694de7f
 ---
 
 # Updating the binary, verified

@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-1601, REQ-1602, REQ-1603, REQ-1604, REQ-1605, REQ-1610, REQ-1611, REQ-1612, REQ-1620, REQ-1621, REQ-1622, REQ-1623, REQ-1630, REQ-1631, REQ-1632, REQ-1700, REQ-1701, REQ-1702, REQ-1703, REQ-1704]
-issue:
+issue: 108
+projected: a87897141a9e
 ---
 
 # Executor and terminal hand-off

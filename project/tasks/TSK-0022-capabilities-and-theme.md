@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-3240, REQ-3241, REQ-3242, REQ-3243, REQ-3244, REQ-3250, REQ-3251, REQ-3252, REQ-3308, REQ-3309, REQ-3310, REQ-3313]
-issue:
+issue: 120
+projected: ef65f1265c85
 ---
 
 # Capability detection and the theme

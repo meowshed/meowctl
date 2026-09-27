@@ -6,7 +6,7 @@ severity: minor
 violates: REQ-3510
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 159
 ---
 
 # `meowctl-cli` writes to stdout and stderr directly at three sites

@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-3201, REQ-3202, REQ-3203, REQ-3210, REQ-3211, REQ-3212, REQ-3230, REQ-3231, REQ-3232, REQ-3270, REQ-3271, REQ-3280, REQ-3300, REQ-3301, REQ-3302, REQ-3303, REQ-3323]
-issue:
+issue: 121
+projected: 71777ce01f15
 ---
 
 # The plain and JSON sinks

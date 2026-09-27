@@ -6,7 +6,7 @@ severity: major
 violates: REQ-3542
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 148
 ---
 
 # `hook` drops a failed write of `.hook-error` silently

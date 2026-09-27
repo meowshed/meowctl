@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-2201, REQ-2202, REQ-2203, REQ-2204, REQ-2206, REQ-2207, REQ-2208, REQ-2300, REQ-2301, REQ-2302, REQ-2303]
-issue:
+issue: 111
+projected: b7d780d7ea0d
 ---
 
 # The evaluator and the predeclared set

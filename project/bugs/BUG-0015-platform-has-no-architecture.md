@@ -6,7 +6,7 @@ severity: major
 violates: REQ-2207
 found: 2026-09-27
 revised: 2026-09-27
-issue:
+issue: 151
 ---
 
 # `platform()` carries no architecture attribute

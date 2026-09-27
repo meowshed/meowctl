@@ -5,7 +5,8 @@ status: approved
 revised: 2026-09-27
 epic: EPC-0001
 closes: [REQ-1220, REQ-1221, REQ-1222, REQ-1223, REQ-1224, REQ-1225, REQ-1261, REQ-1305, REQ-1306, REQ-1307, REQ-1308, REQ-1309]
-issue:
+issue: 101
+projected: 8a241505604d
 ---
 
 # Lock files
