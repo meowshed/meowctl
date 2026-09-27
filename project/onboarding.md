@@ -20,10 +20,10 @@ is where every `(from docs/...)` citation in the record points.
 
 The record now holds a vision, 13 specifications, 556 requirements (554 approved
 and 2 withdrawn), 50 decisions, one epic with 38 tasks that records the 0.2.0
-work, and 23 defects (from `meow-method count`, high). Researching the questions
-the first pass raised found 23 defects in the shipped code, three of them
-serious; the Gaps section answers every question and names the record each
-answer changed.
+work, and 23 defects (from `paw count`, high). Researching the questions the
+first pass raised found 23 defects in the shipped code, three of them serious;
+the Gaps section answers every question and names the record each answer
+changed.
 
 ## Verbs
 
@@ -32,17 +32,17 @@ answer changed.
 
 | Verb | State | Command |
 | --- | --- | --- |
-| `fmt` | resolved | `mise run fmt-check` |
+| `format` | resolved | `mise run fmt-check` |
 | `lint` | resolved | `mise run check` |
-| `typecheck` | unresolved | none declared |
+| `check` | unresolved | none declared |
 | `test` | resolved | `mise run test` |
 | `build` | resolved | `mise run build` |
 
-`typecheck` is unresolved because the repository has no type-check task for the
-host: `mise run check` runs clippy, which type-checks as it lints, and
-`mise run check-windows` checks only the Windows target (from mise.toml, high).
-The gate `mise run all` also runs `doc`, `deny`, `unused-deps` and `lint-md`,
-which map to no verb (from mise.toml, high).
+The `check` verb, which type-checks, is unresolved because the repository has no
+type-check task for the host: `mise run check` runs clippy, which type-checks as
+it lints, and `mise run check-windows` checks only the Windows target (from
+mise.toml, high). The gate `mise run all` also runs `doc`, `deny`, `unused-deps`
+and `lint-md`, which map to no verb (from mise.toml, high).
 
 ## Conventions
 
@@ -102,7 +102,7 @@ Each convention below is what the repository does, counted on 2026-09-27.
 | `.claude/commands/verify.md` | discarded | The method's verify step does its work; removed |
 | `.claude/commands/review.md` | discarded | The method's review step does its work; removed |
 | `.claude/commands/amend-spec.md` | discarded | A draft that supersedes the old record does its work; removed |
-| `.claude/skills/spec-driven/SKILL.md` | discarded | The `meow-method:method` skill holds its method; removed |
+| `.claude/skills/spec-driven/SKILL.md` | discarded | The `meow-flow:method` skill holds its method; removed |
 | `.claude/skills/technical-english/SKILL.md` | discarded | The `meow-prose:writing` skill holds the writing standard; removed |
 | `.claude/skills/scm/SKILL.md` | cited | Branch names, the pull request body and merge rules; its Go-tree and `rust.yml` passages are corrected |
 | `.claude/skills/rust/SKILL.md` | cited | Code conventions; it now cites the decisions and names the dependencies that shipped |
@@ -145,9 +145,8 @@ The record and the process:
    isn't built.
 4. The method writes one index block per file, and specifications, epics and
    defects share `project/README.md`, so its block holds the specifications and
-   the epic and defect tables are written by hand. `meow-method check` reports
-   the other two blocks as out of date; that is a defect in `meow-method` to
-   raise upstream.
+   the epic and defect tables are written by hand. `paw check` reports the other
+   two blocks as out of date; that is a defect in `meow-flow` to raise upstream.
 5. The research index finding stands: writing an empty `RES-0001-synthesis.md`
    would invent research nobody did.
 6. CLAUDE.md's principles now point at `project/` and the method's steps.
@@ -248,10 +247,10 @@ The two questions the second pass left for the owner are answered too:
    REQ-1802's 30 seconds now covers module and registry requests only, and
    BUG-0022 records that the shipped client applies 30 seconds to all three.
 
-The owner approved every record on 2026-09-27. `meow-method check coverage` now
-counts 524 of 554 requirements in force in a task: the 526 migrated ones less
-the two withdrawn, with the 30 added during research waiting for the epics that
-fix their defects.
+The owner approved every record on 2026-09-27. `paw check coverage` now counts
+524 of 554 requirements in force in a task: the 526 migrated ones less the two
+withdrawn, with the 30 added during research waiting for the epics that fix
+their defects.
 
 ## Adoption
 
@@ -262,4 +261,4 @@ the record. What comes next:
    because the first loses user files and the second breaks every Linux machine.
 2. Give each of the 30 requirements the research added a task, through the epics
    that fix the defects they describe.
-3. Raise the index-block and research-index findings against `meow-method`.
+3. Raise the index-block and research-index findings against `meow-flow`.
