@@ -49,8 +49,8 @@ walkdir = "2"
 ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier"] }
 flate2 = "1"
 tar = "0.4"
-sha2 = "0.10"
-base64 = "0.22"
+sha2 = "0.11"
+base64 = "0.23"
 
 # Every crate inherits these with `lints.workspace = true`.
 [workspace.lints.rust]
