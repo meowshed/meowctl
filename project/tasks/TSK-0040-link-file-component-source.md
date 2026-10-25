@@ -1,7 +1,7 @@
 ---
 id: TSK-0040
 artifact: task
-status: approved
+status: done
 revised: 2026-10-25
 bug: BUG-0042
 closes: [REQ-2913, REQ-2914]
@@ -44,16 +44,14 @@ path, and that difference is out of scope here.
 
 ## Evidence
 
-Not yet.
-
-Criteria 1 and 2 rest on `link_file_reads_a_relative_src_from_the_component_directory`
-and `link_file_refuses_an_absolute_src`, which failed before the fix and pass
-after it, and criterion 3 on `link_file_still_refuses_a_relative_dst`, which
-passes on both sides because it guards behaviour REQ-2914 keeps. At the fix
-commit, `mise run fmt-check`, `mise run check`, `mise run test` (603 passed, 3
-skipped) and `mise run build` exit 0. `mise run check-windows` exits 101 here
-and on `main`, because the Windows standard library isn't installed, so it is
-tool absent. The task stays open: an end-to-end apply of
-`@dotmeow//components/git-config` linked into the configuration's own
-`components/` directory, because `component_dir` for a module component is
-wrong, which BUG-0043 records.
+Criteria 1 and 2 rest on
+`link_file_reads_a_relative_src_from_the_component_directory` and
+`link_file_refuses_an_absolute_src`, which failed before the fix and pass after
+it, and criterion 3 on `link_file_still_refuses_a_relative_dst`, which passes on
+both sides because it guards behaviour REQ-2914 keeps. After rebasing onto
+BUG-0043's fix, `mise run fmt-check`, `mise run check`, `mise run test` (606
+passed, 3 skipped) and `mise run build` exit 0. `mise run check-windows` exits
+101 here and on `main`, because the Windows standard library isn't installed, so
+it is tool absent. A release build run as `meowctl upgrade
+@dotmeow//components/git-config` left `~/.config/git/config` linked to the
+component's `config` in the dotmeow 0.3.32 cache directory.

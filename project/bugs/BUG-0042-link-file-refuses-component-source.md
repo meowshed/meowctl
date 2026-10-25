@@ -56,8 +56,12 @@ without dropping `v0.1.0` compatibility.
 
 ## Closed by
 
-Open.
+`link_file_reads_a_relative_src_from_the_component_directory` and
+`link_file_refuses_an_absolute_src` in `crates/meowctl-ctx/tests/surface.rs`
+hold the behaviour as regression checks.
 
 ## Tasks
 
-- [ ] T-001 TSK-0040 read `link_file`'s `src` from `component_dir` in `crates/meowctl-ctx/src/value.rs`
+- [x] T-001 TSK-0040 read `link_file`'s `src` from `component_dir` in
+  `crates/meowctl-ctx/src/value.rs` (the link tests pass, and every stage
+  exits 0)
