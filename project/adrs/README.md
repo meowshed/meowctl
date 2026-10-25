@@ -56,5 +56,5 @@
 | [ADR-0048](ADR-0048-test-matrix-on-linux-only.md) | Run the test matrix on Linux only, while releases build for four targets | approved |
 | [ADR-0049](ADR-0049-refuse-relative-and-user-paths.md) | Refuse relative paths and `~user` in path resolution | approved |
 | [ADR-0050](ADR-0050-verify-before-self-update.md) | Verify a download before `self-update` installs it | approved |
-| [ADR-0051](ADR-0051-read-only-ctx-keeps-add-path.md) | Give a read-only phase a ctx with no mutating methods, keeping `add_path` | approved |
+| [ADR-0051](ADR-0051-read-only-ctx-keeps-add-path.md) | Give a read-only phase a ctx with no mutating methods, keeping `add_path` | done |
 <!-- /meow-method index -->

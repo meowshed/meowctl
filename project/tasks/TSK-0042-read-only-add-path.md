@@ -1,7 +1,7 @@
 ---
 id: TSK-0042
 artifact: task
-status: approved
+status: done
 revised: 2026-10-25
 realises: ADR-0051
 closes: [REQ-2915]
@@ -40,4 +40,11 @@ include `add_path`.
 
 ## Evidence
 
-Not yet.
+Criterion 1 is closed by `a_read_only_surface_keeps_add_path`, which failed
+before the change and passes after it, and criterion 2 by
+`a_read_only_surface_has_no_mutating_method`, which still lists the twelve
+other mutating methods. `mise run fmt-check`, `mise run check`, `mise run test`
+(601 passed, 3 skipped) and `mise run build` exit 0. A release build of this
+branch run as `meowctl verify` against a real configuration passed
+`@stdlib//components/mise`, where `main` stops, and next stopped at
+`@stdlib//components/mprocs`, whose tool upstream renamed to `dekit`.

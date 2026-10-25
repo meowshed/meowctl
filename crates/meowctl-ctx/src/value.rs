@@ -393,9 +393,26 @@ fn reading_methods(builder: &mut MethodsBuilder) {
     }
 }
 
-/// The methods that read or ask but do not mutate.
+/// The methods that read or ask but do not mutate, and `add_path`, which
+/// changes nothing outside this run.
 #[starlark_module]
 fn general_methods(builder: &mut MethodsBuilder) {
+    /// Puts a directory first on the `PATH` every later `run` sees.
+    ///
+    /// It emits nothing. The name suggests a shell statement and it is not
+    /// one. A read-only phase has it, because it changes only this run's `PATH`;
+    /// see [REQ-2825, REQ-2906, REQ-2915].
+    fn add_path<'v>(
+        this: Value<'v>,
+        dir: String,
+    ) -> anyhow::Result<starlark::values::none::NoneType> {
+        let core = core(this)?;
+        if !dir.is_empty() {
+            core.effects.emit(Event::PathPrepended { directory: dir });
+        }
+        Ok(starlark::values::none::NoneType)
+    }
+
     /// Says something, at the level a sink renders as a component's own words.
     fn log<'v>(this: Value<'v>, msg: String) -> anyhow::Result<starlark::values::none::NoneType> {
         core(this)?.effects.emit(Event::Message {
@@ -756,21 +773,6 @@ fn mutating_methods(builder: &mut MethodsBuilder) {
                 value: shell_argument(value),
             },
         )?;
-        Ok(starlark::values::none::NoneType)
-    }
-
-    /// Puts a directory first on the `PATH` every later `run` sees.
-    ///
-    /// It emits nothing. The name suggests a shell statement and it is not
-    /// one; see [REQ-2825, REQ-2906].
-    fn add_path<'v>(
-        this: Value<'v>,
-        dir: String,
-    ) -> anyhow::Result<starlark::values::none::NoneType> {
-        let core = core(this)?;
-        if !dir.is_empty() {
-            core.effects.emit(Event::PathPrepended { directory: dir });
-        }
         Ok(starlark::values::none::NoneType)
     }
 }
