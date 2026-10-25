@@ -219,9 +219,9 @@ fn run_returns_three_fields_and_does_not_fail_on_a_non_zero_exit() {
         &indent(
             r#"
 result = ctx.run("brew", ["list", "git"])
-if result["exit_code"] != 1: fail("exit_code is " + str(result["exit_code"]))
-if result["stderr"] != "not installed": fail("stderr")
-if result["stdout"] != "": fail("stdout")
+if result.exit_code != 1: fail("exit_code is " + str(result.exit_code))
+if result.stderr != "not installed": fail("stderr")
+if result.stdout != "": fail("stdout")
 "#
             .trim(),
         ),

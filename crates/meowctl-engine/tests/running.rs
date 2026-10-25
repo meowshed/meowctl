@@ -389,7 +389,7 @@ def uninstall_pkg(ctx, name, version, **kwargs):
     pass
 def interrogate(ctx):
     result = ctx.run("brew", ["list"])
-    return [line for line in result["stdout"].split("\n") if line]
+    return [line for line in result.stdout.split("\n") if line]
 "#;
     let config = Config::new()
         .declaring(Declaration::new("homebrew"), handler)
@@ -494,7 +494,7 @@ def uninstall_pkg(ctx, name, version, **kwargs):
     pass
 def interrogate(ctx):
     result = ctx.run("brew", ["list"])
-    return [line for line in result["stdout"].split("\n") if line]
+    return [line for line in result.stdout.split("\n") if line]
 "#;
     let asking = |phase: &str| {
         format!(
