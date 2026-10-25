@@ -64,5 +64,7 @@ check, with the two loader tests in `crates/meowctl-module/tests/fetching.rs`.
 
 ## Tasks
 
-- [x] T-001 TSK-0041 take a module component's directory from where the loader read it, in `crates/meowctl-cli/src/run/commands.rs` and `crates/meowctl-module/src/loader.rs`
+- [x] T-001 TSK-0041 take a module component's directory from where the
+  loader read it, in `crates/meowctl-cli/src/run/commands.rs` and
+  `crates/meowctl-module/src/loader.rs`
   (the three directory tests pass, and every stage exits 0)
