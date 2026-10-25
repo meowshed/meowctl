@@ -290,6 +290,7 @@ impl Loader for MapLoader {
             .map(|source| LoadedFile {
                 name: module.to_owned(),
                 source: source.clone(),
+                path: None,
             })
             .ok_or_else(|| StarlarkError::Load {
                 module: module.to_owned(),

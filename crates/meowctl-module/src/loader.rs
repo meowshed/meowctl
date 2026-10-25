@@ -222,6 +222,7 @@ impl Loader for ModuleLoader<'_> {
         Ok(LoadedFile {
             name: module.to_owned(),
             source,
+            path: None,
         })
     }
 }
