@@ -223,10 +223,25 @@ fn core<'v>(this: Value<'v>) -> anyhow::Result<&'v Core> {
 /// Resolves a path argument.
 ///
 /// Expands a leading `~` and refuses anything that is not absolute
-/// afterwards, for every method that takes one; see [REQ-2812, REQ-2902].
+/// afterwards, for every method that takes one; see [REQ-2914, REQ-2902].
 fn path(method: &'static str, core: &Core, raw: &str) -> CtxResult<PathBuf> {
     let env = HomeOnly(&core.capabilities.home);
     paths::resolve(raw, &env).map_err(|source| CtxError::Path { method, source })
+}
+
+/// Resolves a source the component ships, relative to `component_dir`.
+///
+/// Refuses an absolute path, which names nothing in the component; see
+/// [REQ-2913, REQ-2914].
+fn component_source(method: &'static str, core: &Core, raw: &str) -> CtxResult<PathBuf> {
+    if Path::new(raw).is_absolute() || Path::new(raw).has_root() {
+        return Err(CtxError::Argument {
+            method,
+            argument: format!("src {raw:?}"),
+            expected: "a path relative to the component directory",
+        });
+    }
+    Ok(core.capabilities.component_dir.join(raw))
 }
 
 /// An environment that knows only `$HOME`.
@@ -599,7 +614,7 @@ fn mutating_methods(builder: &mut MethodsBuilder) {
         core.apply(
             "link_file",
             &Op::LinkFile {
-                target: path("link_file", core, &src)?,
+                target: component_source("link_file", core, &src)?,
                 link,
                 backup,
             },

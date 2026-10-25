@@ -3,8 +3,8 @@ id: REQ-2812
 artifact: requirement
 topic: ctx
 class: functional
-status: approved
-revised: 2026-09-27
+status: superseded
+revised: 2026-10-25
 elaborates:
 verification: behavioural
 ---

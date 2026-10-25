@@ -2,9 +2,9 @@
 id: SPC-2800
 artifact: spec
 status: live
-revised: 2026-09-27
+revised: 2026-10-25
 checked-at:
-states: [REQ-2801, REQ-2802, REQ-2803, REQ-2810, REQ-2811, REQ-2812, REQ-2813, REQ-2814, REQ-2820, REQ-2821, REQ-2822, REQ-2823, REQ-2824, REQ-2825, REQ-2826, REQ-2827, REQ-2828, REQ-2830, REQ-2831, REQ-2832, REQ-2840, REQ-2841, REQ-2842, REQ-2843, REQ-2844, REQ-2872, REQ-2900, REQ-2901, REQ-2902, REQ-2903, REQ-2904, REQ-2905, REQ-2906, REQ-2907, REQ-2908, REQ-2909, REQ-2910, REQ-2911, REQ-2912, REQ-2940]
+states: [REQ-2801, REQ-2802, REQ-2803, REQ-2810, REQ-2811, REQ-2813, REQ-2814, REQ-2820, REQ-2821, REQ-2822, REQ-2823, REQ-2824, REQ-2825, REQ-2826, REQ-2827, REQ-2828, REQ-2830, REQ-2831, REQ-2832, REQ-2840, REQ-2841, REQ-2842, REQ-2843, REQ-2844, REQ-2872, REQ-2900, REQ-2901, REQ-2902, REQ-2903, REQ-2904, REQ-2905, REQ-2906, REQ-2907, REQ-2908, REQ-2909, REQ-2910, REQ-2911, REQ-2912, REQ-2913, REQ-2914, REQ-2940]
 ---
 
 # The ctx object
@@ -56,11 +56,12 @@ source directory and `state_dir` its persistent per-component directory
 docs/spec/ctx.md, high). An unknown attribute reports attribute-not-found
 [REQ-2811] (from docs/spec/ctx.md, high).
 
-Every method rejects a relative path [REQ-2812] and expands a leading `~`
-[REQ-2902] (from docs/spec/ctx.md, high). Every mutating method goes through an
-`Op` [REQ-2813], and no method branches on whether this is a dry run, because
-the `FileSystem` and `Executor` it was given decide that [REQ-2814] (from
-docs/spec/ctx.md, high).
+Every method rejects a relative path, except the `src` that `link_file` and
+`render_file` read relative to `component_dir` [REQ-2914, REQ-2913], and expands
+a leading `~` [REQ-2902] (from docs/spec/ctx.md, high). Every mutating method
+goes through an `Op` [REQ-2813], and no method branches on whether this is a dry
+run, because the `FileSystem` and `Executor` it was given decide that [REQ-2814]
+(from docs/spec/ctx.md, high).
 
 ### Process and network
 

@@ -22,7 +22,7 @@ use meowctl_tui::Always;
 
 /// An absolute home directory for the platform the test runs on.
 ///
-/// `/home/u` is not absolute on Windows, and [REQ-2812, REQ-2902] refuses a path that
+/// `/home/u` is not absolute on Windows, and [REQ-2914, REQ-2902] refuses a path that
 /// is not absolute after `~` expands, so a test that hard-coded a Unix path
 /// would fail there for the wrong reason.
 #[cfg(unix)]
@@ -259,7 +259,7 @@ if ctx.read_file("~/.config/there") != "content": fail("contents")
     assert!(err.to_string().contains("read_file"), "{err}");
 }
 
-/// [REQ-2812, REQ-2902] a hook has no defined working directory, so a relative path
+/// [REQ-2914, REQ-2902] a hook has no defined working directory, so a relative path
 /// resolves somewhere its author cannot predict.
 #[test]
 fn a_relative_path_is_refused_and_a_tilde_is_expanded() {
@@ -797,7 +797,7 @@ fn shell_is_none_outside_a_runtime_hook_phase() {
 fn a_runtime_hook_reaches_only_the_eight_attributes() {
     let (ctx, _) = build(Vec::new(), ScriptedHttp::new(), Phase::Shell);
 
-    // An absolute path on both platforms: [REQ-2812, REQ-2902] refuses anything else,
+    // An absolute path on both platforms: [REQ-2914, REQ-2902] refuses anything else,
     // and a Windows run would fail on the refusal rather than on the surface.
     let somewhere = format!("ctx.file_exists({})", quoted(COMPONENT_DIR));
     for allowed in [
@@ -1069,7 +1069,7 @@ fn a_displaced_file_goes_beside_itself_with_a_known_name() {
     call(
         &ctx,
         Surface::Full,
-        &format!("    ctx.link_file({}, {})", quoted(&target), quoted(&link)),
+        &format!("    ctx.link_file(\"zshrc\", {})", quoted(&link)),
     )
     .expect("the link");
 
@@ -1079,4 +1079,64 @@ fn a_displaced_file_goes_beside_itself_with_a_known_name() {
         b"the user's own",
         "the displaced file is not at {backup}"
     );
+}
+
+/// [REQ-2913] `link_file` reads `src` from the component, because a component
+/// ships the file it links beside its `.star` file, as `v0.1.0` did.
+#[test]
+fn link_file_reads_a_relative_src_from_the_component_directory() {
+    let (ctx, world) = plain();
+    let target = Path::new(COMPONENT_DIR).join("config");
+    world.fs.seed(&target, "ours");
+
+    call(
+        &ctx,
+        Surface::Full,
+        "    ctx.link_file(\"config\", \"~/.toolrc\")",
+    )
+    .expect("a relative src names a file in the component");
+
+    assert_eq!(
+        world.fs.read_link(&under_home(".toolrc")).expect("a link"),
+        target
+    );
+}
+
+/// [REQ-2913] an absolute `src` names nothing in the component, so `link_file`
+/// refuses it and links nothing.
+#[test]
+fn link_file_refuses_an_absolute_src() {
+    let (ctx, world) = plain();
+    let elsewhere = format!("{HOME}/elsewhere");
+    world.fs.seed(Path::new(&elsewhere), "theirs");
+
+    let err = call(
+        &ctx,
+        Surface::Full,
+        &format!("    ctx.link_file({}, \"~/.toolrc\")", quoted(&elsewhere)),
+    )
+    .expect_err("an absolute src is refused");
+    assert!(err.to_string().contains("link_file"), "{err}");
+    assert!(
+        world.fs.read_link(&under_home(".toolrc")).is_err(),
+        "nothing is linked"
+    );
+}
+
+/// [REQ-2914] only `src` reads from the component; a relative `dst` still has
+/// nothing to resolve against.
+#[test]
+fn link_file_still_refuses_a_relative_dst() {
+    let (ctx, world) = plain();
+    world
+        .fs
+        .seed(Path::new(COMPONENT_DIR).join("config"), "ours");
+
+    let err = call(
+        &ctx,
+        Surface::Full,
+        "    ctx.link_file(\"config\", \"rel/config\")",
+    )
+    .expect_err("a relative dst is refused");
+    assert!(err.to_string().contains("relative"), "{err}");
 }
