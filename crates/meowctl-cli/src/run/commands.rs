@@ -217,9 +217,19 @@ impl Sources for ConfigSources<'_> {
                     reason: e.to_string(),
                 }
             })?;
+            // The directory the module file was read from, where its data
+            // files ship; see [REQ-2803].
+            let directory = file
+                .path
+                .as_deref()
+                .and_then(std::path::Path::parent)
+                .map_or_else(
+                    || self.components.join(id.logical_name()),
+                    std::path::Path::to_path_buf,
+                );
             return Ok(ComponentSource {
                 text: file.source,
-                directory: self.components.join(id.logical_name()),
+                directory,
             });
         }
 

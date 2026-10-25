@@ -1,7 +1,7 @@
 ---
 id: TSK-0041
 artifact: task
-status: approved
+status: done
 revised: 2026-10-25
 bug: BUG-0043
 closes: []
@@ -44,4 +44,12 @@ already the one their file sits in.
 
 ## Evidence
 
-Not yet.
+Criteria 1 and 2 are closed by `a_registry_file_reports_its_place_in_the_cache`
+and `a_replaced_file_reports_its_place_in_the_checkout` in
+`crates/meowctl-module/tests/fetching.rs`, and criterion 3 by
+`a_module_component_lives_where_its_file_was_read` in
+`crates/meowctl-cli/src/run/commands.rs`. All three failed before the fix and
+pass after it. `mise run fmt-check`, `mise run check`, `mise run test` (603
+passed, 3 skipped) and `mise run build` exit 0. Built together with BUG-0042's
+fix, `meowctl upgrade @dotmeow//components/git-config` linked
+`~/.config/git/config` into the dotmeow 0.3.32 cache directory.

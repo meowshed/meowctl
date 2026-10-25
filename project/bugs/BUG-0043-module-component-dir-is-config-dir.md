@@ -58,8 +58,11 @@ broken ones, and before that fix the same wrong directory makes every module
 
 ## Closed by
 
-Open.
+`a_module_component_lives_where_its_file_was_read` in
+`crates/meowctl-cli/src/run/commands.rs` holds the directory as a regression
+check, with the two loader tests in `crates/meowctl-module/tests/fetching.rs`.
 
 ## Tasks
 
-- [ ] T-001 TSK-0041 take a module component's directory from where the loader read it, in `crates/meowctl-cli/src/run/commands.rs` and `crates/meowctl-module/src/loader.rs`
+- [x] T-001 TSK-0041 take a module component's directory from where the loader read it, in `crates/meowctl-cli/src/run/commands.rs` and `crates/meowctl-module/src/loader.rs`
+  (the three directory tests pass, and every stage exits 0)
