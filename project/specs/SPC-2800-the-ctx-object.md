@@ -58,8 +58,8 @@ docs/spec/ctx.md, high). An unknown attribute reports attribute-not-found
 
 Every method rejects a relative path, except the `src` that `link_file` and
 `render_file` read relative to `component_dir` [REQ-2914, REQ-2913], and
-expands a leading `~` [REQ-2902] (from docs/spec/ctx.md, high). Every mutating method goes through an
-`Op` [REQ-2813], and no method branches on whether this is a dry run, because
+expands a leading `~` [REQ-2902] (from docs/spec/ctx.md, high). Every
+mutating method goes through an `Op` [REQ-2813], and no method branches on whether this is a dry run, because
 the `FileSystem` and `Executor` it was given decide that [REQ-2814] (from
 docs/spec/ctx.md, high).
 
