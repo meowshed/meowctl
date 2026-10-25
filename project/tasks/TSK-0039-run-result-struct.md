@@ -1,7 +1,7 @@
 ---
 id: TSK-0039
 artifact: task
-status: approved
+status: done
 revised: 2026-10-25
 bug: BUG-0041
 closes: []
@@ -42,4 +42,15 @@ offered it and no corpus component uses it.
 
 ## Evidence
 
-Not yet.
+Criterion 1 is closed by
+`run_returns_three_fields_and_does_not_fail_on_a_non_zero_exit`, and criterion
+2 by `query_pm_returns_what_the_handler_reports` and
+`interrogate_runs_its_command_in_a_read_only_phase_of_a_dry_run`. All three
+failed on the dict with "Object of type `dict` has no attribute" before the
+fix, and pass after it.
+
+At `fix/run-result-struct`, `mise run fmt-check`, `mise run check`,
+`mise run test` and `mise run build` each exited 0, and the test stage ran 600
+tests with 600 passing and 3 skipped. The corpus test
+`crates/meowctl-starlark/tests/stdlib.rs` ran against the meowctl-stdlib and
+dotmeow checkouts beside the repository.

@@ -62,8 +62,12 @@ without dropping `v0.1.0` compatibility.
 
 ## Closed by
 
-Open.
+`run_returns_three_fields_and_does_not_fail_on_a_non_zero_exit` in
+`crates/meowctl-ctx/tests/surface.rs` reads the result by attribute and holds
+the shape as a regression check. Against the reproduction config, `verify`
+now reports `capslock-control: OK`.
 
 ## Tasks
 
-- [ ] T-001 TSK-0039 return a struct from `ctx.run` in `crates/meowctl-ctx/src/value.rs`
+- [x] T-001 TSK-0039 return a struct from `ctx.run` in `crates/meowctl-ctx/src/value.rs`
+  (the three attribute tests pass, and every stage exits 0)

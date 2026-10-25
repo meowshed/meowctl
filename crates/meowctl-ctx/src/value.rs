@@ -17,6 +17,7 @@ use meowctl_starlark::{HookArgument, PlatformValue};
 use starlark::collections::SmallMap;
 use starlark::environment::{Methods, MethodsBuilder, MethodsStatic};
 use starlark::starlark_module;
+use starlark::values::structs::AllocStruct;
 use starlark::values::{
     Heap, NoSerialize, ProvidesStaticType, StarlarkValue, Value, ValueLike as _, starlark_value,
 };
@@ -261,23 +262,17 @@ fn variables(
 
 /// Builds the value `ctx.run` returns.
 ///
-/// Three fields under these names, because component code branches on
-/// `exit_code`; see [REQ-2820].
+/// A struct with three fields under these names, because component code reads
+/// `result.exit_code` as `v0.1.0`'s struct allowed; see [REQ-2820].
 fn run_result<'v>(heap: Heap<'v>, output: &meowctl_exec::Output) -> Value<'v> {
-    let mut fields = SmallMap::new();
-    for (name, value) in [
+    heap.alloc(AllocStruct([
         ("stdout", heap.alloc(output.stdout.as_str())),
         ("stderr", heap.alloc(output.stderr.as_str())),
         (
             "exit_code",
             heap.alloc(i64::from(output.exit_code.unwrap_or(-1))),
         ),
-    ] {
-        if let Ok(key) = heap.alloc_str(name).to_value().get_hashed() {
-            fields.insert_hashed(key, value);
-        }
-    }
-    heap.alloc(starlark::values::dict::Dict::new(fields))
+    ]))
 }
 
 /// The methods every surface carries, and the whole of `shell.star`'s.
