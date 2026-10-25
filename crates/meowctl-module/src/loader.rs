@@ -111,6 +111,11 @@ impl<'a> ModuleLoader<'a> {
     ///
     /// [`ModuleError`], which names the module and says which step failed.
     pub fn fetch(&self, raw: &str) -> ModuleResult<Vec<u8>> {
+        self.read(raw).map(|(bytes, _)| bytes)
+    }
+
+    /// Resolves a URL to the bytes of the file it names and where it sits.
+    fn read(&self, raw: &str) -> ModuleResult<(Vec<u8>, PathBuf)> {
         match ModuleUrl::parse(raw)? {
             ModuleUrl::Local { root, path } => self.local(root, &path),
             ModuleUrl::Registry { module, path } => self.registry(&module, &path),
@@ -124,7 +129,7 @@ impl<'a> ModuleLoader<'a> {
     }
 
     /// Reads a file under one of the local roots.
-    fn local(&self, root: LocalRoot, path: &str) -> ModuleResult<Vec<u8>> {
+    fn local(&self, root: LocalRoot, path: &str) -> ModuleResult<(Vec<u8>, PathBuf)> {
         let base = match root {
             LocalRoot::Dotfiles => &self.roots.dotfiles,
             LocalRoot::Config => &self.roots.config,
@@ -138,11 +143,12 @@ impl<'a> ModuleLoader<'a> {
                 reason: format!("it resolves outside {}", base.display()),
             });
         }
-        self.fs.read(&target).map_err(ModuleError::from)
+        let bytes = self.fs.read(&target)?;
+        Ok((bytes, target))
     }
 
     /// Reads a file out of a registry module, verified.
-    fn registry(&self, module: &str, path: &str) -> ModuleResult<Vec<u8>> {
+    fn registry(&self, module: &str, path: &str) -> ModuleResult<(Vec<u8>, PathBuf)> {
         if let Some(local) = self.replacements.get(module) {
             // A replacement is a checkout somebody is editing. Hashing it
             // would mean re-locking on every save, so it is served as it is;
@@ -160,7 +166,8 @@ impl<'a> ModuleLoader<'a> {
                     reason: format!("it resolves outside {}", local.display()),
                 });
             }
-            return self.fs.read(&target).map_err(ModuleError::from);
+            let bytes = self.fs.read(&target)?;
+            return Ok((bytes, target));
         }
 
         let version = self.version_of(module)?;
@@ -177,7 +184,8 @@ impl<'a> ModuleLoader<'a> {
             let source = cache::Source::from_index(module, &version, entry);
             self.cache.ensure(self.fs, self.http, &source)?;
         }
-        self.cache.read_verified(self.fs, module, &version, path)
+        let bytes = self.cache.read_verified(self.fs, module, &version, path)?;
+        Ok((bytes, self.cache_path(module, &version, path)))
     }
 
     /// Reads one file out of a GitHub repository at a ref.
@@ -187,7 +195,7 @@ impl<'a> ModuleLoader<'a> {
         repo: &str,
         reference: &str,
         path: &str,
-    ) -> ModuleResult<Vec<u8>> {
+    ) -> ModuleResult<(Vec<u8>, PathBuf)> {
         let module = format!("{owner}/{repo}");
         let commit = match self.resolved.get(&module) {
             Some(commit) => commit.clone(),
@@ -195,7 +203,15 @@ impl<'a> ModuleLoader<'a> {
         };
         let source = Source::from_commit(&module, &self.endpoints, owner, repo, &commit);
         self.cache.ensure(self.fs, self.http, &source)?;
-        self.cache.read_verified(self.fs, &module, &commit, path)
+        let bytes = self.cache.read_verified(self.fs, &module, &commit, path)?;
+        Ok((bytes, self.cache_path(&module, &commit, path)))
+    }
+
+    /// Where a file of an extracted module sits in the cache.
+    fn cache_path(&self, module: &str, key: &str, path: &str) -> PathBuf {
+        self.cache
+            .dir(module, key)
+            .join(path.replace('/', std::path::MAIN_SEPARATOR_STR))
     }
 
     /// The version a module resolved to.
@@ -211,7 +227,7 @@ impl<'a> ModuleLoader<'a> {
 
 impl Loader for ModuleLoader<'_> {
     fn load(&self, module: &str) -> StarlarkResult<LoadedFile> {
-        let bytes = self.fetch(module).map_err(|e| StarlarkError::Load {
+        let (bytes, path) = self.read(module).map_err(|e| StarlarkError::Load {
             module: module.to_owned(),
             reason: e.to_string(),
         })?;
@@ -222,6 +238,7 @@ impl Loader for ModuleLoader<'_> {
         Ok(LoadedFile {
             name: module.to_owned(),
             source,
+            path: Some(path),
         })
     }
 }

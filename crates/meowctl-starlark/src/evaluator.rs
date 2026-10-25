@@ -36,6 +36,9 @@ pub struct LoadedFile {
     pub name: String,
     /// Its source.
     pub source: String,
+    /// Where it sits on disk, when it sits on one, so a component's
+    /// `component_dir` can be the directory holding it; see [REQ-2803].
+    pub path: Option<std::path::PathBuf>,
 }
 
 /// Where `query_pm` gets its answer.

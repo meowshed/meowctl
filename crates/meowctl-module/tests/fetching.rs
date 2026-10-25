@@ -16,6 +16,7 @@ use meowctl_common::Integrity;
 use meowctl_fs::{Entry, FileSystem, MemFs};
 use meowctl_module::{Cache, ModuleError, ModuleLoader, ModuleUrl, Roots, registry};
 use meowctl_net::{NetError, OfflineHttp, ScriptedHttp};
+use meowctl_starlark::Loader as _;
 use support::{
     Entry as ArchiveEntry, absolute_path_tarball, escaping_tarball, github_tarball, tarball,
 };
@@ -707,5 +708,49 @@ fn every_part_of_a_github_url_is_required() {
             reference: "v1.2.3".to_owned(),
             path: "components/git.star".to_owned(),
         }
+    );
+}
+
+/// [REQ-2803] a registry component's file reports where it sits in the cache,
+/// because that directory is the component's `component_dir`.
+#[test]
+fn a_registry_file_reports_its_place_in_the_cache() {
+    let fs = tree();
+    let http = registry_http(stdlib_tarball());
+    let loaded = ModuleLoader::new(&fs, &http, cache(), roots())
+        .with_index_url(INDEX_URL)
+        .resolved("stdlib", "0.2.17")
+        .load("@stdlib//components/apt")
+        .expect("the module loads");
+    assert_eq!(
+        loaded.path,
+        Some(PathBuf::from(
+            "/cache/stdlib/0.2.17/components/apt/init.star"
+        ))
+    );
+}
+
+/// [REQ-2803] a replaced component's file reports where it sits in the
+/// checkout, because the checkout is where its data files are.
+#[test]
+fn a_replaced_file_reports_its_place_in_the_checkout() {
+    let fs = tree();
+    fs.create_dir_all(Path::new("/checkout/components/apt"))
+        .expect("the checkout");
+    fs.write(
+        Path::new("/checkout/components/apt/init.star"),
+        b"APT = local\n",
+    )
+    .expect("the local file");
+
+    let offline = OfflineHttp;
+    let loaded = ModuleLoader::new(&fs, &offline, cache(), roots())
+        .with_index_url(INDEX_URL)
+        .replacing("stdlib", "/checkout")
+        .load("@stdlib//components/apt")
+        .expect("the replacement is served");
+    assert_eq!(
+        loaded.path,
+        Some(PathBuf::from("/checkout/components/apt/init.star"))
     );
 }

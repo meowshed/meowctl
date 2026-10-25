@@ -58,3 +58,4 @@ writes one index block per file and three kinds share this one.
 | [BUG-0022](bugs/BUG-0022-downloads-share-the-thirty-second-bound.md) | `ctx.download` and `self-update` share the 30-second bound meant for module requests | approved |
 | [BUG-0040](bugs/BUG-0040-cli-writes-to-the-terminal-directly.md) | `meowctl-cli` writes to stdout and stderr directly at three sites | approved |
 | [BUG-0041](bugs/BUG-0041-run-result-has-no-attributes.md) | `ctx.run` returns a dict, so a component reading `result.stdout` fails | approved |
+| [BUG-0043](bugs/BUG-0043-module-component-dir-is-config-dir.md) | A module component's `component_dir` is the configuration's own `components/` directory | approved |

@@ -217,9 +217,19 @@ impl Sources for ConfigSources<'_> {
                     reason: e.to_string(),
                 }
             })?;
+            // The directory the module file was read from, where its data
+            // files ship; see [REQ-2803].
+            let directory = file
+                .path
+                .as_deref()
+                .and_then(std::path::Path::parent)
+                .map_or_else(
+                    || self.components.join(id.logical_name()),
+                    std::path::Path::to_path_buf,
+                );
             return Ok(ComponentSource {
                 text: file.source,
-                directory: self.components.join(id.logical_name()),
+                directory,
             });
         }
 
@@ -997,6 +1007,41 @@ fn print_to_stdout(text: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A loader that serves one module file from one place on disk.
+    use meowctl_starlark::LoadedFile;
+
+    struct OneFile(std::path::PathBuf);
+
+    impl Loader for OneFile {
+        fn load(&self, module: &str) -> meowctl_starlark::StarlarkResult<LoadedFile> {
+            Ok(LoadedFile {
+                name: module.to_owned(),
+                source: "component(\"git-config\")\n".to_owned(),
+                path: Some(self.0.clone()),
+            })
+        }
+    }
+
+    /// [REQ-2803] a module component's `component_dir` is the directory its
+    /// file was read from, not one in the configuration, because its data
+    /// files ship beside it in the module.
+    #[test]
+    fn a_module_component_lives_where_its_file_was_read() {
+        let cached = std::path::PathBuf::from("/cache/dotmeow/0.3.32/components/git-config");
+        let loader = OneFile(cached.join("init.star"));
+        let sources = ConfigSources {
+            declared: Vec::new(),
+            loader: &loader,
+            components: std::path::PathBuf::from("/config/components"),
+            directories: Vec::new(),
+        };
+        let id: ComponentId = "@dotmeow//components/git-config"
+            .parse()
+            .expect("a module id");
+        let source = sources.source(&id).expect("the source");
+        assert_eq!(source.directory, cached);
+    }
 
     /// [REQ-1222] the timestamp a lock and a sentinel record.
     ///
