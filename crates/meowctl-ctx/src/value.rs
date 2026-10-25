@@ -3,7 +3,7 @@
 //! Three types rather than one, because the restriction is the value the hook
 //! receives rather than a check inside each method: a hook in a read-only
 //! phase gets a `ctx` with no mutating attribute at all, and asking for one
-//! reports attribute-not-found; see [REQ-2830, REQ-2911], [REQ-2831] and [REQ-2832].
+//! reports attribute-not-found; see [REQ-2915, REQ-2911], [REQ-2831] and [REQ-2832].
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -29,7 +29,7 @@ use crate::{Capabilities, CtxError, CtxResult, Effects, Surface};
 #[derive(Debug, Clone, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct Ctx(#[allocative(skip)] Arc<Core>);
 
-/// The same `ctx` with no mutating attribute; see [REQ-2830, REQ-2911].
+/// The same `ctx` with no mutating attribute but `add_path`; see [REQ-2915, REQ-2911].
 #[derive(Debug, Clone, ProvidesStaticType, NoSerialize, Allocative)]
 struct ReadOnlyCtx(#[allocative(skip)] Arc<Core>);
 

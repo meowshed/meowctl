@@ -41,7 +41,7 @@
 | [ADR-0033](ADR-0033-commands-built-per-invocation.md) | Construct the command tree per invocation | approved |
 | [ADR-0034](ADR-0034-version-from-build-metadata.md) | Take the version from build metadata, not linker flags | approved |
 | [ADR-0035](ADR-0035-stop-a-phase-at-the-first-failure.md) | Stop a phase at the first component that fails | approved |
-| [ADR-0036](ADR-0036-read-only-phases-get-a-read-only-ctx.md) | Give a read-only phase a ctx with no mutating methods | approved |
+| [ADR-0036](ADR-0036-read-only-phases-get-a-read-only-ctx.md) | Give a read-only phase a ctx with no mutating methods | superseded |
 | [ADR-0037](ADR-0037-the-lock-records-its-writer.md) | Fill the lock's meta table, and leave meta out of the byte comparison | approved |
 | [ADR-0038](ADR-0038-per-file-hashes-in-the-cache.md) | Record per-file hashes in the module cache, not in the lock | approved |
 | [ADR-0039](ADR-0039-no-journal-in-a-dry-run.md) | Journal nothing during a dry run | approved |
@@ -56,4 +56,5 @@
 | [ADR-0048](ADR-0048-test-matrix-on-linux-only.md) | Run the test matrix on Linux only, while releases build for four targets | approved |
 | [ADR-0049](ADR-0049-refuse-relative-and-user-paths.md) | Refuse relative paths and `~user` in path resolution | approved |
 | [ADR-0050](ADR-0050-verify-before-self-update.md) | Verify a download before `self-update` installs it | approved |
+| [ADR-0051](ADR-0051-read-only-ctx-keeps-add-path.md) | Give a read-only phase a ctx with no mutating methods, keeping `add_path` | approved |
 <!-- /meow-method index -->
