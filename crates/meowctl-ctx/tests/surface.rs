@@ -396,7 +396,7 @@ fn emit_speaks_only_in_a_runtime_hook_phase() {
     );
 }
 
-/// [REQ-2830, REQ-2911] and [REQ-2832]: a check that writes is a check with a side
+/// [REQ-2915, REQ-2911] and [REQ-2832]: a check that writes is a check with a side
 /// effect. `v0.1.0` has the machinery for this restriction and wires none of
 /// it up.
 ///
@@ -420,7 +420,6 @@ fn a_read_only_surface_has_no_mutating_method() {
         "download",
         "defaults_write",
         "plist_set",
-        "add_path",
     ] {
         let err = call(&ctx, Surface::ReadOnly, &indent(&format!("ctx.{name}")))
             .expect_err(&format!("ctx.{name} should not be available"));
@@ -738,7 +737,7 @@ fn an_effect_whose_journal_cannot_be_written_does_not_happen() {
     );
 }
 
-/// [REQ-1012] and [REQ-2830, REQ-2911]: which surface a phase gets follows from
+/// [REQ-1012] and [REQ-2915, REQ-2911]: which surface a phase gets follows from
 /// whether the phase is read-only, and nothing else decides it.
 #[test]
 fn the_surface_follows_from_the_phase() {
@@ -1004,7 +1003,7 @@ fn a_boolean_reaches_a_command_as_the_shell_spells_it() {
     );
 }
 
-/// [REQ-2830, REQ-2911] and [REQ-2831]: the restricted surfaces answer `hasattr`
+/// [REQ-2915, REQ-2911] and [REQ-2831]: the restricted surfaces answer `hasattr`
 /// honestly, because a component that checks before calling would otherwise
 /// be told a method is there and then refused.
 #[test]
@@ -1139,4 +1138,20 @@ fn link_file_still_refuses_a_relative_dst() {
     )
     .expect_err("a relative dst is refused");
     assert!(err.to_string().contains("relative"), "{err}");
+}
+
+/// [REQ-2915] a check may put a directory first on the `PATH` its own later
+/// `run` calls see, because that changes nothing outside this run and the
+/// stdlib `verify` hooks need it to find the tools mise installed.
+#[test]
+fn a_read_only_surface_keeps_add_path() {
+    let (ctx, world) = build(Vec::new(), ScriptedHttp::new(), Phase::Verify);
+    call(&ctx, Surface::ReadOnly, "    ctx.add_path(\"/opt/bin\")").expect("add_path in a check");
+    let events = world.events.lock().expect("events");
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, Event::PathPrepended { directory } if directory == "/opt/bin")),
+        "{events:?}"
+    );
 }

@@ -1,8 +1,8 @@
 ---
 id: ADR-0036
 artifact: adr
-status: approved
-revised: 2026-09-27
+status: superseded
+revised: 2026-10-25
 addresses: [REQ-2830]
 supersedes: []
 ---

@@ -4,7 +4,7 @@ artifact: spec
 status: live
 revised: 2026-10-25
 checked-at:
-states: [REQ-2801, REQ-2802, REQ-2803, REQ-2810, REQ-2811, REQ-2813, REQ-2814, REQ-2820, REQ-2821, REQ-2822, REQ-2823, REQ-2824, REQ-2825, REQ-2826, REQ-2827, REQ-2828, REQ-2830, REQ-2831, REQ-2832, REQ-2840, REQ-2841, REQ-2842, REQ-2843, REQ-2844, REQ-2872, REQ-2900, REQ-2901, REQ-2902, REQ-2903, REQ-2904, REQ-2905, REQ-2906, REQ-2907, REQ-2908, REQ-2909, REQ-2910, REQ-2911, REQ-2912, REQ-2913, REQ-2914, REQ-2940]
+states: [REQ-2801, REQ-2802, REQ-2803, REQ-2810, REQ-2811, REQ-2813, REQ-2814, REQ-2820, REQ-2821, REQ-2822, REQ-2823, REQ-2824, REQ-2825, REQ-2826, REQ-2827, REQ-2828, REQ-2831, REQ-2832, REQ-2840, REQ-2841, REQ-2842, REQ-2843, REQ-2844, REQ-2872, REQ-2900, REQ-2901, REQ-2902, REQ-2903, REQ-2904, REQ-2905, REQ-2906, REQ-2907, REQ-2908, REQ-2909, REQ-2910, REQ-2911, REQ-2912, REQ-2913, REQ-2914, REQ-2915, REQ-2940]
 ---
 
 # The ctx object
@@ -30,7 +30,7 @@ available in which phase (from docs/spec/ctx.md, high).
 | Phase | Attributes available |
 | --- | --- |
 | A runtime hook phase, `shell` or `login` | `emit`, `file_exists`, `list_dir`, `platform`, `read_file`, `run`, `shell` and `state_dir` (from docs/spec/ctx.md, high) |
-| A read-only phase, as REQ-1012 names them | Every attribute except the mutating methods (from docs/spec/ctx.md, high) |
+| A read-only phase, as REQ-1012 names them | Every attribute except the mutating methods, which leaves `add_path` [REQ-2915] |
 | Every other phase | The six data properties and the twenty-four methods (from docs/spec/ctx.md, high) |
 
 ## Behaviour
@@ -102,8 +102,9 @@ docs/spec/ctx.md, high).
 
 ### Restricted contexts
 
-In a read-only phase, `ctx` exposes no mutating method [REQ-2830] (from
-docs/spec/ctx.md, high). In a runtime hook phase, `ctx` exposes exactly the
+In a read-only phase, `ctx` exposes no mutating method other than `add_path`,
+which changes only the `PATH` later `run` calls see [REQ-2915] (from
+ADR-0051, high). In a runtime hook phase, `ctx` exposes exactly the
 eight attributes `ShellCtxAllowList` names [REQ-2831] (from docs/spec/ctx.md,
 high). The value the hook receives enforces both restrictions, with no check
 inside each method [REQ-2832] (from docs/spec/ctx.md, high).

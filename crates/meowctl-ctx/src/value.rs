@@ -3,7 +3,7 @@
 //! Three types rather than one, because the restriction is the value the hook
 //! receives rather than a check inside each method: a hook in a read-only
 //! phase gets a `ctx` with no mutating attribute at all, and asking for one
-//! reports attribute-not-found; see [REQ-2830, REQ-2911], [REQ-2831] and [REQ-2832].
+//! reports attribute-not-found; see [REQ-2915, REQ-2911], [REQ-2831] and [REQ-2832].
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -29,7 +29,7 @@ use crate::{Capabilities, CtxError, CtxResult, Effects, Surface};
 #[derive(Debug, Clone, ProvidesStaticType, NoSerialize, Allocative)]
 pub struct Ctx(#[allocative(skip)] Arc<Core>);
 
-/// The same `ctx` with no mutating attribute; see [REQ-2830, REQ-2911].
+/// The same `ctx` with no mutating attribute but `add_path`; see [REQ-2915, REQ-2911].
 #[derive(Debug, Clone, ProvidesStaticType, NoSerialize, Allocative)]
 struct ReadOnlyCtx(#[allocative(skip)] Arc<Core>);
 
@@ -393,9 +393,26 @@ fn reading_methods(builder: &mut MethodsBuilder) {
     }
 }
 
-/// The methods that read or ask but do not mutate.
+/// The methods that read or ask but do not mutate, and `add_path`, which
+/// changes nothing outside this run.
 #[starlark_module]
 fn general_methods(builder: &mut MethodsBuilder) {
+    /// Puts a directory first on the `PATH` every later `run` sees.
+    ///
+    /// It emits nothing. The name suggests a shell statement and it is not
+    /// one. A read-only phase has it, because it changes only this run's `PATH`;
+    /// see [REQ-2825, REQ-2906, REQ-2915].
+    fn add_path<'v>(
+        this: Value<'v>,
+        dir: String,
+    ) -> anyhow::Result<starlark::values::none::NoneType> {
+        let core = core(this)?;
+        if !dir.is_empty() {
+            core.effects.emit(Event::PathPrepended { directory: dir });
+        }
+        Ok(starlark::values::none::NoneType)
+    }
+
     /// Says something, at the level a sink renders as a component's own words.
     fn log<'v>(this: Value<'v>, msg: String) -> anyhow::Result<starlark::values::none::NoneType> {
         core(this)?.effects.emit(Event::Message {
@@ -756,21 +773,6 @@ fn mutating_methods(builder: &mut MethodsBuilder) {
                 value: shell_argument(value),
             },
         )?;
-        Ok(starlark::values::none::NoneType)
-    }
-
-    /// Puts a directory first on the `PATH` every later `run` sees.
-    ///
-    /// It emits nothing. The name suggests a shell statement and it is not
-    /// one; see [REQ-2825, REQ-2906].
-    fn add_path<'v>(
-        this: Value<'v>,
-        dir: String,
-    ) -> anyhow::Result<starlark::values::none::NoneType> {
-        let core = core(this)?;
-        if !dir.is_empty() {
-            core.effects.emit(Event::PathPrepended { directory: dir });
-        }
         Ok(starlark::values::none::NoneType)
     }
 }
