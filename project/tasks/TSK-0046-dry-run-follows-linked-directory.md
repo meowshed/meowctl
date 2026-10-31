@@ -1,7 +1,7 @@
 ---
 id: TSK-0046
 artifact: task
-status: approved
+status: done
 revised: 2026-10-31
 bug: BUG-0046
 closes: []
@@ -40,4 +40,10 @@ replace links depend on it.
 
 ## Evidence
 
-Not yet.
+Criterion 1 is closed by `a_write_through_a_linked_directory_is_not_refused`,
+which failed before the change and passes after it, and criterion 2 by
+`a_write_through_a_dangling_link_is_refused`, which passes on both sides. `mise
+run fmt-check`, `mise run check`, `mise run test` (613 passed, 3 skipped) and
+`mise run build` exit 0. A release build run as `meowctl apply --dry-run` with
+`~/.config/meowctl` a symlink to a dotfiles checkout exits 0 and prints the
+plan.

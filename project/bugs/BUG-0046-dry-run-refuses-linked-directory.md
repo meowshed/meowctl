@@ -47,9 +47,11 @@ still fail for a link to nothing.
 
 ## Closed by
 
-Open.
+`a_write_through_a_linked_directory_is_not_refused` in
+`crates/meowctl-fs/tests/dry_run.rs` holds the behaviour as a regression check.
 
 ## Tasks
 
-- [ ] T-001 TSK-0046 follow a symlink when asking whether a directory exists,
-  in `crates/meowctl-fs/src/dry_run.rs`
+- [x] T-001 TSK-0046 follow a symlink when asking whether a directory exists,
+  in `crates/meowctl-fs/src/dry_run.rs` (the link tests pass, and every stage
+  exits 0)
