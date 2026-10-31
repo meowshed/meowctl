@@ -18,6 +18,9 @@ use std::sync::Mutex;
 
 use crate::{Displaced, Entry, FileSystem, FsError, FsResult};
 
+/// How many symlinks a dry run follows to find a directory before it gives up.
+const MAX_LINK_HOPS: usize = 40;
+
 /// What the run would have done to a path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Intent {
@@ -167,11 +170,28 @@ impl DryRunFs {
     ///
     /// A write into a directory an earlier step created must succeed, or the
     /// plan stops halfway through a component that would have worked.
+    ///
+    /// A symlink is followed to its target, as the real write follows it, so a
+    /// configuration directory that links to a checkout counts; see
+    /// [REQ-1433].
     fn directory_would_exist(&self, path: &Path) -> FsResult<bool> {
-        if matches!(self.lock().get(path), Some(Intent::CreatedDirectory)) {
-            return Ok(true);
+        let mut current = path.to_path_buf();
+        // Enough for any link chain a person sets up, and a cycle stops here.
+        for _ in 0..MAX_LINK_HOPS {
+            if matches!(self.lock().get(&current), Some(Intent::CreatedDirectory)) {
+                return Ok(true);
+            }
+            match self.underlying.entry(&current)? {
+                Some(Entry::Symlink { target }) => {
+                    current = match current.parent() {
+                        Some(parent) if target.is_relative() => parent.join(target),
+                        _ => target,
+                    };
+                }
+                entry => return Ok(entry.is_some_and(|e| e.is_dir())),
+            }
         }
-        Ok(self.underlying.entry(path)?.is_some_and(|e| e.is_dir()))
+        Ok(false)
     }
 
     fn require_parent(&self, path: &Path) -> FsResult<()> {

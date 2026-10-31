@@ -131,3 +131,48 @@ fn the_run_can_report_what_it_would_have_done() {
         "{intents:?}"
     );
 }
+
+/// [REQ-1433] a directory reached through a symlink exists, so a dry run
+/// writes into it as the real run will; `~/.config/meowctl` is often a link to
+/// a dotfiles checkout, and `state.toml` lives under it.
+#[test]
+fn a_write_through_a_linked_directory_is_not_refused() {
+    let (dry, backing) = dry_run();
+    backing
+        .create_dir_all(Path::new("/home/u/dotfiles"))
+        .expect("the checkout");
+    backing
+        .symlink(
+            Path::new("/home/u/dotfiles"),
+            Path::new("/home/u/config"),
+            None,
+        )
+        .expect("an absolute link");
+    backing
+        .symlink(Path::new("dotfiles"), Path::new("/home/u/relative"), None)
+        .expect("a relative link");
+
+    dry.write(Path::new("/home/u/config/state.toml"), b"x")
+        .expect("the absolute link is a directory");
+    dry.write(Path::new("/home/u/relative/state.toml"), b"x")
+        .expect("the relative link is a directory");
+}
+
+/// [REQ-1433] a link to nothing is still no directory, so the dry run fails
+/// where the real run will.
+#[test]
+fn a_write_through_a_dangling_link_is_refused() {
+    let (dry, backing) = dry_run();
+    backing
+        .symlink(
+            Path::new("/home/u/missing"),
+            Path::new("/home/u/config"),
+            None,
+        )
+        .expect("a dangling link");
+
+    let err = dry
+        .write(Path::new("/home/u/config/state.toml"), b"x")
+        .expect_err("nothing is there");
+    assert!(err.to_string().contains("does not exist"), "{err}");
+}
