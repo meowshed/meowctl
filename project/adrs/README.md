@@ -57,4 +57,5 @@
 | [ADR-0049](ADR-0049-refuse-relative-and-user-paths.md) | Refuse relative paths and `~user` in path resolution | approved |
 | [ADR-0050](ADR-0050-verify-before-self-update.md) | Verify a download before `self-update` installs it | approved |
 | [ADR-0051](ADR-0051-read-only-ctx-keeps-add-path.md) | Give a read-only phase a ctx with no mutating methods, keeping `add_path` | done |
+| [ADR-0052](ADR-0052-link-file-undo-restores-replaced-link.md) | Restore the symlink a `link_file` replaced when it is undone | done |
 <!-- /meow-method index -->

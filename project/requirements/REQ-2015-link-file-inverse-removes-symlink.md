@@ -3,8 +3,8 @@ id: REQ-2015
 artifact: requirement
 topic: ops
 class: functional
-status: approved
-revised: 2026-09-27
+status: superseded
+revised: 2026-10-31
 elaborates:
 verification: behavioural
 ---

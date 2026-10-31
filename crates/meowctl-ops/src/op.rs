@@ -310,7 +310,7 @@ impl Op {
             },
 
             // The backup is the user's original file. Not restoring it is data
-            // loss; see [REQ-2015, REQ-2111].
+            // loss; see [REQ-2033, REQ-2111].
             Op::LinkFile { link, backup, .. } => match fs.entry(link)? {
                 Some(Entry::Symlink { target }) => Op::Symlink {
                     target,

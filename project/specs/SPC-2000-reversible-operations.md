@@ -2,9 +2,9 @@
 id: SPC-2000
 artifact: spec
 status: live
-revised: 2026-09-27
+revised: 2026-10-31
 checked-at:
-states: [REQ-2001, REQ-2002, REQ-2003, REQ-2004, REQ-2005, REQ-2010, REQ-2011, REQ-2012, REQ-2013, REQ-2014, REQ-2015, REQ-2016, REQ-2017, REQ-2020, REQ-2021, REQ-2022, REQ-2023, REQ-2024, REQ-2025, REQ-2026, REQ-2030, REQ-2031, REQ-2032, REQ-2100, REQ-2101, REQ-2102, REQ-2103, REQ-2104, REQ-2105, REQ-2106, REQ-2107, REQ-2108, REQ-2109, REQ-2110, REQ-2111, REQ-2112, REQ-2113, REQ-2114, REQ-2115, REQ-2116, REQ-2117, REQ-2118, REQ-2119, REQ-2120, REQ-2140, REQ-2141, REQ-2190]
+states: [REQ-2001, REQ-2002, REQ-2003, REQ-2004, REQ-2005, REQ-2010, REQ-2011, REQ-2012, REQ-2013, REQ-2014, REQ-2016, REQ-2017, REQ-2020, REQ-2021, REQ-2022, REQ-2023, REQ-2024, REQ-2025, REQ-2026, REQ-2030, REQ-2031, REQ-2032, REQ-2033, REQ-2100, REQ-2101, REQ-2102, REQ-2103, REQ-2104, REQ-2105, REQ-2106, REQ-2107, REQ-2108, REQ-2109, REQ-2110, REQ-2111, REQ-2112, REQ-2113, REQ-2114, REQ-2115, REQ-2116, REQ-2117, REQ-2118, REQ-2119, REQ-2120, REQ-2140, REQ-2141, REQ-2190]
 ---
 
 # Reversible operations
@@ -63,7 +63,7 @@ state still produces a correct inverse [REQ-2005] (from docs/spec/ops.md, high).
 | `CopyFile` | Deletes the destination [REQ-2012] (from docs/spec/ops.md, high) |
 | `Mkdir` | Removes the directory only when meowctl created it [REQ-2013], and does nothing when it already existed [REQ-2109] (from docs/spec/ops.md, high) |
 | `Symlink` | Re-creates the prior symlink when one existed [REQ-2014], and removes the link when none did [REQ-2110] (from docs/spec/ops.md, high) |
-| `LinkFile` | Removes the symlink [REQ-2015], and restores the backed-up original when a backup was taken [REQ-2111] (from docs/spec/ops.md, high) |
+| `LinkFile` | Re-creates the prior symlink when the link replaced one, and otherwise removes it [REQ-2033, ADR-0052], and restores the backed-up original when a backup was taken [REQ-2111] (from docs/spec/ops.md, high) |
 | `Download` | Restores the prior content when the destination existed [REQ-2016], and deletes the file when it didn't [REQ-2112] (from docs/spec/ops.md, high) |
 | `DefaultsWrite`, `PlistSet` | Each records the prior value [REQ-2017], read while computing the inverse and before the write [REQ-2115]; the inverse restores it [REQ-2113], and deletes the key when no prior value existed [REQ-2114] (from docs/spec/ops.md, high) |
 

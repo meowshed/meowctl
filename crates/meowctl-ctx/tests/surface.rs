@@ -1047,7 +1047,7 @@ fn dir_lists_the_surface_the_phase_gets() {
     .expect("the shell surface lists itself");
 }
 
-/// [REQ-2015, REQ-2111] and [REQ-2813]: `link_file` with no backup given puts the
+/// [REQ-2033, REQ-2111] and [REQ-2813]: `link_file` with no backup given puts the
 /// user's file at
 /// `<name>.meowctl-backup` beside it, which is where `v0.1.0` puts it and
 /// therefore where a user who has been through this before will look.

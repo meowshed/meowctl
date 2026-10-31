@@ -354,6 +354,22 @@ fn every_journalled_variant_writes_the_payload_v0_1_0_reads() {
     assert_eq!(linked["inverse"]["backup_path"], "/home/u/.zshrc.backup");
     assert_eq!(linked["inverse"]["was_backed_up"], true);
 
+    // A link_file that re-pointed an existing link carries the old target,
+    // beside the `was_backed_up` v0.1.0 reads; see [REQ-2033].
+    let repointed = record_for(
+        &Op::LinkFile {
+            target: other.clone(),
+            link: path.clone(),
+            backup: backup.clone(),
+        },
+        &Op::Symlink {
+            target: PathBuf::from("/home/u/was-here"),
+            link: path.clone(),
+        },
+    );
+    assert_eq!(repointed["inverse"]["was_backed_up"], false);
+    assert_eq!(repointed["inverse"]["prior_target"], "/home/u/was-here");
+
     // A defaults write carries the value to put back, and its type: `-bool`
     // and `-int` are different settings with the same string.
     let defaults = record_for(
@@ -529,4 +545,41 @@ fn the_outcome_strings_are_the_ones_the_sentinel_records() {
     assert_eq!(Outcome::Ok.as_str(), "ok");
     assert_eq!(Outcome::Partial.as_str(), "partial");
     assert_eq!(Outcome::Failed.as_str(), "failed");
+}
+
+/// [REQ-2033] undoing a `link_file` that re-pointed a link puts the old link
+/// back, because that link is the user's working config; a record with no
+/// prior target, as v0.1.0 writes, still removes the link.
+#[test]
+fn a_replaced_link_comes_back_on_replay() {
+    let record = |inverse: serde_json::Value| meowctl_ops::Record {
+        seq: 1,
+        phase: "install".to_owned(),
+        component: "fish-config".to_owned(),
+        kind: "link_file".to_owned(),
+        inverse,
+    };
+
+    assert_eq!(
+        inverse_from(&record(serde_json::json!({
+            "dst": "/home/u/.config/fish/config.fish",
+            "was_backed_up": false,
+            "prior_target": "/cache/dotmeow/0.3.32/components/fish-config/config.fish",
+        })))
+        .expect("inverse"),
+        Op::Symlink {
+            target: PathBuf::from("/cache/dotmeow/0.3.32/components/fish-config/config.fish"),
+            link: PathBuf::from("/home/u/.config/fish/config.fish"),
+        }
+    );
+    assert_eq!(
+        inverse_from(&record(serde_json::json!({
+            "dst": "/home/u/.config/fish/config.fish",
+            "was_backed_up": false,
+        })))
+        .expect("inverse"),
+        Op::Remove {
+            path: PathBuf::from("/home/u/.config/fish/config.fish"),
+        }
+    );
 }

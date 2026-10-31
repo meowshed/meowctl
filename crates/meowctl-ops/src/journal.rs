@@ -307,6 +307,12 @@ pub fn inverse_from(record: &Record) -> OpsResult<Op> {
                     backup: PathBuf::from(text("backup_path").unwrap_or_default()),
                     link,
                 }
+            } else if let Some(target) = text("prior_target") {
+                // The link replaced one, which is put back; see [REQ-2033].
+                Op::Symlink {
+                    target: PathBuf::from(target),
+                    link,
+                }
             } else {
                 Op::Remove { path: link }
             }
@@ -386,6 +392,14 @@ fn payload(forward: &Op, inverse: &Op) -> serde_json::Value {
                 "dst": link,
                 "backup_path": backup,
                 "was_backed_up": true,
+            }),
+            // `prior_target` is ours, and v0.1.0 ignores an unknown field:
+            // replayed there it removes the link, as it always did; see
+            // [REQ-2033].
+            Op::Symlink { target, .. } => json!({
+                "dst": link,
+                "was_backed_up": false,
+                "prior_target": target,
             }),
             _ => json!({ "dst": link, "was_backed_up": false }),
         },
