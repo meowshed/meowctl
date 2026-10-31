@@ -464,16 +464,17 @@ pub(super) fn apply(
         return Ok(());
     }
 
+    let journal = Arc::new(std::sync::Mutex::new(
+        meowctl_ops::Journal::open(session.layout.journal()).map_err(|e| {
+            CliError::General(format!("the rollback journal could not be opened: {e}"))
+        })?,
+    ));
     let effects = meowctl_ctx::Effects {
         fs: Arc::clone(&session.fs),
         exec: Arc::clone(&session.exec),
         http: Arc::clone(&session.http),
         interaction: Arc::clone(&session.interaction),
-        journal: Some(Arc::new(std::sync::Mutex::new(
-            meowctl_ops::Journal::open(session.layout.journal()).map_err(|e| {
-                CliError::General(format!("the rollback journal could not be opened: {e}"))
-            })?,
-        ))),
+        journal: Some(Arc::clone(&journal)),
         events: Arc::clone(&session.events),
     };
 
@@ -514,6 +515,15 @@ pub(super) fn apply(
             "stopped: the run was interrupted, and what it had done is recorded".to_owned(),
         ));
     }
+    // The run finished, so nothing in it is left to undo, and a later failed
+    // run must not replay it; see [REQ-2025].
+    journal
+        .lock()
+        .map_err(|_| CliError::General("the rollback journal is poisoned".to_owned()))?
+        .truncate()
+        .map_err(|e| {
+            CliError::General(format!("the rollback journal could not be emptied: {e}"))
+        })?;
     Ok(())
 }
 

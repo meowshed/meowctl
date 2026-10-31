@@ -1,7 +1,7 @@
 ---
 id: TSK-0045
 artifact: task
-status: approved
+status: done
 revised: 2026-10-31
 bug: BUG-0001
 closes: []
@@ -40,4 +40,9 @@ no requirement yet, so a rolled-back run still leaves its records.
 
 ## Evidence
 
-Not yet.
+Criterion 1 is closed by `a_successful_run_leaves_an_empty_journal` and
+criterion 2 by `a_failed_run_does_not_undo_an_earlier_successful_one` in
+`tests/journal.rs`, which drive the binary with `HOME` in a sandbox. Both failed
+before the change, the second on "the failed run undid the earlier one", and
+pass after it. `mise run fmt-check`, `mise run check`, `mise run test` (610
+passed, 3 skipped) and `mise run build` exit 0.
