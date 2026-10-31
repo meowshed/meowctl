@@ -57,5 +57,12 @@ repairs the damage.
 
 ## Closed by
 
-Open. The fix adds a binary-level test that runs `apply` twice and then fails a
-third run, and checks that the first run's file survives.
+`a_failed_run_does_not_undo_an_earlier_successful_one` in `tests/journal.rs`
+runs `apply` through the binary, fails a later run, and checks that the first
+run's file survives.
+
+## Tasks
+
+- [x] T-001 TSK-0045 empty the journal after a successful run, in
+  `crates/meowctl-cli/src/run/commands.rs` (both journal tests pass, and every
+  stage exits 0)
