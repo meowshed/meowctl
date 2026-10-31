@@ -63,7 +63,7 @@ impl Entry {
 }
 
 /// What replacing an existing symlink displaced, so the caller can journal an
-/// inverse that puts it back; see [REQ-2014, REQ-2110] and [REQ-2015, REQ-2111].
+/// inverse that puts it back; see [REQ-2014, REQ-2110] and [REQ-2033, REQ-2111].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Displaced {
     /// Nothing was there.

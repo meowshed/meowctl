@@ -61,3 +61,4 @@ writes one index block per file and three kinds share this one.
 | [BUG-0042](bugs/BUG-0042-link-file-refuses-component-source.md) | `link_file` refuses the relative `src` every corpus component passes | approved |
 | [BUG-0043](bugs/BUG-0043-module-component-dir-is-config-dir.md) | A module component's `component_dir` is the configuration's own `components/` directory | approved |
 | [BUG-0044](bugs/BUG-0044-sync-keeps-locked-version-over-pin.md) | `dep sync` keeps the locked version after `deps.mod` pins a different one | approved |
+| [BUG-0045](bugs/BUG-0045-undo-deletes-replaced-config-link.md) | Undoing a `link_file` that replaced a symlink deletes the link | approved |

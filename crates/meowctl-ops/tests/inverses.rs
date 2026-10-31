@@ -284,7 +284,7 @@ fn undoing_a_symlink_restores_the_previous_target() {
     );
 }
 
-/// [REQ-2015, REQ-2111] the backup is the user's original file, and not restoring it is
+/// [REQ-2033, REQ-2111] the backup is the user's original file, and not restoring it is
 /// data loss.
 #[test]
 fn undoing_a_link_restores_the_file_it_moved_aside() {
