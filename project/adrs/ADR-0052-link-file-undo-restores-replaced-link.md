@@ -1,7 +1,7 @@
 ---
 id: ADR-0052
 artifact: adr
-status: approved
+status: done
 revised: 2026-10-31
 addresses: [REQ-2033]
 supersedes: []

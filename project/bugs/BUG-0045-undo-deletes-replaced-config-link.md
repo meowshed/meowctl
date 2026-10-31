@@ -51,9 +51,11 @@ upgrade triggers it.
 
 ## Closed by
 
-Open.
+`a_replaced_link_comes_back_on_replay` in `crates/meowctl-ops/tests/journal.rs`
+holds the replay as a regression check.
 
 ## Tasks
 
-- [ ] T-001 TSK-0044 journal and replay the prior target of a replaced link, in
-  `crates/meowctl-ops/src/journal.rs`
+- [x] T-001 TSK-0044 journal and replay the prior target of a replaced link, in
+  `crates/meowctl-ops/src/journal.rs` (the replay tests pass, and every stage
+  exits 0)

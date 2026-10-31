@@ -1,7 +1,7 @@
 ---
 id: TSK-0044
 artifact: task
-status: approved
+status: done
 revised: 2026-10-31
 realises: ADR-0052
 closes: [REQ-2033]
@@ -41,4 +41,13 @@ BUG-0001, the journal that is never truncated, is a defect of its own.
 
 ## Evidence
 
-Not yet.
+Criterion 1 is closed by
+`every_journalled_variant_writes_the_payload_v0_1_0_reads`, and criteria 2 and 3
+by `a_replaced_link_comes_back_on_replay`; both failed before the change and
+pass after it. `mise run fmt-check`, `mise run check`, `mise run test` (609
+passed, 3 skipped) and `mise run build` exit 0. End to end, with `HOME` and the
+configuration in a scratch directory, a component linked `~/rc` to its file
+`one`, the journal was emptied, and a second component re-pointed `~/rc` and
+failed; after the run `~/rc` pointed at `one` again. Without emptying the
+journal by hand, the second run first undid the first run's link, because a
+successful run leaves its records behind (BUG-0001).
