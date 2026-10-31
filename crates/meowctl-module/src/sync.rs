@@ -26,7 +26,7 @@ const MANIFEST: &str = "MODULE.meow";
 pub enum Upgrade {
     /// Keep every locked version; resolve only what is missing.
     ///
-    /// The ordinary `meowctl dep sync`, and what [REQ-2450] describes.
+    /// The ordinary `meowctl dep sync`, and what [REQ-2454] describes.
     #[default]
     Nothing,
     /// Clear these modules' locked versions and resolve them again, leaving
@@ -123,7 +123,7 @@ impl<'a> Syncer<'a> {
     /// `previous` is the lock as it stands. A module in it keeps its version
     /// unless `upgrade` says otherwise, because resolution that ran again on
     /// every sync would move with whatever the registry published today; see
-    /// [REQ-2450].
+    /// [REQ-2454].
     ///
     /// # Errors
     ///
@@ -275,6 +275,9 @@ impl<'a> Syncer<'a> {
             .get(&dep.name)
             .filter(|entry| !entry.replaced && !entry.version.is_empty())
             .filter(|_| upgrade.keeps(&dep.name))
+            // A pin that differs from the lock asks for that version; see
+            // [REQ-2454].
+            .filter(|entry| pins_nothing_else(&dep.version, &entry.version))
             .map(|entry| entry.version.clone());
 
         let wanted = match locked {
@@ -403,6 +406,14 @@ impl Requirements for ManifestRequirements<'_> {
             .map(|dep| Requirement::new(dep.name, dep.version))
             .collect())
     }
+}
+
+/// Whether a declared version leaves the locked one standing.
+///
+/// An empty or `latest` declaration pins nothing, so the lock holds it still;
+/// an exact version holds only when it is the locked one; see [REQ-2454].
+fn pins_nothing_else(declared: &str, locked: &str) -> bool {
+    declared.is_empty() || declared == "latest" || declared == locked
 }
 
 /// Merges two manifests' `replace()` directives, local winning.

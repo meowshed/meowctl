@@ -3,8 +3,8 @@ id: REQ-2450
 artifact: requirement
 topic: module
 class: functional
-status: approved
-revised: 2026-09-27
+status: superseded
+revised: 2026-10-31
 elaborates:
 verification: behavioural
 ---
