@@ -59,3 +59,8 @@ repairs the damage.
 
 Open. The fix adds a binary-level test that runs `apply` twice and then fails a
 third run, and checks that the first run's file survives.
+
+## Tasks
+
+- [ ] T-001 TSK-0045 empty the journal after a successful run, in
+  `crates/meowctl-cli/src/run/commands.rs`
