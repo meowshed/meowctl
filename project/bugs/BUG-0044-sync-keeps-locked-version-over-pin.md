@@ -52,9 +52,11 @@ dependency, editing `deps.mod` and syncing, silently does nothing.
 
 ## Closed by
 
-Open.
+`a_changed_pin_moves_the_lock` in `crates/meowctl-module/tests/syncing.rs`
+holds the behaviour as a regression check.
 
 ## Tasks
 
-- [ ] T-001 TSK-0043 re-resolve a module whose pin differs from the lock, in
-  `crates/meowctl-module/src/sync.rs`
+- [x] T-001 TSK-0043 re-resolve a module whose pin differs from the lock, in
+  `crates/meowctl-module/src/sync.rs` (the pin test passes, and every stage
+  exits 0)

@@ -1,7 +1,7 @@
 ---
 id: TSK-0043
 artifact: task
-status: approved
+status: done
 revised: 2026-10-31
 bug: BUG-0044
 closes: [REQ-2454]
@@ -39,4 +39,9 @@ does today.
 
 ## Evidence
 
-Not yet.
+Criterion 1 is closed by `a_changed_pin_moves_the_lock`, which failed before the
+fix and passes after it, and criterion 2 by
+`a_locked_version_is_kept_even_when_a_newer_one_is_published`, which passes on
+both sides. `mise run fmt-check`, `mise run check`, `mise run test` (608 passed,
+3 skipped) and `mise run build` exit 0. No end-to-end `dep sync` against a real
+configuration ran for this change.

@@ -275,6 +275,9 @@ impl<'a> Syncer<'a> {
             .get(&dep.name)
             .filter(|entry| !entry.replaced && !entry.version.is_empty())
             .filter(|_| upgrade.keeps(&dep.name))
+            // A pin that differs from the lock asks for that version; see
+            // [REQ-2454].
+            .filter(|entry| pins_nothing_else(&dep.version, &entry.version))
             .map(|entry| entry.version.clone());
 
         let wanted = match locked {
@@ -403,6 +406,14 @@ impl Requirements for ManifestRequirements<'_> {
             .map(|dep| Requirement::new(dep.name, dep.version))
             .collect())
     }
+}
+
+/// Whether a declared version leaves the locked one standing.
+///
+/// An empty or `latest` declaration pins nothing, so the lock holds it still;
+/// an exact version holds only when it is the locked one; see [REQ-2454].
+fn pins_nothing_else(declared: &str, locked: &str) -> bool {
+    declared.is_empty() || declared == "latest" || declared == locked
 }
 
 /// Merges two manifests' `replace()` directives, local winning.
