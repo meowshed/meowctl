@@ -2,9 +2,9 @@
 id: SPC-2400
 artifact: spec
 status: live
-revised: 2026-09-27
+revised: 2026-10-31
 checked-at:
-states: [REQ-2401, REQ-2402, REQ-2403, REQ-2404, REQ-2405, REQ-2410, REQ-2411, REQ-2412, REQ-2413, REQ-2420, REQ-2421, REQ-2422, REQ-2430, REQ-2431, REQ-2432, REQ-2433, REQ-2434, REQ-2440, REQ-2441, REQ-2442, REQ-2443, REQ-2444, REQ-2445, REQ-2450, REQ-2451, REQ-2452, REQ-2453, REQ-2460, REQ-2461, REQ-2462, REQ-2463, REQ-2464, REQ-2500, REQ-2501, REQ-2502, REQ-2503, REQ-2504, REQ-2505, REQ-2506, REQ-2507, REQ-2508, REQ-2509, REQ-2510, REQ-2511, REQ-2512, REQ-2513, REQ-2514, REQ-2540]
+states: [REQ-2401, REQ-2402, REQ-2403, REQ-2404, REQ-2405, REQ-2410, REQ-2411, REQ-2412, REQ-2413, REQ-2420, REQ-2421, REQ-2422, REQ-2430, REQ-2431, REQ-2432, REQ-2433, REQ-2434, REQ-2440, REQ-2441, REQ-2442, REQ-2443, REQ-2444, REQ-2445, REQ-2451, REQ-2452, REQ-2453, REQ-2454, REQ-2460, REQ-2461, REQ-2462, REQ-2463, REQ-2464, REQ-2500, REQ-2501, REQ-2502, REQ-2503, REQ-2504, REQ-2505, REQ-2506, REQ-2507, REQ-2508, REQ-2509, REQ-2510, REQ-2511, REQ-2512, REQ-2513, REQ-2514, REQ-2540]
 ---
 
 # Module resolution
@@ -121,8 +121,9 @@ per-file hashes go in a second file beside it, which `v0.1.0` ignores [REQ-2512]
 ### Locking
 
 A module already in the lock is used at the locked version without running
-selection again; selection runs when a module is absent or when the caller asks
-to ignore the lock [REQ-2450] (from docs/spec/module.md, high).
+selection again, unless the manifest pins a different exact version; selection
+runs when a module is absent, when its pin changed, or when the caller asks to
+ignore the lock [REQ-2454] (from BUG-0044, high).
 
 Syncing writes the full resolution: version, source, integrity and, where it
 applies, commit SHA [REQ-2451] (from docs/spec/module.md, high).

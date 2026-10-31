@@ -46,7 +46,7 @@ pub struct ModuleLoader<'a> {
     /// Filled from the lock before evaluation starts. A module absent from it
     /// is a module nothing resolved, which is a failure here rather than a
     /// silent fetch of whatever the registry published today; see
-    /// [REQ-2450].
+    /// [REQ-2454].
     resolved: BTreeMap<String, String>,
 }
 

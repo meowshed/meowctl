@@ -184,7 +184,7 @@ fn the_lock_records_which_binary_wrote_it() {
     assert_eq!(synced.lock.meta.updated_at, "2026-09-20T00:00:00Z");
 }
 
-/// [REQ-2450] resolution that ran again on every sync would move with
+/// [REQ-2454] resolution that ran again on every sync would move with
 /// whatever the registry published today, which is what a lock exists to stop.
 #[test]
 fn a_locked_version_is_kept_even_when_a_newer_one_is_published() {
@@ -269,7 +269,7 @@ fn an_upgrade_moves_only_the_modules_it_names() {
     );
 }
 
-/// [REQ-2450] and [REQ-2453]: ignoring the lock entirely is what
+/// [REQ-2454] and [REQ-2453]: ignoring the lock entirely is what
 /// `--update` means, and it moves everything to what the index publishes now.
 #[test]
 fn ignoring_the_lock_resolves_everything_again() {
@@ -682,7 +682,7 @@ fn a_sync_carries_the_other_tables_through() {
     assert_eq!(synced.lock.github, previous.github);
 }
 
-/// [REQ-2450] Minimal Version Selection takes the maximum any path
+/// [REQ-2454] Minimal Version Selection takes the maximum any path
 /// requires, and equal requirements do not move it.
 ///
 /// Mutation testing asked for the second half: `other > self` could become
@@ -705,4 +705,36 @@ fn the_selected_version_is_the_maximum_any_path_requires() {
     assert!(!lower.is_none());
     assert_eq!(none.clone().max(lower.clone()), lower);
     assert_eq!(lower.clone().max(none), lower);
+}
+
+/// [REQ-2454] a pin that differs from the lock is the user asking for that
+/// version, as `v0.1.0`'s `syncOneDep` read it, so an ordinary sync moves to it.
+#[test]
+fn a_changed_pin_moves_the_lock() {
+    let fs = tree();
+    let http = registry_http();
+    let previous = LockFile {
+        modules: BTreeMap::from([(
+            "stdlib".to_owned(),
+            ModuleEntry {
+                version: "0.2.16".to_owned(),
+                ..ModuleEntry::default()
+            },
+        )]),
+        ..LockFile::default()
+    };
+
+    let synced = Syncer::new(&fs, &http, Cache::new("/cache"), "0.2.0", "t")
+        .with_index_url(INDEX_URL)
+        .sync(
+            &[dep("stdlib", "0.2.17")],
+            &[],
+            &previous,
+            &Upgrade::Nothing,
+        )
+        .expect("the pinned version resolves");
+    assert_eq!(
+        synced.resolved.get("stdlib").map(String::as_str),
+        Some("0.2.17")
+    );
 }

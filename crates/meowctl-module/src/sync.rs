@@ -26,7 +26,7 @@ const MANIFEST: &str = "MODULE.meow";
 pub enum Upgrade {
     /// Keep every locked version; resolve only what is missing.
     ///
-    /// The ordinary `meowctl dep sync`, and what [REQ-2450] describes.
+    /// The ordinary `meowctl dep sync`, and what [REQ-2454] describes.
     #[default]
     Nothing,
     /// Clear these modules' locked versions and resolve them again, leaving
@@ -123,7 +123,7 @@ impl<'a> Syncer<'a> {
     /// `previous` is the lock as it stands. A module in it keeps its version
     /// unless `upgrade` says otherwise, because resolution that ran again on
     /// every sync would move with whatever the registry published today; see
-    /// [REQ-2450].
+    /// [REQ-2454].
     ///
     /// # Errors
     ///
